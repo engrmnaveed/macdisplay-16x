@@ -22,7 +22,13 @@ let package = Package(
         .target(name: "DisplayCore"),
         // DDC/CI codec and per-display scheduler. Foundation only.
         .target(name: "DDC"),
+        // The only target that resolves private symbols. Every entry point is optional at run time.
+        .target(name: "DisplayPrivate"),
+        // Adapters over public macOS interfaces, plus the glue that turns the
+        // private transports into DisplayCore controllers.
+        .target(name: "DisplaySystem", dependencies: ["DisplayCore", "DDC", "DisplayPrivate"]),
         .testTarget(name: "DisplayCoreTests", dependencies: ["DisplayCore"], swiftSettings: testSettings),
         .testTarget(name: "DDCTests", dependencies: ["DDC"], swiftSettings: testSettings),
+        .testTarget(name: "DisplaySystemTests", dependencies: ["DisplaySystem", "DisplayCore", "DDC"], swiftSettings: testSettings),
     ]
 )
