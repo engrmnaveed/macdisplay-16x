@@ -61,9 +61,10 @@ final class AppContext {
         eventSource = SystemEventSource(sequencer: sequencer, bus: bus)
         permissionProbe = SystemPermissionProbe(loginItem: loginItem)
         permissions = PermissionBroker(probe: permissionProbe, bus: bus, settings: settings)
-        engine.statusProvider = { [permissions, colorBackend] in
+        engine.statusProvider = { [permissions, colorBackend, loginItem] in
             var lines = ["version: \(AppPaths.version)"]
             lines.append(contentsOf: permissions.statusLines)
+            lines.append("login item service: \(loginItem.systemStatus)")
             switch colorBackend.safety() {
             case .safe: lines.append("color tables: safe to use")
             case .unsafe(let reason): lines.append("color tables: blocked. \(reason)")

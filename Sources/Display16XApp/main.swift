@@ -7,6 +7,10 @@ import DisplaySystem
 //   --safe      Start in safe mode: nothing is restored or reapplied automatically.
 //               Holding Shift while the app starts does the same.
 //   --verbose   Log debug detail, and echo the log to standard error.
+//
+// Development aid, not for everyday use:
+//   --snapshot-panel FILE [--snapshot-details]
+//               Render the panel to a PNG without showing it, then quit.
 
 let arguments = Set(CommandLine.arguments.dropFirst())
 if arguments.contains("--help") || arguments.contains("-h") {
@@ -22,6 +26,10 @@ if arguments.contains("--help") || arguments.contains("-h") {
 var options = LaunchOptions()
 options.safeMode = arguments.contains("--safe")
 options.verbose = arguments.contains("--verbose")
+if let index = CommandLine.arguments.firstIndex(of: "--snapshot-panel"), index + 1 < CommandLine.arguments.count {
+    options.snapshotPath = CommandLine.arguments[index + 1]
+    options.snapshotDetails = arguments.contains("--snapshot-details")
+}
 LogCenter.shared.setVerbose(options.verbose)
 LogCenter.shared.add(sink: SystemLogSink(echo: options.verbose))
 

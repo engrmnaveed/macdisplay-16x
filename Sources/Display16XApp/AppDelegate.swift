@@ -5,6 +5,9 @@ import SwiftUI
 struct LaunchOptions {
     var safeMode = false
     var verbose = false
+    /// Development aid: render the panel to this PNG without showing it, then quit.
+    var snapshotPath: String?
+    var snapshotDetails = false
 }
 
 @MainActor
@@ -28,6 +31,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // Safe mode: Shift held at launch, or --safe.
         let safeMode = options.safeMode || NSEvent.modifierFlags.contains(.shift)
         let context = AppContext(safeMode: safeMode)
+        if let path = options.snapshotPath {
+            self.context = context
+            context.start()
+            Task { @MainActor in
+                await context.coordinator.waitForDetection()
+                PanelSnapshot.write(context: context, to: path, expandDetails: self.options.snapshotDetails)
+                NSApp.terminate(nil)
+            }
+            return
+        }
         if context.isAnotherInstanceRunning {
             Log.app.notice("Display 16X is already running. This copy quits.")
             NSApp.terminate(nil)
@@ -123,5 +136,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         panelModel = nil
         popover?.contentViewController = nil
         popover = nil
+    }
+}
+
+/// Renders the panel off screen, for checking the layout and for screenshots in the docs.
+@MainActor
+enum PanelSnapshot {
+    static func write(context: AppContext, to path: String, expandDetails: Bool) {
+        let model = PanelModel(context: context)
+        let view = PanelView(model: model, quit: {}, expandDetails: expandDetails)
+            .background(Color(nsColor: .windowBackgroundColor))
+        let hosting = NSHostingView(rootView: view)
+        let size = hosting.fittingSize
+        hosting.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = hosting
+        hosting.layoutSubtreeIfNeeded()
+        guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
+            Log.app.error("The panel could not be rendered.")
+            return
+        }
+        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
+        do {
+            try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            Log.app.info("Panel snapshot written to \(path).")
+        } catch {
+            Log.app.error("The panel snapshot could not be written: \(error.localizedDescription)")
+        }
+        model.close()
     }
 }

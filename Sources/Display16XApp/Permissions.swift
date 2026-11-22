@@ -19,8 +19,21 @@ final class LoginItem {
         case .enabled: return .enabled
         case .requiresApproval: return .requiresApproval
         case .notRegistered: return .disabled
-        case .notFound: return .unavailable
+        // What the service reports for an app that has never been registered.
+        case .notFound: return .disabled
         @unknown default: return .unavailable
+        }
+    }
+
+    /// What the system itself says, for the status report.
+    var systemStatus: String {
+        guard isBundled else { return "not running from an app bundle" }
+        switch SMAppService.mainApp.status {
+        case .enabled: return "enabled"
+        case .requiresApproval: return "requires approval"
+        case .notRegistered: return "not registered"
+        case .notFound: return "not found"
+        @unknown default: return "unknown"
         }
     }
 

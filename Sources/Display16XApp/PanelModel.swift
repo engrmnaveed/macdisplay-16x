@@ -85,9 +85,16 @@ final class PanelModel: ObservableObject {
         context.permissions.refresh()
         context.coordinator.redetectStale()
         rebuild()
-        for card in cards where card.brightness.isAvailable {
+        for card in cards {
+            var features: [FeatureID] = []
+            if card.brightness.isAvailable { features.append(.brightness) }
+            if card.volume.isAvailable { features.append(contentsOf: [.volume, .mute]) }
+            guard !features.isEmpty else { continue }
+            let wanted = features
             Task { [context] in
-                await context.engine.execute(Command(.get, .brightness, on: .tag(card.tag.rawValue), origin: .interface, options: CommandOptions(refresh: true)))
+                for feature in wanted {
+                    _ = await context.engine.execute(Command(.get, feature, on: .tag(card.tag.rawValue), origin: .interface, options: CommandOptions(refresh: true)))
+                }
             }
         }
     }

@@ -9,6 +9,7 @@ import SwiftUI
 struct PanelView: View {
     @ObservedObject var model: PanelModel
     let quit: () -> Void
+    var expandDetails = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -22,7 +23,7 @@ struct PanelView: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(model.cards) { card in
-                DisplayCard(card: card, model: model)
+                DisplayCard(card: card, model: model, expandDetails: expandDetails)
             }
             if !model.remembered.isEmpty {
                 RememberedSection(model: model)
@@ -49,7 +50,13 @@ struct PanelView: View {
 struct DisplayCard: View {
     let card: PanelModel.Card
     @ObservedObject var model: PanelModel
-    private let showsDetails = State(initialValue: false)
+    private let showsDetails: State<Bool>
+
+    init(card: PanelModel.Card, model: PanelModel, expandDetails: Bool = false) {
+        self.card = card
+        self.model = model
+        showsDetails = State(initialValue: expandDetails)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
