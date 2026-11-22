@@ -54,6 +54,10 @@ public final class PermissionBroker {
     private let bus: EventBus
     private let settings: SettingsStore
     public private(set) var state = PermissionState()
+    /// True once the user has been sent to System Settings for Accessibility in this run
+    /// and a later check still found it missing.
+    public private(set) var accessibilityDidNotTake = false
+    private var accessibilityRequested = false
 
     public init(probe: any PermissionProbe, bus: EventBus, settings: SettingsStore) {
         self.probe = probe
@@ -67,11 +71,20 @@ public final class PermissionBroker {
     @discardableResult
     public func refresh() -> PermissionState {
         let fresh = PermissionState(accessibility: probe.accessibilityStatus(), loginItem: probe.loginItemStatus())
-        if fresh != state {
+        let didNotTake = accessibilityRequested && fresh.accessibility != .granted
+        if fresh != state || didNotTake != accessibilityDidNotTake {
             state = fresh
+            accessibilityDidNotTake = didNotTake
             bus.publish(.permissionsChanged)
         }
         return state
+    }
+
+    /// The interface calls this when it sends the user to System Settings for Accessibility.
+    /// If the next check still finds it missing, the advice changes: macOS ties the grant
+    /// to the build that asked, so an entry left by an older build looks right and is not.
+    public func accessibilityWasRequested() {
+        accessibilityRequested = true
     }
 
     public var wantsKeys: Bool {
@@ -86,7 +99,9 @@ public final class PermissionBroker {
         if wantsKeys && state.accessibility != .granted {
             result.append(PermissionAdvice(
                 topic: .accessibility,
-                message: "Brightness and volume keys need Accessibility permission. Allow Display 16X in System Settings, then reopen this panel."
+                message: accessibilityDidNotTake
+                    ? "Brightness and volume keys still have no Accessibility permission. If Display 16X is already switched on in System Settings, that entry belongs to an older copy: remove it from the list, add this one, then reopen this panel."
+                    : "Brightness and volume keys need Accessibility permission. Allow Display 16X in System Settings, then reopen this panel."
             ))
         }
         if state.loginItem == .requiresApproval {

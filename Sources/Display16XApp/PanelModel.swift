@@ -295,6 +295,7 @@ final class PanelModel: ObservableObject {
     }
 
     func requestAccessibility() {
+        context.permissions.accessibilityWasRequested()
         SystemPermissionProbe.requestAccessibility()
         SystemPermissionProbe.openAccessibilitySettings()
     }

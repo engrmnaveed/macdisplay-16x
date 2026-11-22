@@ -204,6 +204,31 @@ struct KeyCoordinatorTests {
         #expect(broker.advice.isEmpty)
         #expect(broker.statusLines == ["accessibility: denied", "login item: enabled"])
     }
+
+    @Test("When the grant does not take, the advice says to remove the old entry and add the app again")
+    func accessibilityGrantThatDoesNotTake() {
+        let rig = Rig()
+        let probe = FakePermissionProbe()
+        let broker = PermissionBroker(probe: probe, bus: rig.bus, settings: rig.settings)
+        #expect(broker.advice.first?.message.contains("Allow Display 16X in System Settings") == true)
+
+        // The user is sent to System Settings and comes back. macOS still says no.
+        broker.accessibilityWasRequested()
+        #expect(broker.accessibilityDidNotTake == false, "nothing changes until the next check")
+        let count = rig.events.count
+        broker.refresh()
+        #expect(broker.accessibilityDidNotTake)
+        #expect(rig.events.count == count + 1, "the panel is told, so the notice changes")
+        #expect(broker.advice.first?.message.contains("remove it from the list") == true)
+        broker.refresh()
+        #expect(rig.events.count == count + 1)
+
+        // Once it is granted there is nothing left to say.
+        probe.accessibility = .granted
+        broker.refresh()
+        #expect(broker.accessibilityDidNotTake == false)
+        #expect(broker.advice.isEmpty)
+    }
 }
 
 @Suite("IPC")
