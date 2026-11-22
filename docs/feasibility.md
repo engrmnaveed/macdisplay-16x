@@ -145,7 +145,19 @@ So the interface works on an M5 Pro, in a spike and through the app.
 - **Why the second build did not help.** It writes the table again only when it finds it replaced, and it never found that. Read from inside the app, the table still looked like the app's own. Read at the same time from a separate process (`spikes/gamma-table-write-probe.swift`, read-only), the LG's table was a plain ramp. So a process that has set a table keeps reading its own table back after the system has stopped using it. There was no reconfiguration callback either.
 - **Writing still works.** A new value sent through the app after the unlock showed up in the separate process's read at once (0.745 for 70%, 0.788 for 75%).
 
-What follows: the table has to be written again without asking whether it is still there, at unlock and at a few bounded moments after wake and unlock. That change is not made yet. Until it is made and watched, color tables stay off by default. A custom color profile was not present in any of these checks.
+What follows: the table has to be written again without asking whether it is still there, at unlock and at a few bounded moments after wake and unlock.
+
+- **That change is built, and not yet watched (04:36).** The app now writes the table again blindly on reconfiguration, wake, unlock and the return of the user's session, at 1, 3 and 8 seconds after each, and when the panel opens. The read-back check is gone. Software dimming is reported as accepted, never confirmed, and so is a brightness it has a share in. The unit tests cover the moments and that writing again never dims twice. Whether those moments catch the reset at unlock can only be seen by someone at the screen: switch software dimming on, leave a monitor in the software range, lock, let the displays sleep a minute, wake and unlock. The app's log then shows each rewrite with milliseconds ("Color table written again on #2 after unlock").
+
+Until that has been watched, color tables stay off by default. A custom color profile was not present in any of these checks.
+
+#### Started while the displays were asleep (04:36)
+
+The new build was started 1 hour 52 minutes into a display sleep, with nobody at the Mac.
+
+- The Lenovo answered DDC while asleep and its controls were available at once. The LG did not answer, and the app kept what it had learned about it earlier, with the remembered brightness shown as a stored value.
+- Nothing was written to either monitor: both restores were skipped with "automatic changes are paused: the Mac is asleep".
+- The read-only wake probe is waiting for the wake from this sleep, the first long one measured. **Result pending.**
 
 #### A 75 second display sleep, measured (01:54)
 

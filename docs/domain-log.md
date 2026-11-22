@@ -22,6 +22,8 @@ What follows for the product:
 
 Status: open. The owner asked to set it aside for now. Software dimming stays off by default.
 
+Update, 23 November, 04:36: the blind rewrite is built. The table is written again on reconfiguration, wake, unlock and the return of the user's session, at 1, 3 and 8 seconds after each, and when the panel opens. Software dimming is now reported as accepted, never confirmed, and so is a brightness it has a share in. Nobody has watched it across a lock and unlock yet, so the status stays open until the owner has.
+
 **Decision needed:** none yet. It becomes a decision if blind rewrites turn out not to be enough: whether software dimming ships in v0.1 at all, or with a note that it is lost at unlock until the brightness is touched.
 
 ## 23 November 2026 · Other programs on the DDC channel answer each other's questions
