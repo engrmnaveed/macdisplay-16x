@@ -6,13 +6,34 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · A display sleep can last a second, and the app still rewrites every value
+
+Mac17,9, macOS 27.2.1, Lenovo P32p-20 on HDMI, LG SDQHD on DisplayPort, BetterDisplay running. The displays went to sleep on the idle timer and the owner woke them 1.4 seconds later. This was the first time restore after wake ran on hardware.
+
+What happened:
+
+- Neither monitor went into standby, left the system or lost a value. Both answered DDC within a quarter of a second of the wake.
+- The app waited its 3 seconds and then wrote all four values the owner had set through it: brightness on both monitors, contrast on one, volume on the LG. All four were already in place. Each write was accepted and read back.
+- In the first 3.4 seconds after the wake, 4 of 88 read queries from a separate read-only probe got no usable reply, the last of them at the moment the app's writes went out. Three programs were on the channel, so this does not say which one was at fault.
+
+What it means for the product:
+
+- "Wake" is not "the monitor was in standby". A lid bump, a hot corner or the idle timer followed by a mouse move all produce a sleep and wake pair, many times a day. A rule that writes to the monitor on every wake writes far more often than the case it exists for.
+- Reading first would have sent nothing here. That is one more reason for the option already put to the maintainer in the entry below ("Restore after wake cannot tell..."): read after wake, and write only a value the monitor no longer has. The cost is one read per control, and on the LG a read is two queries.
+- The 3 second wake delay looks right for a short sleep, and bounded retries cover the bad replies in that window. It is still unmeasured for a monitor coming out of a real standby.
+- The system's per-display "asleep" flag was still false inside the sleep notification. Sleep has to be taken from the notification, which is what the app does.
+
+One thing for a later feature: when one display changes size, macOS reports that display as moved, with nobody having touched the arrangement. Anything that watches for arrangement changes made elsewhere must not count those.
+
+**Decision needed:** nothing new. This is evidence for the open decision on the default after wake.
+
 ## 23 November 2026 · An older Accessibility entry under the same name blocks the grant
 
 The owner switched Accessibility on for Display 16X and the app still reported it as not granted, so the keys did nothing. System Settings showed one entry named Display 16X, left from an earlier build or from another app of the same name. After the owner deleted that entry and granted again from the panel, brightness and volume keys worked at once, with the indicator, and without restarting the app.
 
 macOS ties the grant to the code signature, and an ad hoc signature changes with every build, so an entry can look right and belong to a build that no longer exists. Two rules follow:
 
-- When the app sees "not granted" after the user has been sent to System Settings, the notice should say to remove the old Display 16X entry and add it again. Today it only says to allow the app.
+- When the app sees "not granted" after the user has been sent to System Settings, the notice should say to remove the old Display 16X entry and add it again. (Built later the same day: the notice changes once a check after the request still finds the grant missing.)
 - A stable signing identity for development builds would make this go away. That decision is already open in the entry on toolchain limits.
 
 Also confirmed here: the grant takes effect while the app is running. No restart was needed on macOS 27.2.1.

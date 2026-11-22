@@ -171,8 +171,37 @@ A refresh-rate change was chosen because it does not move windows. Size changes 
 
 - The displays woke at 00:05. The app saw the LG leave and return four seconds later. The Lenovo stayed connected.
 - Display IDs (4 and 5) and system UUIDs were the same before the display sleep, during it and after the wake, including across the LG's reconnect.
-- How soon each monitor accepts DDC after wake is **not measured yet.** The first version of the wake probe was a bare command-line process, which never receives sleep or wake notifications, so it missed the wake. The app's own probe one second after the LG returned got no answer, and that proves nothing, because it sent its query once and the LG never answers a single query. The fixed probe is waiting for the next wake.
-- Not tested: full system sleep, unplugging a cable, and moving a monitor to another port.
+- The first version of the wake probe was a bare command-line process, which never receives sleep or wake notifications, so it missed that wake. The app's own probe one second after the LG returned got no answer, and that proves nothing, because it sent its query once and the LG never answers a single query. The fixed probe caught the next wake, below.
+- Not tested: wake from a long standby with the fixed probe, full system sleep, unplugging a cable, and moving a monitor to another port.
+
+#### A short display sleep, measured (01:38)
+
+The displays went to sleep on the 10 minute idle timer at 01:38:28.556 and were woken by input 1.42 seconds later. BetterDisplay and Display 16X were both running. The read-only probe (`spikes/ddc-wake-probe.swift`) asked each monitor for its brightness about twice a second for 20 seconds after the wake.
+
+| | Lenovo P32p-20 (HDMI) | LG SDQHD (DisplayPort) |
+| --- | --- | --- |
+| First query after wake | Answered, 0.12 s after the notification | Answered, 0.21 s after the notification |
+| Brightness before sleep and after wake | 69 and 69 | 56 and 56 |
+| Queries answered in 20 s | 43 of 44 | 41 of 44 |
+| Queries without a usable reply | 1.5 s (all zeros) | 0.5 s and 1.5 s (the "not ready" null message), 3.3 s (stray bytes) |
+
+- Neither monitor left the system. Display IDs and UUIDs did not change, and the reconfiguration callback at wake carried no add, remove or mode flag.
+- `CGDisplayIsAsleep` said "awake" for both displays inside the handler of the "screens did sleep" notification. The notification is the signal. The per-display flag lags behind it.
+- Every reply that failed came within 3.4 seconds of the wake. Two other programs were talking to the same monitors in that window, and the app's own restore went out at 3.0 seconds, so a monitor that was not ready and two programs colliding on the channel cannot be told apart from this run.
+- A blank this short does not put the monitors in standby and they keep their values. How long a monitor needs after a real standby is **still not measured.**
+
+The app during the same wake, from its log:
+
+| Time | What the app did |
+| --- | --- |
+| 01:38:29 | Saw the wake and the reconfiguration begin |
+| 01:38:31 | Reconfiguration settled (the 1 second settle delay) |
+| 01:38:33 | Wake settled (the 3 second delay). Restore sent brightness to both monitors, contrast to one and volume to the LG. Each write was accepted on the first attempt |
+| Afterwards | Both monitors read back the stored brightness (0.688 and 0.562). The gate was open and nothing was left pending |
+
+This is the first run of restore after wake on hardware. It shows the path works: wake, settle, gate, write, read back. It does not show a lost value being repaired, because the monitors had lost nothing, so all four writes put back what was already there.
+
+Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 
 ### Interfaces and modes
 

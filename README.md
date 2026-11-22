@@ -50,7 +50,8 @@ dist/display16x features                   # every feature and its operations
 | Native brightness for built-in and Apple displays | Built. No such display was available to test |
 | Software dimming through color tables | Built and unit-tested. Through the app the table was written and read back on hardware. Off by default until someone has watched it |
 | Brightness and volume keys, on-screen indicator | Verified on both monitors after granting Accessibility. If the grant does not take, remove the old Display 16X entry in System Settings and add it again |
-| Restore after wake and reconnect, safe mode | Built and unit-tested. Hardware check pending |
+| Restore after wake | Ran once on hardware after a 1.4 second display sleep: values written and read back. Not yet seen repairing a value a monitor lost |
+| Restore after reconnect, safe mode | Built and unit-tested. Hardware check pending |
 | Rotation | Built behind the timed revert. Never run on hardware |
 | Launch at login | Built. Not verified |
 | CLI and hardware probe | Working |
