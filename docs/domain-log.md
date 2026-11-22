@@ -6,6 +6,17 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · An older Accessibility entry under the same name blocks the grant
+
+The owner switched Accessibility on for Display 16X and the app still reported it as not granted, so the keys did nothing. System Settings showed one entry named Display 16X, left from an earlier build or from another app of the same name. After the owner deleted that entry and granted again from the panel, brightness and volume keys worked at once, with the indicator, and without restarting the app.
+
+macOS ties the grant to the code signature, and an ad hoc signature changes with every build, so an entry can look right and belong to a build that no longer exists. Two rules follow:
+
+- When the app sees "not granted" after the user has been sent to System Settings, the notice should say to remove the old Display 16X entry and add it again. Today it only says to allow the app.
+- A stable signing identity for development builds would make this go away. That decision is already open in the entry on toolchain limits.
+
+Also confirmed here: the grant takes effect while the app is running. No restart was needed on macOS 27.2.1.
+
 ## 23 November 2026 · The public mode list is not enough, even for v0.1
 
 The roadmap and the feasibility note of 22 November say the public Core Graphics mode list is enough for the v0.1 resolution list. It is not, and the owner hit the consequence within minutes of using the panel.

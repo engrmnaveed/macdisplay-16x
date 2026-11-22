@@ -194,7 +194,14 @@ Release build, packaged app, both displays awake and unchanged, panel closed, me
 
 The process had 3 threads while idle. A separate debug-build process that builds and renders the whole panel off screen peaked at 67 MB, which is an upper bound for "panel open".
 
-Checked by the owner in the panel: both monitors appear by name, and both screens follow their brightness slider while it is dragged.
+Checked by the owner in the panel and on the keyboard, with BetterDisplay running:
+
+- Both monitors appear by name, and both screens follow their brightness slider while it is dragged.
+- Refresh rate from the detail view: the Lenovo went to 50 Hz, asked Keep or Revert, and Revert returned it to 60 Hz.
+- The LG's volume follows its slider, and the speaker button mutes and unmutes.
+- After Accessibility was granted, the brightness keys and the volume keys change the monitor and show the indicator. The grant took effect without restarting the app.
+
+The first attempt at the grant failed: the app kept reporting Accessibility as not granted. System Settings had a single older entry named Display 16X. The owner deleted it, granted again from the panel's button, and the keys worked at once.
 
 Launch at login was not exercised. The login item service reports "not found" for the packaged app before it has ever been registered, and registering it would have changed the owner's login items.
 
