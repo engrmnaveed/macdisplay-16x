@@ -18,6 +18,22 @@ enum CapturedReply {
     /// LG SDQHD when a query was sent only once, 23 November 2026: the DDC null message
     /// (address, zero length, checksum) followed by leftovers from the bus.
     static let lgNotReady: [UInt8] = [0x6E, 0x80, 0xBE, 0x04, 0x00, 0x0D, 0x12, 0x18, 0x27, 0x16, 0x1C]
+    /// LG SDQHD, first capabilities fragment, 23 November 2026. The second byte is 0x51
+    /// again, so the length is not stated. 32 bytes of text, then the checksum 0x3C.
+    static let lgCapabilitiesFragment: [UInt8] = [
+        0x6E, 0x51, 0xE3, 0x00, 0x00,
+        0x28, 0x70, 0x72, 0x6F, 0x74, 0x28, 0x6D, 0x6F, 0x6E, 0x69, 0x74, 0x6F, 0x72, 0x29, 0x74, 0x79,
+        0x70, 0x65, 0x28, 0x6C, 0x63, 0x64, 0x29, 0x6D, 0x6F, 0x64, 0x65, 0x6C, 0x28, 0x4D, 0x51, 0x37,
+        0x3C,
+    ]
+    /// Lenovo P32p-20, first capabilities fragment, 23 November 2026: a standard frame with
+    /// 26 bytes of text and the checksum 0x28, after which the buffer repeats.
+    static let lenovoCapabilitiesFragment: [UInt8] = [
+        0x6E, 0x9D, 0xE3, 0x00, 0x00,
+        0x28, 0x70, 0x72, 0x6F, 0x74, 0x28, 0x6D, 0x6F, 0x6E, 0x69, 0x74, 0x6F, 0x72, 0x29, 0x74, 0x79,
+        0x70, 0x65, 0x28, 0x4C, 0x43, 0x44, 0x29, 0x6D, 0x6F, 0x64,
+        0x28, 0x6E, 0x9D, 0xE3, 0x00, 0x00, 0x28,
+    ]
     /// Lenovo P32p-20, volume query, 23 November 2026: 50 of 100.
     static let lenovoVolume: [UInt8] = [0x6E, 0x88, 0x02, 0x00, 0x62, 0x00, 0x00, 0x64, 0x00, 0x32, 0x80]
     /// LG SDQHD while the display is asleep, 22 November 2026. Every read returns this filler,
@@ -137,6 +153,14 @@ struct CodecTests {
         let end: [UInt8] = [0x6E, 0x83, 0xE3, 0x00, 0x20, 0x00]
         #expect(DDCReplyParser.parseCapabilitiesFragment(end, expectingOffset: 0x20) == .success([]))
         #expect(DDCReplyParser.parseCapabilitiesFragment([UInt8](repeating: 0, count: 38), expectingOffset: 0) == .failure(.noReply))
+    }
+
+    @Test("Captured capability fragments are read, including the LG's with its unstated length")
+    func capturedCapabilityFragments() throws {
+        let lenovo = try DDCReplyParser.parseCapabilitiesFragment(CapturedReply.lenovoCapabilitiesFragment, expectingOffset: 0).get()
+        #expect(String(decoding: lenovo, as: UTF8.self) == "(prot(monitor)type(LCD)mod")
+        let lg = try DDCReplyParser.parseCapabilitiesFragment(CapturedReply.lgCapabilitiesFragment, expectingOffset: 0).get()
+        #expect(String(decoding: lg, as: UTF8.self) == "(prot(monitor)type(lcd)model(MQ7")
     }
 
     @Test("A capabilities string lists features and their values")

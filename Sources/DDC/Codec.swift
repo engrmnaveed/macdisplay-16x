@@ -197,10 +197,31 @@ public enum DDCReplyParser {
         guard bytes.count >= 6 else { return .failure(.noReply) }
         if let first = bytes.first, bytes.allSatisfy({ $0 == first }) { return .failure(.noReply) }
         guard bytes[2] == 0xE3 else { return .failure(.invalidReply(hex(Array(bytes.prefix(8))))) }
-        let length = Int(bytes[1] & 0x7F)
-        guard length >= 3, bytes.count >= length + 2 else { return .failure(.invalidReply("length \(length)")) }
         guard UInt16(bytes[3]) << 8 | UInt16(bytes[4]) == offset else { return .failure(.invalidReply("fragment for another offset")) }
-        return .success(Array(bytes[5..<(length + 2)]))
+
+        /// True when `count` bytes of text are followed by the checksum of the standard frame.
+        func checksumFits(_ count: Int) -> Bool {
+            let end = 5 + count
+            guard count >= 0, end < bytes.count else { return false }
+            let seed = DDCAddress.replyChecksumSeed ^ DDCAddress.display ^ (0x80 | UInt8(count + 3))
+            return DDCPacket.checksum(bytes[2..<end], seed: seed) == bytes[end]
+        }
+
+        let declared = Int(bytes[1] & 0x7F) - 3
+        if bytes[1] & 0x80 != 0, checksumFits(declared) {
+            return .success(Array(bytes[5..<(5 + declared)]))
+        }
+        // The length byte cannot be trusted (one monitor sends the host address there).
+        // The checksum still covers the frame the monitor meant to send, so the length that
+        // makes it fit is the real one. Full fragments are the common case, so try long first.
+        for count in stride(from: min(32, bytes.count - 6), through: 0, by: -1) where checksumFits(count) {
+            return .success(Array(bytes[5..<(5 + count)]))
+        }
+        // No checksum fits. Take the declared length when it is plausible.
+        if bytes[1] & 0x80 != 0, (0...32).contains(declared), bytes.count >= 5 + declared {
+            return .success(Array(bytes[5..<(5 + declared)]))
+        }
+        return .failure(.invalidReply("no usable length"))
     }
 }
 
