@@ -22,12 +22,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let indicatorPresenter = IndicatorWindowPresenter()
     private var subscription: EventBus.Subscription?
     private var accessibilityObserver: NSObjectProtocol?
+    private var signalSources: [any DispatchSourceSignal] = []
 
     init(options: LaunchOptions) {
         self.options = options
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        quitCleanlyOnSignals()
         // Safe mode: --safe, or Shift held while the app starts. Shift has to stay down for
         // a moment, so a capital letter typed elsewhere at the wrong instant does not count.
         if options.safeMode {
@@ -83,6 +85,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     self?.updateKeyCapture()
                 }
             }
+        }
+    }
+
+    /// `kill`, a script or a shutdown asks with a signal. Without this the process just ends:
+    /// settings still waiting to be saved are lost and nothing is handed back in order.
+    private func quitCleanlyOnSignals() {
+        for number in [SIGTERM, SIGINT] {
+            signal(number, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+            source.setEventHandler { NSApp.terminate(nil) }
+            source.resume()
+            signalSources.append(source)
         }
     }
 

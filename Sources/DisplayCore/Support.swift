@@ -99,8 +99,18 @@ public struct LogEntry: Codable, Sendable, Equatable {
     public var message: String
 
     public var line: String {
-        let stamp = ISO8601DateFormatter.string(from: date, timeZone: .current, formatOptions: [.withInternetDateTime])
+        // Milliseconds matter: what the system did around a wake is told apart by them.
+        let stamp = LogEntry.stamp(date)
         return "\(stamp) [\(category)] \(level.label): \(message)"
+    }
+}
+
+extension LogEntry {
+    static func stamp(_ date: Date, timeZone: TimeZone = .current) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
     }
 }
 
