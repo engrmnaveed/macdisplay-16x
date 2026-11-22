@@ -14,6 +14,7 @@ let package = Package(
     name: "Display16X",
     platforms: [.macOS(.v14)],
     products: [
+        .executable(name: "display16x", targets: ["display16x"]),
         .library(name: "DisplayCore", targets: ["DisplayCore"]),
         .library(name: "DDC", targets: ["DDC"]),
     ],
@@ -27,6 +28,10 @@ let package = Package(
         // Adapters over public macOS interfaces, plus the glue that turns the
         // private transports into DisplayCore controllers.
         .target(name: "DisplaySystem", dependencies: ["DisplayCore", "DDC", "DisplayPrivate"]),
+        .executableTarget(
+            name: "display16x",
+            dependencies: ["DisplayCore", "DDC", "DisplaySystem", "DisplayPrivate"]
+        ),
         .testTarget(name: "DisplayCoreTests", dependencies: ["DisplayCore"], swiftSettings: testSettings),
         .testTarget(name: "DDCTests", dependencies: ["DDC"], swiftSettings: testSettings),
         .testTarget(name: "DisplaySystemTests", dependencies: ["DisplaySystem", "DisplayCore", "DDC"], swiftSettings: testSettings),
