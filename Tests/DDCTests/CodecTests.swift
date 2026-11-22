@@ -18,6 +18,10 @@ enum CapturedReply {
     /// LG SDQHD when a query was sent only once, 23 November 2026: the DDC null message
     /// (address, zero length, checksum) followed by leftovers from the bus.
     static let lgNotReady: [UInt8] = [0x6E, 0x80, 0xBE, 0x04, 0x00, 0x0D, 0x12, 0x18, 0x27, 0x16, 0x1C]
+    /// Read from the LG SDQHD 3.4 seconds after a wake, in answer to a brightness query. It
+    /// is a valid reply about contrast: another program had asked for contrast on the same
+    /// channel a moment earlier, and this reader collected its answer.
+    static let lgAnswerToSomeoneElse: [UInt8] = [0x6E, 0x51, 0x02, 0x00, 0x12, 0x00, 0x00, 0x64, 0x00, 0x44, 0x86]
     /// LG SDQHD, first capabilities fragment, 23 November 2026. The second byte is 0x51
     /// again, so the length is not stated. 32 bytes of text, then the checksum 0x3C.
     static let lgCapabilitiesFragment: [UInt8] = [
@@ -102,6 +106,19 @@ struct CodecTests {
     func nullMessage() {
         #expect(DDCReplyParser.parseFeatureReply(CapturedReply.lgNotReady, expecting: VCPCode.brightness) == .failure(.notReady))
         #expect(DDCReplyParser.parseFeatureReply(CapturedReply.lgNotReady, expecting: VCPCode.brightness, tolerance: .strict) == .failure(.notReady))
+    }
+
+    @Test("An answer to another program's question is never taken as ours")
+    func replyForAnotherCode() {
+        // Asked for brightness, got the reply to someone else's contrast query.
+        let asBrightness = DDCReplyParser.parseFeatureReply(CapturedReply.lgAnswerToSomeoneElse, expecting: VCPCode.brightness)
+        guard case .failure(.invalidReply) = asBrightness else {
+            Issue.record("a contrast reply was accepted as brightness: \(asBrightness)")
+            return
+        }
+        // The same bytes are a good reply for the program that asked for contrast.
+        let asContrast = DDCReplyParser.parseFeatureReply(CapturedReply.lgAnswerToSomeoneElse, expecting: VCPCode.contrast)
+        #expect((try? asContrast.get())?.current == 0x44)
     }
 
     @Test("Even the lenient parser needs a consistent payload")
