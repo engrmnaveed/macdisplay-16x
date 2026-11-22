@@ -63,7 +63,7 @@ public final class ControlService {
     private func enabledCapabilities(for live: LiveDisplay) -> [ControllerKind: [ControlID: ControlCapability]] {
         var capabilities = live.capabilities
         for (kind, configuration) in settings.recordSettings(live.tag).controllers {
-            for (control, controlSettings) in configuration.controls ?? [:] where controlSettings.enabled == false {
+            for (control, controlSettings) in configuration.controls ?? [:] where controlSettings.enabled == false || controlSettings.ignoresWrites == true {
                 capabilities[kind]?[control] = nil
             }
         }
@@ -140,8 +140,12 @@ public final class ControlService {
         for kind in nativeFirst ? kinds : kinds.reversed() {
             if let reason = live.withheld[kind] { return .unavailable(reason) }
             guard live.controllers[kind] != nil else { continue }
-            if settings.recordSettings(tag).controllers[kind]?.controls?[control]?.enabled == false {
+            let controlSettings = settings.recordSettings(tag).controllers[kind]?.controls?[control]
+            if controlSettings?.enabled == false {
                 return .unavailable("\(capitalTitle) is turned off for this display.")
+            }
+            if controlSettings?.ignoresWrites == true {
+                return .unavailable("The monitor reports a \(title) level and ignores changes to it.")
             }
             switch live.detection[kind] {
             case .noChannel?:
@@ -240,6 +244,7 @@ public final class ControlService {
 
         // Track first, so the next step or drag starts from the newest request.
         let previous = settings.recordSettings(tag).values[control]
+        let previousRaw = previous.map { isSwitch ? mapping.raw(forSwitch: $0 >= 0.5) : mapping.raw(for: $0) }
         track(control, value: target, for: tag, origin: origin, recompose: recompose)
 
         switch await owner.controller.write(control, raw: raw, access: access) {
@@ -263,21 +268,76 @@ public final class ControlService {
             return ControlWriteResult(outcome: .accepted, actual: target)
         }
         var reported: Double?
+        var readings: [Double] = []
         for _ in 0..<2 {
             guard case .success(let reading) = await owner.controller.read(control, access: access) else { break }
             reported = reading.value
+            readings.append(reading.value)
             let matches = owner.capability.isStepped ? reading.value == raw : abs(reading.value - raw) <= abs(mapping.rawMaximum - mapping.rawMinimum) * 0.01
-            if matches { return ControlWriteResult(outcome: .confirmed, actual: target) }
+            if matches {
+                // A change that took is proof the control works.
+                if let previousRaw, previousRaw != raw { noteWrite(control, kind: owner.kind, tag: tag, effective: true) }
+                return ControlWriteResult(outcome: .confirmed, actual: target)
+            }
         }
         guard let reported else {
             return ControlWriteResult(outcome: .accepted, actual: target, detail: "sent, but the value could not be read back")
         }
-        // The device disagrees. Believe the device, and say so.
+        // The device disagrees. Believe the device, and say so. Two reads that agree with
+        // each other and not with what was sent mean the write was ignored, which some
+        // monitors do for a control they report and do not really have. Only changes made
+        // by hand count as evidence: a restore right after wake can be ignored by a monitor
+        // that is simply not ready yet.
+        if readings.count == 2, readings[0] == readings[1], !origin.isAutomatic, !sequencer.isInWakeTransition {
+            noteWrite(control, kind: owner.kind, tag: tag, effective: false)
+        }
         let actual = isSwitch ? (mapping.switchState(forRaw: reported).map { $0 ? 1.0 : 0.0 } ?? target) : mapping.normalized(for: reported)
         if settings.recordSettings(tag).values[control] == target {
             track(control, value: actual, for: tag, origin: .outsideChange, recompose: recompose, trusted: true)
         }
         return .failed("sent \(format(raw)), but the display reports \(format(reported))", actual: actual)
+    }
+
+    /// Two verified writes in a row that changed nothing mark the control as one the device
+    /// ignores. One write that took clears the count.
+    private func noteWrite(_ control: ControlID, kind: ControllerKind, tag: DisplayTag, effective: Bool) {
+        var learned = false
+        settings.updateRecord(tag) { record in
+            var configuration = record.controllers[kind] ?? ControllerSettings()
+            var controls = configuration.controls ?? [:]
+            var entry = controls[control] ?? ControlSettings()
+            if effective {
+                entry.ineffectiveWrites = nil
+            } else {
+                let count = (entry.ineffectiveWrites ?? 0) + 1
+                entry.ineffectiveWrites = count
+                if count >= 2, entry.ignoresWrites != true {
+                    entry.ignoresWrites = true
+                    learned = true
+                }
+            }
+            controls[control] = entry
+            configuration.controls = controls
+            record.controllers[kind] = configuration
+        }
+        if learned {
+            Log.core.notice("\(control) on \(tag) reports a value and ignores changes. It is no longer offered.")
+            bus.publish(.controllersReady(tag))
+        }
+    }
+
+    /// Forgets what was learned about controls that ignore writes, so they are tried again.
+    public func forgetIgnoredWrites(for tag: DisplayTag) {
+        settings.updateRecord(tag) { record in
+            for kind in Array(record.controllers.keys) {
+                guard var controls = record.controllers[kind]?.controls else { continue }
+                for control in Array(controls.keys) {
+                    controls[control]?.ignoresWrites = nil
+                    controls[control]?.ineffectiveWrites = nil
+                }
+                record.controllers[kind]?.controls = controls
+            }
+        }
     }
 
     private func format(_ raw: Double) -> String {

@@ -284,6 +284,13 @@ public protocol DisplayController: AnyObject, Sendable {
     func write(_ control: ControlID, raw: Double, access: ControlAccess) async -> RawWriteOutcome
     /// Called when the display goes away. Pending work is dropped.
     func invalidate() async
+    /// The raw values the device says a choice control accepts, when it says so. Slow on
+    /// some devices, so it is asked once per display and remembered.
+    func reportedChoices(for control: ControlID) async -> [Int]?
+}
+
+extension DisplayController {
+    public func reportedChoices(for control: ControlID) async -> [Int]? { nil }
 }
 
 public enum ControllerAttachment: Sendable {
@@ -405,6 +412,25 @@ public struct InputEntry: Codable, Sendable, Equatable, Identifiable {
         InputEntry(id: "hdmi-2", label: "HDMI 2", rawValue: 0x12),
         InputEntry(id: "usb-c", label: "USB-C", rawValue: 0x1B),
     ]
+
+    /// Names for the values the command set defines. Anything else is vendor-specific.
+    private static let standardNames: [Int: (id: String, label: String)] = [
+        0x01: ("vga-1", "VGA 1"), 0x02: ("vga-2", "VGA 2"),
+        0x03: ("dvi-1", "DVI 1"), 0x04: ("dvi-2", "DVI 2"),
+        0x0F: ("displayport-1", "DisplayPort 1"), 0x10: ("displayport-2", "DisplayPort 2"),
+        0x11: ("hdmi-1", "HDMI 1"), 0x12: ("hdmi-2", "HDMI 2"),
+    ]
+
+    /// The input list for a monitor that reports which values it accepts. A value the
+    /// command set does not define keeps its number as its name, because guessing a label
+    /// for a switch that can cut the picture off is worse than an honest number.
+    public static func entries(forReported values: [Int]) -> [InputEntry] {
+        var seen: Set<Int> = []
+        return values.filter { seen.insert($0).inserted }.map { value in
+            if let known = standardNames[value] { return InputEntry(id: known.id, label: known.label, rawValue: value) }
+            return InputEntry(id: "input-\(value)", label: "Input \(value)", rawValue: value)
+        }
+    }
 }
 
 /// What a controller does with stored values when the app starts.

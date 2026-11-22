@@ -79,7 +79,7 @@ struct DDCControllerTests {
         #expect(detection.capabilities[.contrast]?.neutral == 0.75)
         #expect(detection.capabilities[.mute]?.addressing == .toggleOnly)
         #expect(detection.capabilities[.input]?.readability == .unknown)
-        #expect(detection.currentRaw == [.hardwareBrightness: 75, .contrast: 70, .volume: 30, .mute: 2])
+        #expect(detection.currentRaw == [.hardwareBrightness: 75, .contrast: 70, .volume: 30, .mute: 2, .input: 15])
         #expect(detection.notes.isEmpty)
     }
 

@@ -99,8 +99,10 @@ public final class DDCDisplayController: DisplayController, @unchecked Sendable 
                     capabilities[.mute] = ControlCapability(addressing: .toggleOnly, readability: .readable, rawMinimum: 1, rawMaximum: 2)
                     current[.mute] = Double(reply.current)
                 case .input:
-                    // Monitors do not report their input reliably, so it is never read back.
+                    // A monitor may stop answering once it shows another input, so a switch
+                    // is never verified by reading back. The value in use now is still worth knowing.
                     capabilities[.input] = ControlCapability(readability: .unknown, rawMinimum: 0, rawMaximum: 255)
+                    current[.input] = Double(reply.current)
                 default:
                     guard reply.maximum > 0 else {
                         notes.append("\(control.rawValue) reports a maximum of zero")
@@ -181,6 +183,13 @@ public final class DDCDisplayController: DisplayController, @unchecked Sendable 
 
     public func invalidate() async {
         scheduler.invalidate()
+    }
+
+    /// The input values the monitor lists in its capabilities string. A hint: a monitor
+    /// may list none and still switch.
+    public func reportedChoices(for control: ControlID) async -> [Int]? {
+        guard control == .input, case .success(let text) = await scheduler.readCapabilities(), !text.isEmpty else { return nil }
+        return DDCCapabilities(parsing: text).features[VCPCode.inputSource]?.map(Int.init)
     }
 }
 

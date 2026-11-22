@@ -566,3 +566,136 @@ struct CommandEngineTests {
         #expect(FeatureRegistry.standard.restorable.map(\.id) == [.brightness, .contrast, .volume, .mute])
     }
 }
+
+@Suite("Input lists")
+@MainActor
+struct InputListTests {
+    let tag = DisplayTag(1)
+
+    @Test("A monitor that lists its inputs gets exactly those, with the one in use selected")
+    func learnedFromTheMonitor() async {
+        let rig = Rig()
+        // What the Lenovo P32p-20 reports: HDMI 1, DisplayPort 1 and a vendor value, on HDMI 1.
+        let ddc = FakeController.ddc()
+        ddc.reportedInputs = [0x11, 0x0F, 0x31]
+        ddc.values[.input] = 0x11
+        rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.start()
+        #expect(rig.controls.inputs(for: tag).map(\.id) == ["hdmi-1", "displayport-1", "input-49"])
+        #expect(rig.controls.inputs(for: tag).map(\.label) == ["HDMI 1", "DisplayPort 1", "Input 49"])
+        #expect(rig.settings.recordSettings(tag).currentInput == "hdmi-1")
+        #expect(rig.controls.trackedValue(.input, for: tag) == nil, "an input is a choice, not a level")
+
+        _ = await rig.run(.set, .input, on: .tag(1), value: .choice("input-49"), options: CommandOptions(confirmed: true))
+        #expect(ddc.writes(to: .input) == [49])
+    }
+
+    @Test("The monitor is asked once, and a monitor that says nothing keeps the generic list")
+    func askedOnce() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        #expect(ddc.choiceQueries == 1)
+        #expect(rig.controls.inputs(for: tag) == InputEntry.standard)
+        #expect(rig.settings.recordSettings(tag).currentInput == "displayport-1")
+        rig.coordinator.redetect(tag)
+        await rig.idle()
+        #expect(ddc.choiceQueries == 1)
+    }
+
+    @Test("A list the user already has is never replaced")
+    func customListIsKept() async {
+        let custom = [InputEntry(id: "desk", label: "Desk Mac", rawValue: 0x0F), InputEntry(id: "console", label: "Console", rawValue: 0x11, hidden: true)]
+        let persistence = MemoryPersistence()
+        let first = Rig(persistence: persistence)
+        first.plug(Fixture.lenovo())
+        await first.start()
+        first.settings.updateRecord(DisplayTag(1)) {
+            $0.inputs = custom
+            $0.controllers[.ddc]?.inputsChecked = nil
+        }
+        first.coordinator.shutdown()
+
+        let rig = Rig(persistence: persistence)
+        let ddc = FakeController.ddc()
+        ddc.reportedInputs = [0x11, 0x0F, 0x31]
+        rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.start()
+        #expect(rig.settings.recordSettings(tag).inputs == custom)
+        #expect(rig.controls.inputs(for: tag).map(\.id) == ["desk"], "hidden entries are not offered")
+        #expect(ddc.choiceQueries == 0)
+    }
+
+    @Test("Reported values are named from the command set, and unknown ones keep their number")
+    func naming() {
+        let entries = InputEntry.entries(forReported: [0x0F, 0x10, 0x11, 0x12, 0x0F, 0x1B, 0x03])
+        #expect(entries.map(\.id) == ["displayport-1", "displayport-2", "hdmi-1", "hdmi-2", "input-27", "dvi-1"])
+        #expect(InputEntry.entries(forReported: []).isEmpty)
+    }
+}
+
+@Suite("Controls a monitor reports and ignores")
+@MainActor
+struct IgnoredWriteTests {
+    let tag = DisplayTag(1)
+
+    /// The Lenovo P32p-20: it answers volume queries with 50 of 100 and never changes it.
+    private func makeRig() async -> (Rig, FakeController) {
+        let rig = Rig()
+        let ddc = FakeController.ddc(volume: 50)
+        ddc.capabilities[.mute] = nil
+        ddc.deafControls = [.volume]
+        rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.start()
+        return (rig, ddc)
+    }
+
+    @Test("Two verified writes that change nothing mark the control as ignored, with a reason")
+    func learnedAfterTwoWrites() async throws {
+        let (rig, ddc) = await makeRig()
+        let first = try #require(await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.49)).entries.first)
+        #expect(first.outcome == .failed)
+        #expect(first.detail == "sent 49, but the display reports 50")
+        #expect(rig.engine.availability(of: .volume, for: tag).isAvailable, "one failure is not enough")
+
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.3))
+        let reason = "The monitor reports a volume level and ignores changes to it."
+        #expect(rig.engine.availability(of: .volume, for: tag) == .unavailable(reason))
+        #expect(rig.engine.availability(of: .mute, for: tag).isAvailable == false, "mute by volume goes with it")
+        #expect(await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.2)).entries.first?.detail == reason)
+        #expect(ddc.values[.volume] == 50)
+        #expect(rig.controls.trackedValue(.volume, for: tag) == 0.5)
+        #expect(rig.engine.availability(of: .brightness, for: tag).isAvailable, "other controls are untouched")
+    }
+
+    @Test("A write that takes clears the count, and writing the value already there proves nothing")
+    func effectiveWriteClearsCount() async {
+        let (rig, ddc) = await makeRig()
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.4))
+        // Writing the value the monitor already holds reads back fine and is no evidence.
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.5))
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.controls?[.volume]?.ineffectiveWrites == 1)
+
+        ddc.deafControls = []
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.4))
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.controls?[.volume]?.ineffectiveWrites == nil)
+        #expect(rig.engine.availability(of: .volume, for: tag).isAvailable)
+    }
+
+    @Test("Unverified writes while dragging never count, and Check Again gives the control another chance")
+    func draggingAndCheckAgain() async {
+        let (rig, _) = await makeRig()
+        for value in [0.4, 0.3, 0.2] {
+            _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(value), origin: .interface, options: CommandOptions(verification: .none))
+        }
+        #expect(rig.engine.availability(of: .volume, for: tag).isAvailable)
+        // The value read back at the end of each drag does count.
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.1), origin: .interface)
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.2), origin: .interface)
+        #expect(!rig.engine.availability(of: .volume, for: tag).isAvailable)
+
+        rig.coordinator.redetect(tag)
+        await rig.idle()
+        #expect(rig.engine.availability(of: .volume, for: tag).isAvailable)
+    }
+}

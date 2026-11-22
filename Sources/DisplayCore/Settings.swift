@@ -190,6 +190,10 @@ public struct ControlSettings: Codable, Sendable, Equatable {
     public var codeOverride: [UInt8]?
     public var onRaw: Double?
     public var offRaw: Double?
+    /// Verified writes in a row that left the device at its old value.
+    public var ineffectiveWrites: Int?
+    /// Learned: the device reports this control and ignores changes to it.
+    public var ignoresWrites: Bool?
 
     public init() {}
 }
@@ -221,6 +225,8 @@ public struct ControllerSettings: Codable, Sendable, Equatable {
     public var detectionOutcome: DetectionOutcome?
     /// Quirks learned from the device's replies.
     public var quirks: [String]?
+    /// True once the device was asked which inputs it has, whatever it answered.
+    public var inputsChecked: Bool?
 
     public init() {}
 }

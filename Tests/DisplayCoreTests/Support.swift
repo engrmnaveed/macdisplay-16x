@@ -73,6 +73,9 @@ final class FakeController: DisplayController, @unchecked Sendable {
     private var _ignoreWrites = false
     private var _outcome: DetectionOutcome
     private var _invalidated = false
+    private var _reportedInputs: [Int]?
+    private var _choiceQueries = 0
+    private var _deafControls: Set<ControlID> = []
 
     init(kind: ControllerKind, capabilities: [ControlID: ControlCapability], values: [ControlID: Double], outcome: DetectionOutcome = .working) {
         self.kind = kind
@@ -153,13 +156,35 @@ final class FakeController: DisplayController, @unchecked Sendable {
         lock.withLock {
             if _failWrites { return .failed(.noReply) }
             _writes.append((control, raw, access))
-            if !_ignoreWrites { _values[control] = raw }
+            if !_ignoreWrites && !_deafControls.contains(control) { _values[control] = raw }
             return .written
         }
     }
 
     func invalidate() async {
         lock.withLock { _invalidated = true }
+    }
+
+    /// Controls the monitor reports and never changes, like the volume of a monitor
+    /// without speakers.
+    var deafControls: Set<ControlID> {
+        get { lock.withLock { _deafControls } }
+        set { lock.withLock { _deafControls = newValue } }
+    }
+
+    /// What the monitor says its inputs are, as in a capabilities string.
+    var reportedInputs: [Int]? {
+        get { lock.withLock { _reportedInputs } }
+        set { lock.withLock { _reportedInputs = newValue } }
+    }
+
+    var choiceQueries: Int { lock.withLock { _choiceQueries } }
+
+    func reportedChoices(for control: ControlID) async -> [Int]? {
+        lock.withLock {
+            _choiceQueries += 1
+            return control == .input ? _reportedInputs : nil
+        }
     }
 }
 

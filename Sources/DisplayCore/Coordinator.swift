@@ -25,6 +25,7 @@ public final class DisplayCoordinator {
     private var detectionTasks: [DisplayTag: Task<Void, Never>] = [:]
     private var redetectionWork: [DisplayTag: ScheduledWork] = [:]
     private var redetectionAttempts: [DisplayTag: Int] = [:]
+    private var lastReportedInput: [DisplayTag: Int] = [:]
     /// A monitor that was silent right after it connected is asked again after these delays.
     /// Bounded: after the last one it waits for the next wake or for the panel to open.
     public var redetectionDelays: [TimeInterval] = [3, 10]
@@ -131,9 +132,11 @@ public final class DisplayCoordinator {
         }
     }
 
-    /// Probes a display's controllers again, on request.
+    /// Probes a display's controllers again, on request. What was learned about controls
+    /// that ignore changes is forgotten, so they get another chance.
     public func redetect(_ tag: DisplayTag) {
         guard registry.live[tag] != nil else { return }
+        controls.forgetIgnoredWrites(for: tag)
         startDetection(tag, trigger: .reconnect)
     }
 
@@ -276,8 +279,32 @@ public final class DisplayCoordinator {
         }
         settleBrightness(tag)
         bus.publish(.controllersReady(tag))
+        await learnInputs(tag, live: live)
         await modes.recoverUnconfirmed(tag)
         await reconciler.displayReady(tag, trigger: trigger)
+    }
+
+    /// Asks a monitor once which inputs it has, and builds its input list from the answer.
+    /// A list the user already has is never replaced.
+    private func learnInputs(_ tag: DisplayTag, live: LiveDisplay) async {
+        guard let owner = controls.owner(of: .input, for: tag) else { return }
+        let stored = settings.recordSettings(tag)
+        if stored.inputs == nil, stored.controllers[owner.kind]?.inputsChecked != true {
+            let reported = await owner.controller.reportedChoices(for: .input)
+            guard registry.live[tag] === live else { return }
+            settings.updateRecord(tag) { record in
+                record.controllers[owner.kind, default: ControllerSettings()].inputsChecked = true
+                if let reported, !reported.isEmpty, record.inputs == nil {
+                    record.inputs = InputEntry.entries(forReported: reported)
+                }
+            }
+        }
+        // The input in use when the display was probed, when the list knows it.
+        if settings.recordSettings(tag).currentInput == nil, let raw = lastReportedInput[tag],
+           let entry = controls.inputs(for: tag).first(where: { $0.rawValue == raw }) {
+            settings.updateRecord(tag) { $0.currentInput = entry.id }
+        }
+        bus.publish(.controllersReady(tag))
     }
 
     /// Values read during detection become the tracked values on first sight, or always
@@ -285,6 +312,11 @@ public final class DisplayCoordinator {
     private func seed(_ detection: ControllerDetection, kind: ControllerKind, tag: DisplayTag, trigger: RestoreTrigger) {
         let policy = settings.recordSettings(tag).controllers[kind]?.startupPolicy
         for (control, raw) in detection.currentRaw.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            if control == .input {
+                // An input is a choice, not a level. It is matched to the list later.
+                lastReportedInput[tag] = Int(raw)
+                continue
+            }
             guard let owner = controls.owner(of: control, for: tag, forcing: kind) else { continue }
             let mapping = controls.mapping(for: control, tag: tag, owner: owner)
             let value: Double
