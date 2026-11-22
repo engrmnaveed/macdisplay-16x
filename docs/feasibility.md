@@ -133,7 +133,9 @@ Not tested: a connection that carries video and no DDC. There is none on this de
 - A gain of 0.7 was written to both: status 0, and the table read back exactly as written.
 - The original table was written back: read back identical to the original, and still identical after the process exited.
 
-So the interface works on an M5 Pro. What is still open is what it looks like: the run was not watched, the behavior after wake was not observed, and no custom color profile was present. Color tables stay off by default until those three are checked.
+The same path through the app, with the displays awake and software dimming switched on for the test: `display16x set softwareBrightness 80% --tag 2` was confirmed, a separate read of the LG's table showed it scaled to 0.830 (the 0.15 zero level plus 80% of the rest), the Lenovo's table stayed a plain ramp, and setting 100% put the LG's table back to a plain ramp. With software dimming on, the LG's 63% hardware brightness sits at 0.704 on the composite scale, as the 0.2 switchover says it should.
+
+So the interface works on an M5 Pro, in a spike and through the app. What is still open is what it looks like: nobody was asked to watch, the behavior after wake was not observed, and no custom color profile was present. Color tables stay off by default until those three are checked.
 
 ### Mode change with the timed revert
 
