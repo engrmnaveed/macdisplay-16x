@@ -114,13 +114,19 @@ public final class LogCenter: @unchecked Sendable {
     public static let shared = LogCenter()
 
     private let lock = NSLock()
-    private var entries: [LogEntry] = []
+    /// Info and above. Debug entries are kept apart, so a burst of them (one line per DDC
+    /// write while a slider is dragged) cannot push out the lines a bug report needs.
+    private var entries: [(sequence: UInt64, entry: LogEntry)] = []
+    private var debugEntries: [(sequence: UInt64, entry: LogEntry)] = []
+    private var nextSequence: UInt64 = 0
     private var sinks: [any LogSink] = []
     private var minimumLevel: LogLevel = .info
     private let capacity: Int
+    private let debugCapacity: Int
 
-    public init(capacity: Int = 400) {
+    public init(capacity: Int = 400, debugCapacity: Int = 200) {
         self.capacity = capacity
+        self.debugCapacity = debugCapacity
     }
 
     public func add(sink: any LogSink) {
@@ -136,15 +142,24 @@ public final class LogCenter: @unchecked Sendable {
         let entry = LogEntry(date: Date(), level: level, category: category, message: message)
         let targets: [any LogSink] = lock.withLock {
             guard level >= minimumLevel else { return [] }
-            entries.append(entry)
-            if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
+            nextSequence += 1
+            if level == .debug {
+                debugEntries.append((nextSequence, entry))
+                if debugEntries.count > debugCapacity { debugEntries.removeFirst(debugEntries.count - debugCapacity) }
+            } else {
+                entries.append((nextSequence, entry))
+                if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
+            }
             return sinks
         }
         for sink in targets { sink.write(entry) }
     }
 
+    /// The kept entries of every level, in the order they were logged.
     public func recent() -> [LogEntry] {
-        lock.withLock { entries }
+        lock.withLock {
+            (entries + debugEntries).sorted { $0.sequence < $1.sequence }.map(\.entry)
+        }
     }
 }
 

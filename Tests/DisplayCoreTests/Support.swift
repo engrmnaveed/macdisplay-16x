@@ -34,6 +34,21 @@ final class ManualScheduler: Scheduler {
     var pendingCount: Int { items.count }
 }
 
+/// Collects every log line written while it is attached, so a test does not depend on the
+/// bounded history that other tests are filling at the same time.
+final class CapturingLogSink: LogSink, @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [LogEntry] = []
+
+    func write(_ entry: LogEntry) {
+        lock.withLock { entries.append(entry) }
+    }
+
+    func messages(containing text: String) -> [String] {
+        lock.withLock { entries.map(\.message).filter { $0.contains(text) } }
+    }
+}
+
 /// Waits for work that hops off the main actor, such as a fake controller call.
 @MainActor
 func eventually(timeout: TimeInterval = 3, _ condition: @MainActor () -> Bool) async -> Bool {

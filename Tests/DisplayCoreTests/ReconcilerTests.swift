@@ -121,6 +121,28 @@ struct ReconcilerTests {
         #expect(rig.settings.pendingRestores(for: tag).isEmpty)
     }
 
+    @Test("A restore says in the log what it put back, and on which display")
+    func restoreIsLogged() async {
+        let sink = CapturingLogSink()
+        LogCenter.shared.add(sink: sink)
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.37))
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.21))
+        ddc.values[.hardwareBrightness] = 100
+        ddc.values[.volume] = 80
+
+        await wake(rig)
+        #expect(await eventually { ddc.values[.hardwareBrightness] == 37 && ddc.values[.volume] == 21 })
+        await rig.idle()
+
+        let lines = sink.messages(containing: "brightness 37%")
+        #expect(lines.count == 1, "one line for the whole pass")
+        #expect(lines.first?.hasPrefix("After wake, put back on #1 LEN P32p-20: ") == true)
+        #expect(lines.first?.contains("volume 21%") == true)
+    }
+
     @Test("Stored values are reapplied when a display reconnects")
     func restoreOnReconnect() async {
         let rig = Rig()

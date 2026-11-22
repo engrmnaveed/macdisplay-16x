@@ -67,8 +67,12 @@ public final class DDCDisplayController: DisplayController, @unchecked Sendable 
         (.input, VCPCode.inputSource),
     ]
 
-    public init(scheduler: DDCScheduler) {
+    /// Names the monitor in log lines.
+    private let name: String
+
+    public init(scheduler: DDCScheduler, name: String = "monitor") {
         self.scheduler = scheduler
+        self.name = name
     }
 
     static func code(for control: ControlID) -> UInt8? {
@@ -166,7 +170,7 @@ public final class DDCDisplayController: DisplayController, @unchecked Sendable 
         var last = RawWriteOutcome.written
         for code in codes {
             let result = await scheduler.write(code: code, value: value)
-            Log.ddc.debug("write 0x\(String(code, radix: 16)) = \(value): \(result)")
+            Log.ddc.debug("\(name): write 0x\(String(code, radix: 16)) = \(value): \(result)")
             last = outcome(result)
             if case .failed = last { return last }
         }
@@ -244,7 +248,7 @@ public final class SystemControllerProvider: ControllerProviding {
             }
             let tuning = DDCTuning(settings: settings?.transport, vendor: display.identifiers.vendor, product: display.identifiers.model)
             let scheduler = DDCScheduler(transport: AVServiceTransport(service: service), tuning: tuning, label: "tag\(record.tag.rawValue)")
-            return .attached(DDCDisplayController(scheduler: scheduler))
+            return .attached(DDCDisplayController(scheduler: scheduler, name: "\(record.tag) \(record.displayName)"))
         case .appleNative:
             guard NativeBrightness.isAvailable else {
                 return .unavailable("This macOS release does not offer its brightness interface.")

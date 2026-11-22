@@ -28,6 +28,15 @@ public enum RestoreTrigger: String, Sendable {
     case startup
     case reconnect
     case wake
+
+    /// How the log names the moment.
+    var occasion: String {
+        switch self {
+        case .startup: "At startup"
+        case .reconnect: "After the display returned"
+        case .wake: "After wake"
+        }
+    }
 }
 
 /// Wake and reconnect work runs as an ordered pipeline. A stage can be added later without
@@ -186,13 +195,22 @@ public final class Reconciler {
             // Some monitors need extra time after wake or reconnect before they accept commands.
             await pause(settings.effective(tag).wakeRestoreDelay)
         }
-        let failed = await send(plan(for: tag, trigger: trigger), to: tag, origin: trigger == .startup ? .startup : .restore)
+        let failed = await send(plan(for: tag, trigger: trigger), to: tag, origin: trigger == .startup ? .startup : .restore, occasion: trigger.occasion)
         if failed { scheduleRetry(for: tag) }
     }
 
     /// Sends each value through the command engine. Returns true when anything failed.
-    private func send(_ plan: [(feature: FeatureID, value: Double)], to tag: DisplayTag, origin: ChangeOrigin) async -> Bool {
+    /// What went out is logged in one line, so a bug report shows what the app changed on
+    /// its own and when.
+    private func send(_ plan: [(feature: FeatureID, value: Double)], to tag: DisplayTag, origin: ChangeOrigin, occasion: String) async -> Bool {
         var anyFailed = false
+        var sent: [String] = []
+        defer {
+            if !sent.isEmpty {
+                let name = registry.record(for: tag)?.displayName ?? "display"
+                Log.core.info("\(occasion), put back on \(tag) \(name): \(sent.joined(separator: ", ")).")
+            }
+        }
         for item in plan {
             guard registry.live[tag] != nil else { return true }
             let isSwitch = engine.features.descriptor(item.feature)?.valueKind == .boolean
@@ -205,6 +223,7 @@ public final class Reconciler {
             let result = await engine.execute(command)
             if result.succeeded {
                 settings.removePendingRestore(tag: tag, feature: item.feature)
+                sent.append(isSwitch ? "\(item.feature) \(item.value >= 0.5 ? "on" : "off")" : "\(item.feature) \(Int((item.value * 100).rounded()))%")
             } else {
                 anyFailed = true
                 let reason = result.error ?? result.entries.first?.detail ?? "unknown"
@@ -234,7 +253,7 @@ public final class Reconciler {
         if case .blocked = gate.check(.restore) { return }
         inFlight.insert(tag)
         let pending = settings.pendingRestores(for: tag).map { (feature: FeatureID(rawValue: $0.feature), value: $0.value) }
-        let failed = await send(pending, to: tag, origin: .restore)
+        let failed = await send(pending, to: tag, origin: .restore, occasion: "On a retry")
         inFlight.remove(tag)
         if failed { scheduleRetry(for: tag) }
     }
