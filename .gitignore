@@ -1,0 +1,6 @@
+/.build/
+/.swiftpm/
+/dist/
+/.research/
+.DS_Store
+.idea
