@@ -1,7 +1,7 @@
 # Display 16X — Product requirements
 
 **Owner** 16X Brains  
-**Status** Draft for review · 22 November 2026  
+**Status** Draft for review · 22 November 2026 · revised 23 November after the first hardware build  
 **Local project** macdisplay-16x  
 **Working product name** Display 16X · CLI executable `display16x`  
 **Company** [16X Brains](https://16xbrains.com/)
@@ -33,7 +33,7 @@ Everything is free. Features are grouped by what they cost the machine. The [roa
 
 | Group | Features | Default |
 | --- | --- | --- |
-| **Core** | Per-display resolution list and slider with HiDPI and refresh rate. Rotation. DDC brightness, contrast, volume and input on external monitors. Native brightness on built-in and Apple displays. Software dimming through gamma tables. Brightness and volume keys with an on-screen indicator. Launch at login. | On |
+| **Core** | Per-display resolution list and slider with HiDPI and refresh rate. Rotation. DDC brightness, contrast, volume and input on external monitors. Native brightness on built-in and Apple displays. Software dimming through gamma tables. Brightness and volume keys with an on-screen indicator. Launch at login. | On, except software dimming, which is opt-in until it is proven across lock and unlock |
 | **Layout** | Arrangement, main display and mirroring from the menu. Disconnect and reconnect a display without unplugging it. Restore resolution and arrangement after wake or reconnect. Presets with shortcuts. CLI, URL scheme and Shortcuts actions. | On |
 | **Advanced** | Flexible HiDPI scaling and custom resolutions through system display overrides. Virtual screens. HDR switching and XDR brightness. Color profile and color mode selection. | Off until enabled per feature |
 | **Later** | Picture-in-picture and streaming, image filters and LUTs, EDID overrides, HDMI-CEC and network TV control. | Not scheduled |
@@ -44,7 +44,8 @@ The interface is our own design. It should feel like a small macOS control panel
 
 - **One card per display.** Name, connection, a brightness slider, and a text-size strip that runs from "larger text" to "more space" with the resolution shown as secondary detail. Volume and input appear only when the monitor supports them. Everything else sits one level down in a per-display detail view.
 - **Safe changes.** A resolution or refresh change shows Keep and Revert and rolls back on its own after a short countdown, so a mode the monitor cannot show never strands the user.
-- **Say why.** A control that is unavailable stays visible in the detail view with a one-line reason, such as a monitor that did not answer DDC on this port. Nothing disappears silently.
+- **Say why.** A control that is unavailable stays visible in the detail view with a one-line reason, such as a monitor that did not answer DDC on this port, or one that reports a volume control and ignores it. Nothing disappears silently.
+- **Say what is known.** A value the monitor read back is confirmed. A value the app only sent, such as software dimming, is shown as sent. An input the monitor lists under a number we cannot name is shown by its number until the user names it.
 - **Scenes.** Saved setups (for example Desk, Presentation, Night) are first-class, one click or one shortcut to apply.
 - **Honest cost.** Any Advanced feature that keeps the GPU busy says so next to its switch.
 - **Keyboard and VoiceOver throughout**, with standard macOS controls before custom ones.
@@ -62,7 +63,7 @@ A SwiftPM package with no third-party dependencies in the core, built with Swift
 | `DisplayCore` | The domain model with no system dependencies: display records and identity, modes, controls and controllers, composite brightness, the command engine, events, the automation gate and settings. Unit-tested with fakes. |
 | `DDC` | DDC/CI packet encoding, lenient reply parsing, one serial queue per display, write coalescing and a quirks table. |
 | `DisplaySystem` | Adapters over public macOS interfaces: inventory, modes, gamma tables, reconfiguration, sleep and wake. |
-| `DisplayPrivate` | The only target that touches private interfaces (SkyLight, DisplayServices, IOAVService, CGVirtualDisplay). Run-time symbol lookup, one capability flag per feature. |
+| `DisplayPrivate` | The only target that touches private interfaces (SkyLight including the window server's mode list, DisplayServices, IOAVService, MonitorPanel, CGVirtualDisplay). Run-time symbol lookup, one capability flag per feature. |
 | `Display16XApp` | AppKit status item with SwiftUI content built when the menu opens and released when it closes. |
 | `display16x` | CLI for scripting and for the hardware probe used in bug reports. |
 
@@ -94,4 +95,4 @@ Provisional targets for the MacBook Air M1 (8 GB). Record measured numbers befor
 
 ## Decisions before a public release
 
-Confirm the final name and icon, the deployment floor after testing, the update mechanism, and when to add the project to the 16X Brains site.
+Confirm the final name and icon, the deployment floor after testing, the update mechanism, and when to add the project to the 16X Brains site. Decide how identical monitors are told apart for DDC, and write the user-facing note on running next to other display utilities. The decisions that affect v0.1 are tracked in the [roadmap](docs/roadmap.md#5-open-decisions).

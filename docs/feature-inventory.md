@@ -44,6 +44,7 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | Capability | What it does | Milestone | Core hook |
 | --- | --- | --- | --- |
 | Full mode list | Shows every mode with size, HiDPI, refresh and depth | v0.1 | mode model |
+| Hidden scaled modes | Lists and selects the HiDPI modes the public mode list leaves out | v0.1 | mode model |
 | Logical and pixel size | Separates desktop size from backing size | v0.1 | mode model |
 | Mode flags | Marks native, default, unsafe and invalid modes | v0.1 | mode model |
 | Mode filters | Narrows the list by HiDPI, refresh, aspect and depth | v0.1 | mode filter chain |
@@ -64,6 +65,7 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | Nearest match | Applies the closest mode and reports the difference | v0.1 | mode model |
 | Verify after apply | Reads the mode back after reconfiguration settles | v0.1 | mode model |
 | Timed revert | Rolls back an unconfirmed interactive mode change | v0.1 | mode model |
+| Countdown on request | Lets a command from the CLI ask for Keep or Revert | v0.1 | command engine |
 | Favourite modes | Saves a few full modes per display | v0.2 | mode model |
 | Favourite tolerance | Matches favourites despite small depth or rate drift | v0.2 | mode model |
 | Undo last mode | Returns to the mode before the last change | v0.2 | mode model |
@@ -93,6 +95,9 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | Manual assignment | Stops automatic reassignment of a control | v0.1 | resolver |
 | Add and remove controllers | Keeps a controller's settings after removal | v0.1 | controllers and capabilities |
 | DDC detection | Tests the channel, reads the capability string and current values | v0.1 | DDC transport |
+| Ignored control detection | Marks a control the monitor reports and ignores, with a way to check again | v0.1 | controllers and capabilities |
+| Repeated queries | Sends each query more than once for monitors that drop the first | v0.1 | DDC transport |
+| Reply matching | Accepts a reply only when it names the feature that was asked for | v0.1 | DDC transport |
 | Detection outcome | Reports no channel, unsupported, limited or working | v0.1 | DDC transport |
 | Auto-configure | Enables reported features and adopts their ranges | v0.1 | DDC transport |
 | Full code report | Lists every reported code, mapped or not | v0.1 | probe |
@@ -114,6 +119,7 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | Lenient replies | Tolerates bad checksums and duplicated bytes | v0.1 | DDC transport |
 | Startup value policy | Trusts, writes or reads stored values at start | v0.1 | controllers and capabilities |
 | Reapply on wake | Resends stored values after wake with an extra delay | v0.1 | reconciler |
+| Adopt on wake | Reads values after wake and keeps what the monitor reports, where restore is not wanted | v0.1 | reconciler |
 | Write on reconnect | Resends ranged and on/off values when a display returns | v0.1 | reconciler |
 | On-demand readback | Reads a value from the monitor when asked | v0.1 | controllers and capabilities |
 | Periodic readback | Reads monitor values on a timer | Not planned | none by design: no background reads |
@@ -194,6 +200,7 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | --- | --- | --- | --- |
 | Input switching | Changes the monitor input over DDC | v0.1 | controllers and capabilities |
 | Input list editing | Labels, icons, grouping and hidden entries per display | v0.1 | controllers and capabilities |
+| Monitor's own input list | Builds the input list from the values the monitor lists, and numbers the ones it cannot name | v0.1 | controllers and capabilities |
 | Alternate input command | Uses another command for monitors that need it | v0.1 | controllers and capabilities |
 | Input identifiers | Keeps input ids separate from raw values and per controller | v0.1 | controllers and capabilities |
 | Risk confirmation | Confirms input switches and power-off before sending | v0.1 | controllers and capabilities |
@@ -519,3 +526,10 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 - Nothing in the user session can act before login or under FileVault, and virtual screens vanish when the app quits.
 - A request that is accepted is not the same as one that took effect. Mode, rotation and refresh changes must be read back.
 - Sync and protection can loop or cascade without a change origin and a retry limit.
+- The public mode list hides scaled HiDPI modes unless the display is on one. A size strip or a revert built on it loses modes the moment the display changes size. *Seen on our test monitors.*
+- macOS puts its own color table back at unlock with no reconfiguration event, and a process that set a table keeps reading its own table back. Software dimming cannot be verified from inside the app. *Seen on our test monitors.*
+- Programs that share a DDC channel receive each other's replies. A valid, correctly checksummed reply can be the answer to another program's question. *Seen on our test monitors.*
+- A monitor can answer a read for a control it does not have, and accept writes it ignores. Only a write that reads back as the new value proves a control works. *Seen on our test monitors.*
+- A sleep and wake pair is not a standby. Short display sleeps happen many times a day and the monitors keep their values, so a rule that writes on every wake writes far more often than the case it exists for. *Seen on our test monitors.*
+- DDC has no change notifications. After a wake the app cannot tell a monitor that forgot a value from a user who changed it with the monitor's buttons or another utility.
+- The Accessibility grant belongs to a code signature. An entry from an earlier build with the same name blocks a new grant until it is removed. *Seen on this Mac.*
