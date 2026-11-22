@@ -6,6 +6,45 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · A monitor can report a control it does not have
+
+The Lenovo P32p-20 answers a volume query with "50 of 100" and ignores every volume write. A change sent through the app read back as 50 each time, and an independent read agreed. Its capabilities string leaves volume out, and in this case the string was right.
+
+So there are three sources and none is proof on its own: a capabilities string can omit controls that work, a read can succeed for a control that does nothing, and a write can be accepted without taking effect. Only a write that reads back as the new value proves a control works.
+
+What the product does now:
+
+- A control is offered when the monitor answers a read for it, as before.
+- When two changes made by hand in a row read back unchanged, with two reads agreeing each time, the control is marked as one the monitor reports and ignores. It leaves the card and stays in the detail view with that reason. "Check Again" gives it another chance.
+- Automatic restores never count as evidence, and neither does anything during a wake transition, because a monitor that is not ready yet ignores writes too.
+- Mute by "volume to zero" goes away together with volume.
+
+On this desk that means: the Lenovo offers brightness, contrast and input. The LG offers brightness, contrast, volume, mute and input, and its volume and contrast writes were confirmed.
+
+## 23 November 2026 · Restore after wake cannot tell "the monitor forgot" from "someone changed it"
+
+DDC has no change notifications. When the app wakes and finds a monitor at another brightness than the one the user set here, there are two explanations it cannot tell apart: the monitor lost the value, or the user changed it with the monitor's buttons or with another utility. Restoring is right in the first case and wrong in the second.
+
+What the build does: it restores only values the user set through the app, and it stops restoring a control as soon as it has seen another value on the monitor (which happens when the panel opens and reads it). That still leaves a window: a change made elsewhere that the app never saw is undone at the next wake.
+
+This matters on any Mac that runs a second brightness tool, and on this one it would have shown at once, because another utility is in charge of these monitors. Both test monitors keep their brightness through standby, so on them a restore after wake only ever undoes outside changes.
+
+**Decision needed:** the default for DDC values after wake. Either restore (the current default, right for monitors that forget), or read first and adopt what the monitor reports (right for monitors that remember, which is most of them), with restore as an opt-in per display. Software dimming is not part of the question: it lives in the app and always has to be written again.
+
+## 23 November 2026 · A monitor's own input list beats the generic one
+
+The Lenovo P32p-20's capabilities string lists three inputs: 17 (HDMI 1), 15 (DisplayPort 1) and 49. The command set defines no input 49, so it is the monitor's own value, presumably for its USB-C port. The generic list offers USB-C as 27, which this monitor does not list. A generic "USB-C" entry would therefore send it a value it never said it accepts.
+
+The same string leaves out volume (0x62), and the monitor answers volume queries anyway. *Later the same day it turned out the string was right: the monitor ignores volume writes. See the entry above.* The capabilities string is still treated as a hint, because other monitors are known to omit controls that work.
+
+What the product does now:
+
+- Controls are found by asking for each one. The capabilities string is never used to rule a control out.
+- A monitor is asked once for its input values. When it lists any, its input list is built from them, and the input in use is selected. A value the command set does not define is shown by its number ("Input 49"), because a guessed label on a switch that can cut the picture off is worse than an honest number. The user's own list, once they have one, is never replaced.
+- A monitor that lists no inputs keeps the generic list.
+
+**Decision needed:** whether to ship known labels per vendor for vendor-specific input values (for example "USB-C" for 49 on Lenovo), which needs each one confirmed on hardware, or to leave unknown values numbered until the user renames them.
+
 ## 23 November 2026 · The LG needs every query twice, and its replies are sound
 
 Correction to the feasibility note of 22 November, which said the LG SDQHD sends a wrong length byte and a wrong checksum.
@@ -63,11 +102,13 @@ Lenovo P32p-20 on USB-C/DisplayPort. The first DDC query after some idle time of
 | --- | --- | --- |
 | Brightness (0x10) | 75 of 100 | 63 of 100 |
 | Contrast (0x12) | 71 of 100 | 70 of 100 |
-| Volume (0x62) | 50 of 100 | 13 of 100 |
+| Volume (0x62) | reports 50 of 100 and ignores writes | 13 of 100, writes confirmed |
 | Mute (0x8D) | reports "unsupported code" | 2, not muted |
 | Input (0x60) | 17 (HDMI 1 in the standard table), maximum reported as 49 | 15 (DisplayPort 1), maximum 18 |
 
-The Lenovo has volume and no mute command, so mute on it has to be "volume to zero" with the old level remembered. The product falls back to that strategy when a monitor has volume and no mute command. The Lenovo reports input 17 while it is driven over USB-C, so the standard input labels are conventions and cannot be trusted as a readout.
+A monitor with volume and no mute command is muted by "volume to zero" with the old level remembered, and the product falls back to that strategy on its own. The Lenovo looked like such a monitor at first. It is not: it has no working volume at all (see 23 November).
+
+Both input readouts are right: the Lenovo is on HDMI and reports 17 (HDMI 1), the LG is on DisplayPort and reports 15 (DisplayPort 1). *An earlier version of this entry said the Lenovo was on USB-C and its readout was wrong. That was a mistake about the cable, not about the monitor.*
 
 ## 22 November 2026 · Mode list facts on macOS 27
 

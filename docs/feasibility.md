@@ -59,7 +59,7 @@ DDC writes, gamma dimming, override install and activation, virtual display crea
 
 ## 23 November 2026 · v0.1 Core build · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
 
-Same Mac and monitors as above: Lenovo P32p-20 and LG SDQHD, both on DisplayPort transport, the LG rotated 270°. BetterDisplay 5 was running throughout and holds a client on both DDC channels, so every DDC number here was measured with a second utility present. Nothing looked disturbed by it.
+Same Mac and monitors as above: the Lenovo P32p-20 on HDMI (it reports input 17, and macOS names its factory color profiles "HDMI") and the LG SDQHD on DisplayPort (input 15), rotated 270°. BetterDisplay 5 was running throughout and holds a client on both DDC channels, so every DDC number here was measured with a second utility present. Nothing looked disturbed by it.
 
 ### How the two monitors answer DDC
 
@@ -71,7 +71,7 @@ Same Mac and monitors as above: Lenovo P32p-20 and LG SDQHD, both on DisplayPort
 | While the display is asleep | Still answers | Returns filler: `a6` repeated, or zeros. EDID over I2C still reads |
 | Brightness `0x10` | 75 of 100 | 63 of 100 |
 | Contrast `0x12` | 71 of 100 | 70 of 100 |
-| Volume `0x62` | 50 of 100 | 13 of 100 |
+| Volume `0x62` | Reports 50 of 100 and ignores every write | 13 of 100 (19 later, changed by the owner) |
 | Mute `0x8D` | Unsupported code | 2 (not muted) |
 | Input `0x60` | 17, maximum 49 | 15, maximum 18 |
 | Reading all five controls | About 0.9 s | Under 1 s |
@@ -87,6 +87,11 @@ Captured LG replies, all with a checksum that is right once `0x88` is put back i
 6e 80 be 04 00 0d 12 18 27 16 1c     single query: null message, then leftovers
 a6 a6 a6 a6 a6 a6 a6 a6 a6 a6 a6     display asleep
 ```
+
+Capabilities strings, read with `display16x probe --capabilities`:
+
+- Lenovo: `model(ThinkVision P32p-20)`, MCCS 2.2, 32 codes. It lists inputs `60(11 0F 31)` and does not list volume `62`, which it answers anyway. Fragments carry 26 bytes of text in a standard frame.
+- LG: fragments carry 32 bytes of text, again with `0x51` where the length byte belongs, so the length is not stated. It is recovered as the length for which the checksum of the standard frame fits. Both monitors' first fragments are unit-test fixtures.
 
 What the DDC code does with this: every query is sent twice, the null message and uniform filler count as "no reply" and are retried, and a reply with a garbled header is accepted when its checksum matches the standard frame. A reply whose checksum cannot be made to match is read twice and has to agree with itself. All of the captures above are unit-test fixtures.
 
@@ -106,6 +111,17 @@ A write call takes 6 to 8 ms, so 5 ms spacing is about 80 writes a second. Both 
 Through the app, 40 `set brightness` commands issued in 1.31 s (30 a second) became 17 writes on the wire. The other 23 were replaced in the queue before they started. The monitor ended on the last value issued, the app's stored value matched the device, and the rate stayed under the budget of 20 writes a second.
 
 Brightness set through `display16x set` was confirmed by an independent read on both monitors (Lenovo 75 → 70 → 75, LG 63 → 58 → 56 → 63), and both were left at their original values.
+
+Other controls, each changed by one step through `display16x set`, read back, and put back:
+
+| Control | Lenovo | LG |
+| --- | --- | --- |
+| Contrast | 71 → 70 → 71, confirmed | 70 → 69 → 70, confirmed |
+| Volume | Sent 49 and 48, monitor still reports 50. After the second attempt the app marked volume as "reported and ignored" | 19 → 18 → 19, confirmed |
+| Mute | No mute command, and no working volume to fall back on | Read as off. Not written, because the LG was the audio output in use |
+| Input | Read as HDMI 1 | Read as DisplayPort 1 |
+
+Input switching was never sent to hardware. It can cut the Mac off from the monitor, and nothing on this desk needs it.
 
 Not tested: a connection that carries video and no DDC. There is none on this desk.
 
@@ -131,6 +147,22 @@ So the interface works on an M5 Pro. What is still open is what it looks like: t
 - Rotation: the display preferences class of the MonitorPanel framework is present, reports the same angle as Core Graphics for both monitors, and says both can be rotated. The write path has never been run.
 - Mode flags: 101 of the Lenovo's 140 modes and 27 of the LG's 46 are marked safe. Every mode reports the same 8-bit pixel encoding, so depth cannot be told apart through the public interface.
 - Sizes on the text-size strip: 11 on the Lenovo (1280 × 720 to 3360 × 1890), 5 on the LG (900 × 800 to 2304 × 2048).
+
+### Idle cost, measured against the budget in the PRD
+
+Release build, packaged app, both displays awake and unchanged, panel closed, measured for 10 minutes (00:14:38 to 00:24:39) with `top` and `ps`. This is an M5 Pro. The budget is written for a MacBook Air M1, which was not available.
+
+| Budget | Target | Measured here |
+| --- | --- | --- |
+| Idle CPU, menu closed | At most 0.1% of one core over 10 minutes | 0.02 s of CPU in 600 s, which is 0.003% |
+| Recurring wakeups | None | 1 idle wakeup in 10 minutes |
+| Memory, menu closed | At most 50 MiB after first use | 15 MB physical footprint before the panel was ever opened. After first use: not measured yet |
+| Menu open | Under 100 ms warm, no DDC on the main thread | Not timed. Capabilities come from the cache, and DDC runs on each display's own queue |
+| Brightness drag | At most 20 writes a second, last value wins, final value sent | 17 writes for 40 commands in 1.31 s, and the monitor ended on the last value |
+
+The process had 3 threads while idle. A separate debug-build process that builds and renders the whole panel off screen peaked at 67 MB, which is an upper bound for "panel open" and says little about "after it closed". The real figure needs someone to open and close the panel once.
+
+Launch at login was not exercised. The login item service reports "not found" for the packaged app before it has ever been registered, and registering it would have changed the owner's login items.
 
 ### Building with the Command Line Tools alone
 
