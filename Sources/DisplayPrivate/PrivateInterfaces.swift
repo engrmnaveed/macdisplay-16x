@@ -47,11 +47,13 @@ public struct PrivateCapabilities: Sendable, Equatable {
     public var avServiceI2C: Bool
     public var nativeBrightness: Bool
     public var rotation: Bool
+    public var windowServerModes: Bool
 
     public static let current = PrivateCapabilities(
         avServiceI2C: AVServiceDirectory.isAvailable,
         nativeBrightness: NativeBrightness.isAvailable,
-        rotation: DisplayRotation.isAvailable
+        rotation: DisplayRotation.isAvailable,
+        windowServerModes: WindowServerModes.canList && WindowServerModes.canSelect
     )
 
     public var summary: [String] {
@@ -59,6 +61,7 @@ public struct PrivateCapabilities: Sendable, Equatable {
             "AV service I2C (DDC): \(avServiceI2C ? "available" : "missing")",
             "Native brightness: \(nativeBrightness ? "available" : "missing")",
             "Rotation: \(rotation ? "available" : "missing")",
+            "Window server mode list: \(windowServerModes ? "available" : "missing")",
         ]
     }
 }
@@ -249,6 +252,99 @@ public enum DisplayRotation {
         guard [0, 90, 180, 270].contains(degrees), let displayClass, let object = object(for: display),
               let implementation = class_getMethodImplementation(displayClass, orientationSetter) else { return false }
         unsafeBitCast(implementation, to: IntSetter.self)(object, orientationSetter, Int32(degrees))
+        return true
+    }
+}
+
+// MARK: Window server modes
+
+/// One entry of the window server's own mode list. The public mode list is a subset of
+/// it: it leaves out the scaled HiDPI modes that System Settings offers as "more space",
+/// except for the one in use.
+public struct WindowServerMode: Sendable, Equatable {
+    /// The mode's number, which is also its index in the list and what selects it.
+    public var number: Int32
+    public var flags: UInt32
+    /// Size in points.
+    public var width: Int
+    public var height: Int
+    /// 2 for HiDPI.
+    public var density: Double
+    /// Whole hertz. Fractional rates are only exact in the public list.
+    public var refreshRate: Int
+
+    public init(number: Int32, flags: UInt32, width: Int, height: Int, density: Double, refreshRate: Int) {
+        self.number = number
+        self.flags = flags
+        self.width = width
+        self.height = height
+        self.density = density
+        self.refreshRate = refreshRate
+    }
+
+    /// Set on modes the system does not consider usable for the desktop.
+    public static let notUsableFlag: UInt32 = 0x4000_0000
+    public static let nativeFlag: UInt32 = 0x0200_0000
+    public static let defaultFlag: UInt32 = 0x0000_0004
+}
+
+/// The window server's mode list, and selecting a mode by its number. A saved mode can
+/// only be returned to reliably this way, because the public list forgets a hidden mode
+/// the moment the display leaves it.
+public enum WindowServerModes {
+    private typealias CountFunction = @convention(c) (UInt32, UnsafeMutablePointer<Int32>) -> Void
+    private typealias DescriptionFunction = @convention(c) (UInt32, Int32, UnsafeMutableRawPointer, Int32) -> Void
+    private typealias ConfigureFunction = @convention(c) (OpaquePointer, UInt32, Int32) -> Void
+
+    // Layout of a mode description, as documented by open-source projects that list modes.
+    private static let descriptionCapacity = 0xDC
+    private static let descriptionLength: Int32 = 0xD4
+    private static let refreshOffset = 0xBE
+    private static let densityOffset = 0xD0
+
+    public static var canList: Bool {
+        PrivateLibraries.skyLight.symbol("SLSGetNumberOfDisplayModes", as: UnsafeRawPointer.self) != nil
+            && PrivateLibraries.skyLight.symbol("SLSGetDisplayModeDescriptionOfLength", as: UnsafeRawPointer.self) != nil
+    }
+
+    public static var canSelect: Bool {
+        PrivateLibraries.skyLight.symbol("SLSConfigureDisplayMode", as: UnsafeRawPointer.self) != nil
+    }
+
+    public static func modes(display: UInt32) -> [WindowServerMode] {
+        guard let count = PrivateLibraries.skyLight.symbol("SLSGetNumberOfDisplayModes", as: CountFunction.self),
+              let describe = PrivateLibraries.skyLight.symbol("SLSGetDisplayModeDescriptionOfLength", as: DescriptionFunction.self) else { return [] }
+        var total: Int32 = 0
+        count(display, &total)
+        // A list this long would mean the call did not behave as expected.
+        guard total > 0, total < 4_096 else { return [] }
+        var result: [WindowServerMode] = []
+        for index in 0..<total {
+            var raw = [UInt8](repeating: 0, count: descriptionCapacity)
+            raw.withUnsafeMutableBytes { describe(display, index, $0.baseAddress!, descriptionLength) }
+            let mode: WindowServerMode = raw.withUnsafeBytes { bytes in
+                WindowServerMode(
+                    number: Int32(bitPattern: bytes.loadUnaligned(fromByteOffset: 0, as: UInt32.self)),
+                    flags: bytes.loadUnaligned(fromByteOffset: 4, as: UInt32.self),
+                    width: Int(bytes.loadUnaligned(fromByteOffset: 8, as: UInt32.self)),
+                    height: Int(bytes.loadUnaligned(fromByteOffset: 12, as: UInt32.self)),
+                    density: Double(bytes.loadUnaligned(fromByteOffset: densityOffset, as: Float.self)),
+                    refreshRate: Int(bytes.loadUnaligned(fromByteOffset: refreshOffset, as: UInt16.self))
+                )
+            }
+            // Anything implausible means the layout changed. Then the list is not used at all.
+            guard mode.width > 0, mode.width < 32_768, mode.height > 0, mode.height < 32_768,
+                  mode.density == 1 || mode.density == 2, mode.number == index else { return [] }
+            result.append(mode)
+        }
+        return result
+    }
+
+    /// Adds "select this mode" to an open display configuration. The caller completes the
+    /// configuration and reads the mode back.
+    public static func select(mode number: Int32, display: UInt32, in configuration: OpaquePointer) -> Bool {
+        guard let configure = PrivateLibraries.skyLight.symbol("SLSConfigureDisplayMode", as: ConfigureFunction.self) else { return false }
+        configure(configuration, display, number)
         return true
     }
 }

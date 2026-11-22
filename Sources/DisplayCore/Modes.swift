@@ -236,8 +236,9 @@ public enum ModeFilter: Sendable, Equatable {
     case nativeAspect(tolerance: Double)
     /// Hides modes with fewer lines than this.
     case minimumHeight(Int)
-    /// Keeps the density (HiDPI or not) of the current mode.
-    case sameDensityAsCurrent
+    /// On a display that offers HiDPI modes, keeps those and the panel's own 1:1 mode.
+    /// On a display without HiDPI, keeps everything.
+    case hiDPIWhenOffered
     /// One entry per distinct mode.
     case removeDuplicates
     /// One entry per logical size, preferring the current refresh rate and depth.
@@ -263,7 +264,7 @@ public struct ModeFilterChain: Sendable, Equatable {
     public static func sizeStrip(minimumHeight: Int, includeUnsafe: Bool) -> ModeFilterChain {
         ModeFilterChain(
             (includeUnsafe ? [] : [.safeOnly]) + [
-                .sameDensityAsCurrent,
+                .hiDPIWhenOffered,
                 .nativeAspect(tolerance: 0.02),
                 .minimumHeight(minimumHeight),
                 .onePerSize,
@@ -285,9 +286,10 @@ public struct ModeFilterChain: Sendable, Equatable {
                 result = result.filter { abs($0.aspectRatio - aspect) / aspect <= tolerance }
             case .minimumHeight(let lines):
                 result = result.filter { $0.logicalHeight >= lines }
-            case .sameDensityAsCurrent:
-                guard let current = context.current else { continue }
-                result = result.filter { $0.isHiDPI == current.isHiDPI }
+            case .hiDPIWhenOffered:
+                guard result.contains(where: \.isHiDPI) else { continue }
+                // The native 1:1 mode is the far end of "more space" on a HiDPI display.
+                result = result.filter { $0.isHiDPI || $0.isNative }
             case .removeDuplicates:
                 var kept: [ModeDescriptor] = []
                 for mode in result {
@@ -308,7 +310,15 @@ public struct ModeFilterChain: Sendable, Equatable {
                         + (mode.scale == current.scale ? 0 : 1)
                 }
                 for mode in result {
+                    // A size offered at both densities is kept once: as the panel's own
+                    // unscaled grid when it is that, and in its HiDPI form otherwise.
                     let key = "\(mode.logicalWidth)x\(mode.logicalHeight)"
+                    if let existing = best[key], existing.isHiDPI != mode.isHiDPI {
+                        let unscaled = existing.isHiDPI ? mode : existing
+                        let scaled = existing.isHiDPI ? existing : mode
+                        best[key] = unscaled.isNative ? unscaled : scaled
+                        continue
+                    }
                     if let existing = best[key] {
                         if distance(mode) < distance(existing) { best[key] = mode }
                     } else {
@@ -341,7 +351,10 @@ public struct SizeStripEntry: Sendable, Equatable, Identifiable {
     public var isCurrent: Bool
     public var isDefault: Bool
 
-    public var id: String { "\(mode.logicalWidth)x\(mode.logicalHeight)" }
+    /// The panel's own pixel grid with no scaling.
+    public var isNativeUnscaled: Bool { mode.isNative && !mode.isHiDPI }
+
+    public var id: String { "\(mode.logicalWidth)x\(mode.logicalHeight)@\(mode.isHiDPI ? 2 : 1)" }
 }
 
 public enum ModeCatalog {
@@ -356,10 +369,10 @@ public enum ModeCatalog {
         let context = ModeFilterContext(current: current, native: native)
         let filtered = ModeFilterChain.sizeStrip(minimumHeight: minimumHeight, includeUnsafe: includeUnsafe)
             .apply(to: modes, context: context)
-            .sorted { ($0.logicalWidth, $0.logicalHeight) < ($1.logicalWidth, $1.logicalHeight) }
-        // The system's default flag is not always on a mode of the density in use. The
+            .sorted { ($0.logicalWidth, $0.logicalHeight, $0.isHiDPI ? 0 : 1) < ($1.logicalWidth, $1.logicalHeight, $1.isHiDPI ? 0 : 1) }
+        // The system's default flag is not always on a mode of the strip's density. The
         // native-flagged mode of that density is the default size then.
-        let density = current?.isHiDPI
+        let density: Bool? = modes.contains(where: { $0.isHiDPI && $0.isSafe }) ? true : current?.isHiDPI
         let defaultMode = modes.first(where: { $0.isSystemDefault && (density == nil || $0.isHiDPI == density) })
             ?? modes.first(where: { $0.isNative && (density == nil || $0.isHiDPI == density) })
             ?? modes.first(where: \.isSystemDefault)
@@ -368,8 +381,8 @@ public enum ModeCatalog {
             SizeStripEntry(
                 mode: mode,
                 relativeSpace: Double(mode.logicalWidth) / max(referenceWidth, 1),
-                isCurrent: current.map { $0.logicalWidth == mode.logicalWidth && $0.logicalHeight == mode.logicalHeight } ?? false,
-                isDefault: defaultMode.map { $0.logicalWidth == mode.logicalWidth && $0.logicalHeight == mode.logicalHeight } ?? false
+                isCurrent: current.map { $0.logicalWidth == mode.logicalWidth && $0.logicalHeight == mode.logicalHeight && $0.isHiDPI == mode.isHiDPI } ?? false,
+                isDefault: defaultMode.map { $0.logicalWidth == mode.logicalWidth && $0.logicalHeight == mode.logicalHeight && $0.isHiDPI == mode.isHiDPI } ?? false
             )
         }
     }

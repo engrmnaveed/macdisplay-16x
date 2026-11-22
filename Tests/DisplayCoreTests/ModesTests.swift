@@ -82,11 +82,13 @@ struct ModeModelTests {
         #expect(withUnsafe.contains { $0.sizeLabel == "3360 × 1890" })
     }
 
-    @Test("The size strip runs from larger text to more space at the current density")
+    @Test("The size strip runs from larger text to more space, and ends at the panel's own size")
     func sizeStrip() {
         let strip = ModeCatalog.sizeStrip(modes: modes, current: current)
-        #expect(strip.map(\.mode.sizeLabel) == ["1280 × 720", "1920 × 1080", "2560 × 1440", "3008 × 1692", "3200 × 1800"])
-        #expect(strip.allSatisfy { $0.mode.isHiDPI && $0.mode.refreshRate == 60 })
+        #expect(strip.map(\.mode.sizeLabel) == ["1280 × 720", "1920 × 1080", "2560 × 1440", "3008 × 1692", "3200 × 1800", "3840 × 2160"])
+        #expect(strip.dropLast().allSatisfy { $0.mode.isHiDPI && $0.mode.refreshRate == 60 })
+        #expect(strip.last?.isNativeUnscaled == true, "the far end of more space is the unscaled panel")
+        #expect(strip.filter(\.isNativeUnscaled).count == 1)
         #expect(strip.first { $0.isCurrent }?.mode.sizeLabel == "1920 × 1080")
         #expect(strip.first { $0.isDefault }?.relativeSpace == 1)
         #expect(strip.last!.relativeSpace > 1.6)
@@ -111,7 +113,45 @@ struct ModeModelTests {
         let native = Fixture.mode(2880, 2560, scale: 1, flags: [.safe, .native])
         let list = [native, Fixture.mode(2304, 2048), Fixture.mode(1440, 1280, flags: [.safe, .systemDefault]), Fixture.mode(1920, 1080)]
         let strip = ModeCatalog.sizeStrip(modes: list, current: list[1])
-        #expect(strip.map(\.mode.sizeLabel) == ["1440 × 1280", "2304 × 2048"])
+        #expect(strip.map(\.mode.sizeLabel) == ["1440 × 1280", "2304 × 2048", "2880 × 2560"])
+    }
+
+    @Test("The strip does not depend on where the display is now")
+    func stripIsStableAcrossSizes() {
+        // The LG's sizes, including the scaled ones the public list hides.
+        let list = [
+            Fixture.mode(2880, 2560, scale: 1, flags: [.safe, .native, .systemDefault]),
+            Fixture.mode(900, 800), Fixture.mode(1080, 960), Fixture.mode(1152, 1024),
+            Fixture.mode(1440, 1280, flags: [.safe, .native]),
+            Fixture.mode(1512, 1344), Fixture.mode(1800, 1600), Fixture.mode(2160, 1920), Fixture.mode(2304, 2048),
+            Fixture.mode(2304, 2048, scale: 1), Fixture.mode(1440, 1280, scale: 1),
+        ]
+        let sizes = ["900 × 800", "1080 × 960", "1152 × 1024", "1440 × 1280", "1512 × 1344", "1800 × 1600", "2160 × 1920", "2304 × 2048", "2880 × 2560"]
+        for current in [list[8], list[4], list[1], list[0]] {
+            let strip = ModeCatalog.sizeStrip(modes: list, current: current)
+            #expect(strip.map(\.mode.sizeLabel) == sizes, "current \(current.summary)")
+            #expect(strip.filter(\.isCurrent).count == 1)
+            #expect(Set(strip.map(\.id)).count == strip.count)
+        }
+        // From the smaller size, everything above it is still there.
+        let atDefault = ModeCatalog.sizeStrip(modes: list, current: list[4])
+        #expect(atDefault.firstIndex(where: \.isCurrent) == 3)
+        #expect(atDefault.first { $0.isDefault }?.mode.sizeLabel == "1440 × 1280")
+
+        // A standard-density mode that is not the panel's own is kept only while in use.
+        let odd = ModeCatalog.sizeStrip(modes: list, current: list[9])
+        #expect(odd.filter { $0.mode.sizeLabel == "2304 × 2048" }.count == 2)
+        #expect(odd.first { $0.isCurrent }?.mode.isHiDPI == false)
+    }
+
+    @Test("A display without HiDPI modes gets a strip of its standard modes")
+    func stripWithoutHiDPI() {
+        let list = [
+            Fixture.mode(1920, 1080, scale: 1, flags: [.safe, .native, .systemDefault]),
+            Fixture.mode(1600, 900, scale: 1), Fixture.mode(1280, 720, scale: 1), Fixture.mode(1024, 768, scale: 1),
+        ]
+        let strip = ModeCatalog.sizeStrip(modes: list, current: list[0])
+        #expect(strip.map(\.mode.sizeLabel) == ["1280 × 720", "1600 × 900", "1920 × 1080"])
     }
 
     @Test("When the default flag sits on another density, the native-flagged mode is the default size")
@@ -126,6 +166,8 @@ struct ModeModelTests {
         let strip = ModeCatalog.sizeStrip(modes: list, current: list[2])
         #expect(strip.first { $0.isDefault }?.mode.sizeLabel == "1440 × 1280")
         #expect(strip.first { $0.isCurrent }?.relativeSpace == 1.6)
+        #expect(strip.last?.mode.sizeLabel == "2880 × 2560")
+        #expect(strip.last?.isDefault == false)
     }
 
     @Test("Refresh rates are listed for the current size, density and depth")

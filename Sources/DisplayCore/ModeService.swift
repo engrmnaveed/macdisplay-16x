@@ -148,14 +148,17 @@ public final class ModeService {
     private func apply(_ mode: ModeDescriptor, tag: DisplayTag, previous: ModeDescriptor?, origin: ChangeOrigin) async -> ModeChangeReport {
         guard let live = registry.live[tag] else { return ModeChangeReport(requested: mode, failure: ModeApplyError.displayNotFound.reason) }
         if case .failure(let error) = system.apply(mode, to: live.systemID) {
+            Log.core.notice("Mode change on \(tag) to \(mode.summary) was refused: \(error.reason).")
             return ModeChangeReport(requested: mode, actual: previous, failure: error.reason)
         }
-        _ = await bus.next(within: settleTimeout, scheduler: scheduler) { $0 == .reconfigurationSettled }
+        let settled = await bus.next(within: settleTimeout, scheduler: scheduler) { $0 == .reconfigurationSettled }
         // The system ID can change during reconfiguration, so look the display up again.
         guard let liveNow = registry.live[tag], let actual = system.currentMode(for: liveNow.systemID) else {
+            Log.core.notice("Display \(tag) went away during a mode change to \(mode.summary).")
             return ModeChangeReport(requested: mode, failure: "the display went away during the change")
         }
         let verified = actual.sameMode(as: mode)
+        Log.core.info("Mode change on \(tag): asked for \(mode.summary), display shows \(actual.summary)\(settled ? "" : " (the system announced no reconfiguration)").")
         if let previous, !actual.sameMode(as: previous) {
             settings.updateRecord(tag) { $0.previousMode = previous }
         }
@@ -277,6 +280,9 @@ public final class ModeService {
                 $0.unconfirmedModes[tag] = nil
                 $0.unconfirmedRotations[tag] = nil
             }
+        } else {
+            // The entry stays in the recovery store, so the next start tries again.
+            Log.core.error("Display \(tag) could not be returned to \(confirmation.previousMode?.summary ?? "its previous rotation").")
         }
         return restored
     }

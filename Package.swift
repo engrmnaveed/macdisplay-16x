@@ -39,6 +39,6 @@ let package = Package(
         ),
         .testTarget(name: "DisplayCoreTests", dependencies: ["DisplayCore"], swiftSettings: testSettings),
         .testTarget(name: "DDCTests", dependencies: ["DDC"], swiftSettings: testSettings),
-        .testTarget(name: "DisplaySystemTests", dependencies: ["DisplaySystem", "DisplayCore", "DDC"], swiftSettings: testSettings),
+        .testTarget(name: "DisplaySystemTests", dependencies: ["DisplaySystem", "DisplayCore", "DDC", "DisplayPrivate"], swiftSettings: testSettings),
     ]
 )

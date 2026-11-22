@@ -189,6 +189,7 @@ public final class EventSequencer {
     public func systemReconfigured() {
         if !isReconfiguring {
             isReconfiguring = true
+            Log.core.debug("Reconfiguration began.")
             bus.publish(.reconfigurationBegan)
         }
         settleWork?.cancel()
@@ -196,6 +197,7 @@ public final class EventSequencer {
             guard let self else { return }
             self.isReconfiguring = false
             self.settleWork = nil
+            Log.core.debug("Reconfiguration settled.")
             self.bus.publish(.reconfigurationSettled)
         }
     }

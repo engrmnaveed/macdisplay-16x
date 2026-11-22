@@ -1,5 +1,6 @@
 import DDC
 import DisplayCore
+import DisplayPrivate
 import Foundation
 import Testing
 @testable import DisplaySystem
@@ -207,5 +208,79 @@ struct AVServiceMatcherTests {
         let outcome = AVServiceMatcher.match(displays: displays, services: [edid(vendor: 0x30AE, product: 0x62A2, serial: 77)])
         #expect(outcome.pairs == [SystemDisplayID(4): 0])
         #expect(outcome.ambiguous.isEmpty)
+    }
+}
+
+@Suite("Mode list from the window server")
+@MainActor
+struct ModeMergeTests {
+    private func descriptor(_ width: Int, _ height: Int, scale: Int, rate: Double = 60, flags: ModeFlags = [.safe]) -> ModeDescriptor {
+        ModeDescriptor(logicalWidth: width, logicalHeight: height, pixelWidth: width * scale, pixelHeight: height * scale, refreshRate: rate, flags: flags)
+    }
+
+    /// A cut of what the LG SDQHD reported on 23 November 2026 while it was at 1440 × 1280.
+    private var publicModes: [SystemModeEntry] {
+        [
+            SystemModeEntry(number: 9, descriptor: descriptor(1152, 1024, scale: 2), isHidden: false),
+            SystemModeEntry(number: 15, descriptor: descriptor(1440, 1280, scale: 2, rate: 59.94, flags: [.safe, .native]), isHidden: false),
+            SystemModeEntry(number: 25, descriptor: descriptor(2880, 2560, scale: 1, flags: [.safe, .native, .systemDefault]), isHidden: false),
+            SystemModeEntry(number: 45, descriptor: descriptor(720, 640, scale: 2, flags: []), isHidden: false),
+        ]
+    }
+
+    private var windowServer: [WindowServerMode] {
+        [
+            WindowServerMode(number: 9, flags: 0x1, width: 1152, height: 1024, density: 2, refreshRate: 60),
+            WindowServerMode(number: 15, flags: 0x2000001, width: 1440, height: 1280, density: 2, refreshRate: 60),
+            WindowServerMode(number: 25, flags: 0x2000007, width: 2880, height: 2560, density: 1, refreshRate: 60),
+            WindowServerMode(number: 31, flags: 0x200001, width: 1800, height: 1600, density: 2, refreshRate: 60),
+            WindowServerMode(number: 33, flags: 0x200001, width: 2304, height: 2048, density: 2, refreshRate: 60),
+            WindowServerMode(number: 45, flags: 0x40000000, width: 720, height: 640, density: 2, refreshRate: 60),
+            WindowServerMode(number: 46, flags: 0x40000000, width: 720, height: 640, density: 1, refreshRate: 0),
+        ]
+    }
+
+    @Test("Modes the public list hides are added, described from the window server's entry")
+    func hiddenModesAreAdded() throws {
+        let merged = SystemModeController.merge(publicModes: publicModes, windowServer: windowServer)
+        #expect(merged.map(\.number) == [9, 15, 25, 31, 33, 45, 46])
+        let scaled = try #require(merged.first { $0.number == 33 })
+        #expect(scaled.isHidden)
+        #expect(scaled.descriptor.summary == "2304 × 2048 HiDPI, 60 Hz")
+        #expect(scaled.descriptor.pixelWidth == 4608)
+        #expect(scaled.descriptor.pixelHeight == 4096)
+        #expect(scaled.descriptor.isSafe, "a scaled mode the system lists as valid is offered")
+    }
+
+    @Test("A mode the public list knows keeps its exact rate and its flags")
+    func publicDescriptionWins() throws {
+        let merged = SystemModeController.merge(publicModes: publicModes, windowServer: windowServer)
+        let native = try #require(merged.first { $0.number == 15 })
+        #expect(!native.isHidden)
+        #expect(native.descriptor.refreshRate == 59.94, "the window server only knows whole hertz")
+        #expect(native.descriptor.isNative)
+        #expect(merged.first { $0.number == 45 }?.descriptor.isSafe == false)
+    }
+
+    @Test("A hidden mode the system marks as not usable stays unsafe, and a missing rate reads as 60")
+    func unusableHiddenModes() throws {
+        let merged = SystemModeController.merge(publicModes: publicModes, windowServer: windowServer)
+        let entry = try #require(merged.first { $0.number == 46 })
+        #expect(entry.isHidden)
+        #expect(!entry.descriptor.isSafe)
+        #expect(entry.descriptor.refreshRate == 60)
+    }
+
+    @Test("Without the window server's list the public list is used as it is")
+    func publicOnly() {
+        #expect(SystemModeController.merge(publicModes: publicModes, windowServer: []) == publicModes)
+    }
+
+    @Test("With the hidden modes the LG's strip keeps its more-space side from any size")
+    func stripFromMergedList() {
+        let modes = SystemModeController.merge(publicModes: publicModes, windowServer: windowServer).map(\.descriptor)
+        let atDefault = ModeCatalog.sizeStrip(modes: modes, current: modes[1])
+        #expect(atDefault.map(\.mode.sizeLabel) == ["1152 × 1024", "1440 × 1280", "1800 × 1600", "2304 × 2048", "2880 × 2560"])
+        #expect(atDefault.firstIndex(where: \.isCurrent) == 1)
     }
 }
