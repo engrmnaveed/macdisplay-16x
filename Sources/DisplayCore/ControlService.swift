@@ -407,6 +407,10 @@ public final class ControlService {
         for (control, value) in [(ControlID.softwareBrightness, parts.software), (.hardwareBrightness, parts.hardware)] {
             guard let value, let owner = owner(of: control, for: tag) else { continue }
             if skipUnchanged, let tracked = values[control], mapping(for: control, tag: tag, owner: owner).isSameRaw(tracked, value) {
+                // Same step on the device, so nothing is sent. The exact position is still
+                // remembered: otherwise the scale is rebuilt from the older fraction after a
+                // restart and the slider lands a little off where it was left.
+                if tracked != value { track(control, value: value, for: tag, origin: origin, recompose: false) }
                 continue
             }
             let result = await write(control, value: value, for: tag, origin: origin, verification: verification, recompose: false)

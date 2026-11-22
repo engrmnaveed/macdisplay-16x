@@ -217,6 +217,22 @@ struct CommandEngineTests {
         #expect(askedAbove.entries.first?.outcome == .confirmed)
     }
 
+    @Test("A drag that ends within one step of the monitor still remembers where it ended")
+    func dragRemembersExactPosition() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        let tag = DisplayTag(1)
+        let drag = CommandOptions(verification: .none)
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.676), origin: .interface, options: drag)
+        ddc.clearWrites()
+        // Both positions are 68 of 100 on the monitor.
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.681), origin: .interface, options: drag)
+        #expect(ddc.writes.isEmpty, "the same step is not sent twice")
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.681)
+        #expect(rig.controls.trackedValue(.hardwareBrightness, for: tag) == 0.681, "the part keeps up with the scale, so a restart rebuilds the same value")
+    }
+
     @Test("While dragging, a part that does not change on the device is not sent again")
     func draggingSkipsUnchangedParts() async {
         let rig = Rig { $0.global.colorTablesEnabled = true }
