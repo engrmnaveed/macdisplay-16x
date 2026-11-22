@@ -306,6 +306,128 @@ struct ReconcilerTests {
         #expect(ddc.values[.hardwareBrightness] == 15)
     }
 
+    @Test("A color table the system replaces at unlock is written again")
+    func softwareDimmingSurvivesUnlock() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        let dimmed = rig.colorBackend.written[Fixture.lenovoID]
+        #expect(dimmed != nil)
+
+        // Unlocking hands the displays back with the system's own tables.
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.screenUnlocked)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+
+        // The same when another user's session ends and this one returns.
+        rig.bus.publish(.sessionInactive)
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.sessionActive)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+    }
+
+    @Test("A reset that comes after the wake is caught by a few bounded checks, and then the app is idle again")
+    func lateColorTableReset() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        let dimmed = rig.colorBackend.written[Fixture.lenovoID]
+        await wake(rig)
+        let writesAfterWake = rig.colorBackend.writeCount
+
+        // Nothing changed: the checks look and write nothing.
+        rig.scheduler.advance(by: 1.01)
+        #expect(rig.colorBackend.writeCount == writesAfterWake, "a table that is still in use is not written again")
+
+        // The system puts its own table back two seconds after the wake settled, silently.
+        rig.colorBackend.systemReset()
+        rig.scheduler.advance(by: 2.0)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+
+        // After the last check nothing is left scheduled. A reset after that waits for the
+        // next event or for the panel to open.
+        rig.scheduler.advance(by: 10)
+        await rig.idle()
+        #expect(rig.scheduler.pendingCount == 0, "no check repeats")
+        rig.colorBackend.systemReset()
+        rig.scheduler.advance(by: 60)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
+        rig.coordinator.checkColorTables()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+        #expect(rig.scheduler.pendingCount == 0)
+    }
+
+    @Test("No check is scheduled while no color table of ours is in use")
+    func noColorChecksWhenNeutral() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.6))
+        await rig.reconfigure()
+        rig.bus.publish(.screenUnlocked)
+        await rig.idle()
+        #expect(rig.scheduler.pendingCount == 0)
+        #expect(rig.colorBackend.writeCount == 0)
+    }
+
+    @Test("The table found after a reset becomes the one to dim from, unless it is not a usable table")
+    func baselineAfterReset() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        let dimmed = rig.colorBackend.written[Fixture.lenovoID]!
+
+        // A display that is not ready reports an empty table. It is never dimmed from.
+        rig.colorBackend.reported[Fixture.lenovoID] = ColorTable(red: [0, 0, 0, 0], green: [0, 0, 0, 0], blue: [0, 0, 0, 0])
+        rig.bus.publish(.screenUnlocked)
+        #expect(rig.colorBackend.adopted.isEmpty)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed, "written again over the table known before")
+        rig.colorBackend.reported[Fixture.lenovoID] = nil
+
+        // The system comes back with another table of its own, for example a new profile.
+        let warmer = ColorTable(red: [0, 0.3, 0.6, 0.9], green: [0, 0.3, 0.6, 0.9], blue: [0, 0.25, 0.5, 0.75])
+        rig.colorBackend.systemReset()
+        rig.colorBackend.baseline = warmer
+        rig.bus.publish(.screenUnlocked)
+        #expect(rig.colorBackend.adopted == [Fixture.lenovoID])
+        let now = rig.colorBackend.written[Fixture.lenovoID]!
+        #expect(now != dimmed)
+        #expect(abs(now.blue[3] / now.red[3] - warmer.blue[3] / warmer.red[3]) < 0.001, "the system's own balance is kept under the dimming")
+        #expect(now.red[3] < warmer.red[3], "and it is dimmed")
+    }
+
+    @Test("In safe mode a replaced color table is left alone")
+    func safeModeLeavesColorTables() async {
+        let rig = Rig(safeMode: true) { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        #expect(rig.colorBackend.written[Fixture.lenovoID] != nil, "a change made by hand still works")
+        let pending = rig.scheduler.pendingCount
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.screenUnlocked)
+        rig.coordinator.checkColorTables()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
+        #expect(rig.scheduler.pendingCount == pending, "and no check is scheduled")
+    }
+
+    @Test("The software part of a brightness change goes out before the command to the monitor")
+    func softwarePartFirst() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        let order = OrderLog()
+        ddc.onWrite = { control in if control == .hardwareBrightness { order.add("monitor") } }
+        rig.colorBackend.onWrite = { order.add("table") }
+
+        // From the middle of the hardware range to the bottom of the scale in one move.
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        #expect(order.all == ["table", "monitor"])
+    }
+
     @Test("Values reported during a wake transition are not trusted")
     func darkWakeGuard() async {
         let rig = Rig()

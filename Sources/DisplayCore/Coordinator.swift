@@ -29,6 +29,12 @@ public final class DisplayCoordinator {
     /// A monitor that was silent right after it connected is asked again after these delays.
     /// Bounded: after the last one it waits for the next wake or for the panel to open.
     public var redetectionDelays: [TimeInterval] = [3, 10]
+    /// The system can put its own color tables back a moment after wake, unlock or a
+    /// reconfiguration, later than any notification it sends. Ours are looked at again at
+    /// these moments after each such event and written again if they are gone. One-shot and
+    /// bounded, and nothing is scheduled while no table of ours is in use.
+    public var colorTableCheckDelays: [TimeInterval] = [1, 3, 8]
+    private var colorTableChecks: [ScheduledWork] = []
     public private(set) var isStarted = false
 
     public init(
@@ -75,6 +81,8 @@ public final class DisplayCoordinator {
     public func shutdown() {
         bus.publish(.appTerminating)
         for task in detectionTasks.values { task.cancel() }
+        colorTableChecks.forEach { $0.cancel() }
+        colorTableChecks = []
         colorBackend?.clearAll()
         settings.flush()
     }
@@ -96,6 +104,9 @@ public final class DisplayCoordinator {
             // Its probe ends with its own restore.
             redetectStale(trigger: .wake, minimumAge: 0)
             Task { @MainActor [reconciler] in await reconciler.restoreAll(trigger: .wake) }
+        case .screenUnlocked, .sessionActive:
+            // The login window hands the displays back with the system's own color tables.
+            reapplyColorTables()
         default:
             break
         }
@@ -350,16 +361,38 @@ public final class DisplayCoordinator {
 
     // MARK: Color tables
 
-    /// The system resets color tables on reconfiguration and wake, so ours are written again.
-    /// This is an automatic write and passes the gate.
-    private func reapplyColorTables() {
+    /// The system resets color tables on reconfiguration, wake and unlock, so ours are
+    /// written again when they are found replaced. This is an automatic write and passes
+    /// the gate.
+    private func reapplyColorTables(followUps: Bool = true) {
         guard gate.check(.restore) == .allowed else { return }
-        for live in registry.live.values {
-            guard let pipeline = live.pipeline else { continue }
+        var inUse = false
+        for tag in registry.live.keys.sorted() {
+            guard let live = registry.live[tag], let pipeline = live.pipeline else { continue }
             pipeline.rebind(to: live.systemID)
-            if !pipeline.reapply() {
-                Log.core.notice("Color table for \(live.tag) could not be reapplied: \(pipeline.blockedReason ?? "unknown").")
+            guard !pipeline.isNeutral else { continue }
+            inUse = true
+            switch pipeline.reapply() {
+            case .intact:
+                break
+            case .rewritten:
+                Log.core.info("The system had put its own color table back on \(tag). Ours was written again.")
+            case .failed:
+                Log.core.notice("Color table for \(tag) could not be reapplied: \(pipeline.blockedReason ?? "unknown").")
             }
         }
+        guard followUps else { return }
+        colorTableChecks.forEach { $0.cancel() }
+        colorTableChecks = []
+        if inUse {
+            colorTableChecks = colorTableCheckDelays.map { delay in
+                scheduler.schedule(after: delay) { [weak self] in self?.reapplyColorTables(followUps: false) }
+            }
+        }
+    }
+
+    /// Looks at the color tables once, on a user action such as opening the panel.
+    public func checkColorTables() {
+        reapplyColorTables(followUps: false)
     }
 }

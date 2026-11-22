@@ -229,19 +229,55 @@ struct ColorPipelineTests {
         #expect(pipeline.blockedReason == "a connected display uses a custom color profile")
     }
 
-    @Test("Reapply writes the table again after the system reset it")
+    @Test("Reapply writes the table again after the system reset it, and only then")
     func reapply() {
         let backend = FakeColorBackend()
         let pipeline = ColorPipeline(display: Fixture.lenovoID, backend: backend)
         pipeline.set(.uniformGain(0.5), for: .dimming)
+        #expect(pipeline.isIntact)
+        #expect(pipeline.reapply() == .intact)
+        #expect(backend.writeCount == 1, "a table that is still in use is not written again")
+
         backend.systemReset()
-        #expect(pipeline.reapply())
+        #expect(!pipeline.isIntact)
+        #expect(pipeline.reapply() == .rewritten)
         #expect(backend.written[Fixture.lenovoID] != nil)
         #expect(backend.writeCount == 2)
+        #expect(pipeline.isIntact)
 
         let neutral = ColorPipeline(display: Fixture.lgID, backend: backend)
-        #expect(neutral.reapply())
+        #expect(neutral.reapply() == .intact)
         #expect(backend.writeCount == 2, "a neutral pipeline has nothing to reapply")
+    }
+
+    @Test("A table read back with rounding still counts as ours, so dimming never compounds")
+    func readBackRounding() {
+        let backend = FakeColorBackend()
+        let pipeline = ColorPipeline(display: Fixture.lenovoID, backend: backend)
+        pipeline.set(.uniformGain(0.5), for: .dimming)
+        let written = backend.written[Fixture.lenovoID]!
+        // What an 8-bit table would hand back.
+        let rounded = ColorTable(
+            red: written.red.map { ($0 * 255).rounded() / 255 },
+            green: written.green.map { ($0 * 255).rounded() / 255 },
+            blue: written.blue.map { ($0 * 255).rounded() / 255 }
+        )
+        backend.reported[Fixture.lenovoID] = rounded
+        #expect(pipeline.reapply() == .intact)
+        #expect(backend.adopted.isEmpty)
+        #expect(backend.writeCount == 1)
+    }
+
+    @Test("Reading software dimming puts a replaced table back first, so the answer is true")
+    func readHeals() async {
+        let backend = FakeColorBackend()
+        let pipeline = ColorPipeline(display: Fixture.lenovoID, backend: backend)
+        let controller = SoftwareDimmingController(pipeline: pipeline)
+        _ = await controller.write(.softwareBrightness, raw: 0.4, access: .standard)
+        let dimmed = backend.written[Fixture.lenovoID]
+        backend.systemReset()
+        #expect(await controller.read(.softwareBrightness, access: .standard) == .success(RawReading(value: Double(Float(0.4)), maximum: 1)))
+        #expect(backend.written[Fixture.lenovoID] == dimmed)
     }
 
     @Test("Only the dimming stage is implemented, and it comes after the reserved image stages")

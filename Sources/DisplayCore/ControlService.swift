@@ -400,7 +400,10 @@ public final class ControlService {
         track(.brightness, value: target, for: tag, origin: origin, recompose: false)
 
         var results: [ControlWriteResult] = []
-        for (control, value) in [(ControlID.hardwareBrightness, parts.hardware), (.softwareBrightness, parts.software)] {
+        // The software part goes first. It takes effect at once, while a command to the
+        // monitor waits its turn in the queue and the monitor takes its own time, so the
+        // other order makes a fast drag across the switchover lag visibly.
+        for (control, value) in [(ControlID.softwareBrightness, parts.software), (.hardwareBrightness, parts.hardware)] {
             guard let value, let owner = owner(of: control, for: tag) else { continue }
             if skipUnchanged, let tracked = values[control], mapping(for: control, tag: tag, owner: owner).isSameRaw(tracked, value) {
                 continue

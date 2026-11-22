@@ -84,6 +84,7 @@ final class PanelModel: ObservableObject {
     func opened() {
         context.permissions.refresh()
         context.coordinator.redetectStale()
+        context.coordinator.checkColorTables()
         rebuild()
         for card in cards {
             var features: [FeatureID] = []
@@ -272,6 +273,7 @@ final class PanelModel: ObservableObject {
 
     /// Software dimming changes which controllers a display has, so they are rebuilt.
     func setSoftwareDimming(_ enabled: Bool) {
+        Log.app.info("Software dimming switched \(enabled ? "on" : "off") from the panel.")
         context.settings.update { $0.global.colorTablesEnabled = enabled }
         context.coordinator.reattachAll()
         rebuild()

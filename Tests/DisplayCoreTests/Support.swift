@@ -34,6 +34,15 @@ final class ManualScheduler: Scheduler {
     var pendingCount: Int { items.count }
 }
 
+/// Records the order in which things happened across threads.
+final class OrderLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String] = []
+
+    func add(_ item: String) { lock.withLock { items.append(item) } }
+    var all: [String] { lock.withLock { items } }
+}
+
 /// Collects every log line written while it is attached, so a test does not depend on the
 /// bounded history that other tests are filling at the same time.
 final class CapturingLogSink: LogSink, @unchecked Sendable {
@@ -91,6 +100,13 @@ final class FakeController: DisplayController, @unchecked Sendable {
     private var _reportedInputs: [Int]?
     private var _choiceQueries = 0
     private var _deafControls: Set<ControlID> = []
+    private var _onWrite: (@Sendable (ControlID) -> Void)?
+
+    /// Called for every write that reaches the device, to check the order of things.
+    var onWrite: (@Sendable (ControlID) -> Void)? {
+        get { lock.withLock { _onWrite } }
+        set { lock.withLock { _onWrite = newValue } }
+    }
 
     init(kind: ControllerKind, capabilities: [ControlID: ControlCapability], values: [ControlID: Double], outcome: DetectionOutcome = .working) {
         self.kind = kind
@@ -170,6 +186,7 @@ final class FakeController: DisplayController, @unchecked Sendable {
     func write(_ control: ControlID, raw: Double, access: ControlAccess) async -> RawWriteOutcome {
         lock.withLock {
             if _failWrites { return .failed(.noReply) }
+            _onWrite?(control)
             _writes.append((control, raw, access))
             if !_ignoreWrites && !_deafControls.contains(control) { _values[control] = raw }
             return .written
@@ -279,10 +296,23 @@ final class FakeColorBackend: ColorBackend {
     var clearedAll = 0
     var baseline = ColorTable.identity(size: 4)
 
+    /// What a display reports when the table cannot be trusted, for example while asleep.
+    var reported: [SystemDisplayID: ColorTable] = [:]
+    var adopted: [SystemDisplayID] = []
+
     func safety() -> ColorTableSafety { safetyState }
     func baselineTable(for display: SystemDisplayID) -> ColorTable? { baseline }
+    func currentTable(for display: SystemDisplayID) -> ColorTable? { reported[display] ?? written[display] ?? baseline }
+
+    func adoptCurrentTableAsBaseline(for display: SystemDisplayID) {
+        adopted.append(display)
+        if let current = currentTable(for: display) { baseline = current }
+    }
+
+    var onWrite: (() -> Void)?
 
     func write(_ table: ColorTable, to display: SystemDisplayID) -> Bool {
+        onWrite?()
         written[display] = table
         writeCount += 1
         return true

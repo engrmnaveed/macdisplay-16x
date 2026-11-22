@@ -59,6 +59,16 @@ public final class GammaTableBackend: ColorBackend {
         return status == .success
     }
 
+    public func currentTable(for display: SystemDisplayID) -> ColorTable? {
+        GammaTableBackend.readTable(display.rawValue)
+    }
+
+    /// Called when our table was found replaced: what is in use now is the system's own.
+    public func adoptCurrentTableAsBaseline(for display: SystemDisplayID) {
+        guard let table = GammaTableBackend.readTable(display.rawValue) else { return }
+        baselines[display] = table
+    }
+
     public func clear(_ display: SystemDisplayID) {
         guard active.contains(display) else { return }
         active.remove(display)
