@@ -21,7 +21,7 @@ The app appears as a display icon in the menu bar and has no Dock icon. Click th
 
 - **Safe mode:** hold Shift while the app starts, or pass `--safe`. Nothing is restored or reapplied automatically in safe mode.
 - **Verbose log:** pass `--verbose` to log debug detail and echo the log to standard error.
-- **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild.
+- **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild: remove the old Display 16X entry from the Accessibility list and add the new one. To keep the grant across rebuilds, create a code signing certificate in Keychain Access (Certificate Assistant, Create a Certificate, type Code Signing) and pass its name: `DISPLAY16X_SIGN_IDENTITY="name" scripts/package-macos.sh`.
 - **Panel snapshot:** `--snapshot-panel FILE` renders the panel to a PNG without showing it and quits, and `--snapshot-details` opens the detail views in it. It is a development aid for checking the layout.
 
 ## Command line

@@ -3,6 +3,7 @@
 # Needs the Command Line Tools only.
 #
 #   scripts/package-macos.sh
+#   DISPLAY16X_SIGN_IDENTITY="My Code Signing Certificate" scripts/package-macos.sh
 #
 # The app is a menu bar item with no Dock icon (LSUIElement). The command line tool is
 # placed inside the bundle at Contents/MacOS/display16x and copied to dist/display16x.
@@ -68,11 +69,20 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# Ad hoc signature. macOS ties privacy grants such as Accessibility to the signature, and
-# an ad hoc one changes with every build, so a grant has to be given again after a rebuild.
-codesign --force --sign - "$APP/Contents/MacOS/display16x"
-codesign --force --sign - "$APP"
+# macOS ties privacy grants such as Accessibility to the signature. An ad hoc signature
+# changes with every build, so the grant has to be given again after each rebuild. With
+# DISPLAY16X_SIGN_IDENTITY set to the name of a code signing certificate in the keychain
+# (a self-signed one is enough for development), the signature stays the same and so does
+# the grant.
+IDENTITY="${DISPLAY16X_SIGN_IDENTITY:--}"
+codesign --force --sign "$IDENTITY" "$APP/Contents/MacOS/display16x"
+codesign --force --sign "$IDENTITY" "$APP"
 codesign --verify --strict "$APP"
+if [[ "$IDENTITY" == "-" ]]; then
+    echo "Signed ad hoc. Accessibility has to be granted again for this build."
+else
+    echo "Signed with: $IDENTITY"
+fi
 
 echo "Packaged $APP"
 echo "Command line tool: dist/display16x"
