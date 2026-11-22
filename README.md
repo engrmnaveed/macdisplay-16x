@@ -45,7 +45,7 @@ dist/display16x features                   # every feature and its operations
 | Area | State |
 | --- | --- |
 | Display records with stable tags, matched across reconnects and restarts | Built, unit-tested, checked on hardware |
-| Resolution list, text-size strip, refresh rate, Keep and Revert with a timed revert | A refresh-rate change with the timed revert was verified on hardware. Size changes and the Keep and Revert buttons are unit-tested only |
+| Resolution list, text-size strip, refresh rate, Keep and Revert with a timed revert | Verified on hardware: size changes from the strip, Keep, Revert, and the revert on its own when unanswered. The list includes the scaled sizes macOS hides from its public mode list |
 | DDC brightness, contrast, volume and input, one serial queue per display | Brightness verified on a Lenovo P32p-20 and an LG SDQHD by an independent read. Volume, contrast and mute are read on hardware and written only in unit tests. Input switching is never run on hardware |
 | Native brightness for built-in and Apple displays | Built. No such display was available to test |
 | Software dimming through color tables | Built and unit-tested. Through the app the table was written and read back on hardware. Off by default until someone has watched it |
@@ -85,7 +85,7 @@ Settings are one JSON file in `~/Library/Application Support/com.16xbrains.macdi
 
 ## Limits you should know about
 
-- Private interfaces are used for DDC, native brightness and rotation, so the app cannot be on the Mac App Store, and a macOS update can turn a control off until the app catches up.
+- Private interfaces are used for DDC, native brightness, rotation and the full mode list, so the app cannot be on the Mac App Store, and a macOS update can turn a control off until the app catches up. Without the private mode list the app falls back to the public one, which lacks some scaled sizes.
 - A monitor in standby may not answer DDC. The app keeps what it learned and asks again after wake.
 - After wake and on reconnect the app puts back only the values you set through it. A change made with the monitor's own buttons is left alone.
 - Two identical monitors cannot be told apart for DDC with certainty. The probe says so when it applies.

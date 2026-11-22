@@ -6,6 +6,32 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The public mode list is not enough, even for v0.1
+
+The roadmap and the feasibility note of 22 November say the public Core Graphics mode list is enough for the v0.1 resolution list. It is not, and the owner hit the consequence within minutes of using the panel.
+
+What was observed on both monitors (macOS 27.2.1):
+
+- The window server lists 53 modes for the LG SDQHD and 158 for the Lenovo P32p-20. The public list has 45 and 140.
+- The missing ones are scaled HiDPI modes, the kind System Settings offers toward "More Space". On the LG they are 1512 × 1344, 1800 × 1600, 2160 × 1920 and 2304 × 2048. On the Lenovo they include 3840 × 2160 HiDPI and several 4:3 sizes.
+- The public list shows such a mode only while the display is on it. The LG was on 2304 × 2048 HiDPI, so that mode was listed. The moment the app switched the LG to 1440 × 1280, the mode vanished from the public list.
+
+Two things went wrong because of it. The timed revert could not go back: "the display no longer offers this mode", and the LG stayed at the smaller size until the owner fixed it by hand. And the text-size strip lost its "more space" side as soon as the display moved left, because the sizes to the right no longer existed in the public list.
+
+What the build does now:
+
+- The mode list comes from the window server's own list (a private interface in `DisplayPrivate`, optional at run time). The public list supplies exact refresh rates and the safe flag for the modes it knows. Without the private interface the public list is used alone, with the limits above.
+- A mode the public list hides is selected by its window-server number, inside an ordinary configuration transaction. That is the call the MIT-licensed displayplacer uses.
+- The strip no longer depends on the mode in use. On a display that offers HiDPI it shows the HiDPI sizes and ends at the panel's own unscaled size ("Native"), which is what the owner expects to find at the far end of "more space".
+
+Checked by the owner on the LG after the change: the strip keeps all nine stops from any size, an unanswered change goes back on its own, Revert goes back at once, and Keep keeps.
+
+This changes two planning statements: the capability map's "Public Core Graphics" for resolution, and the principle that v0.1 needs private interfaces only for DDC, brightness and rotation. **Decision needed:** confirm that mode listing and selection belong to the private-interface set for v0.1, with the public list as the fallback.
+
+## 23 November 2026 · Shift at launch needs to be held, not just down
+
+Safe mode starts when Shift is held at launch. The app was once started while the owner was typing, Shift happened to be down at that instant, and the app came up in safe mode without anyone asking for it. A login item starts while people are typing, so this would not be rare. Shift now has to be down at launch and still down 0.8 seconds later. `--safe` is unchanged.
+
 ## 23 November 2026 · The CLI can ask for the countdown too
 
 The architecture gives the timed revert to interactive changes only, because nobody is there to confirm a change from the CLI. That stays the default. An opt-in was added: `display16x set resolution … --try` (also for refresh rate and rotation) asks Keep or Revert on screen and goes back on its own, and `display16x keep` or `revert` answers it. Someone typing a mode they are not sure their monitor can show gets the same safety net as someone using the panel. It is one option on the command, and the engine and the mode service treat it exactly like an interactive change.

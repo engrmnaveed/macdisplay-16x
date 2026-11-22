@@ -137,6 +137,26 @@ The same path through the app, with the displays awake and software dimming swit
 
 So the interface works on an M5 Pro, in a spike and through the app. What is still open is what it looks like: nobody was asked to watch, the behavior after wake was not observed, and no custom color profile was present. Color tables stay off by default until those three are checked.
 
+### The mode list, public and private
+
+| | Lenovo P32p-20 | LG SDQHD |
+| --- | --- | --- |
+| Modes in the window server's list | 158 | 53 |
+| Modes in the public list | 140 | 45, or 46 while a hidden mode is in use |
+| Hidden from the public list | 18, among them 3840 × 2160 HiDPI | 8, among them 1512 × 1344, 1800 × 1600, 2160 × 1920 and 2304 × 2048 HiDPI |
+| Sizes on the text-size strip, public list only | 11 | 5, and only 4 once the display leaves 2304 × 2048 |
+| Sizes on the strip, window server list | 13, ending at 3840 × 2160 native | 9, ending at 2880 × 2560 native |
+
+The hidden modes carry the flags `0x200001` in the window server's list. A mode's number there is its index, and it equals the mode number the public interface reports for the mode in use. The description of a mode is read with the layout the MIT-licensed displayplacer documents (size at offsets 8 and 12, refresh rate at `0xBE`, density at `0xD0`), and a list that does not look right (a density other than 1 or 2, a number that is not its index) is discarded as a whole.
+
+What went wrong with the public list alone, on the owner's first try: the LG was on the hidden mode 2304 × 2048 HiDPI. A size change to 1440 × 1280 worked, and neither the automatic revert nor the Revert button could go back, with "the display no longer offers this mode" in the log.
+
+After switching to the window server's list and selecting hidden modes by number, the owner repeated the test on the LG (2304 × 2048 ↔ 2160 × 1920, both hidden modes):
+
+- Unanswered change: applied at 00:58:51, read back a second later, reverted on its own at 00:59:07, read back as 2304 × 2048.
+- Revert button: back within two seconds.
+- Keep: the size stayed, the strip kept all nine stops, and dragging back to 2304 × 2048 worked.
+
 ### Mode change with the timed revert
 
 The Lenovo's refresh rate was changed from 60 to 50 Hz at 3200 × 1800 HiDPI with `display16x set refreshRate 50 --tag 1 --try`, which asks Keep or Revert the way the panel does.
@@ -145,7 +165,7 @@ The Lenovo's refresh rate was changed from 60 to 50 Hz at 3200 × 1800 HiDPI wit
 - Nobody answered. After 15 seconds the app went back to 60 Hz, and a separate probe read 60 Hz.
 - The recovery file held the mode to return to during the countdown and was empty afterwards.
 
-A refresh-rate change was chosen because it does not move windows. A size change through the text-size strip takes the same path and has not been run on hardware, and neither have Keep and Revert as buttons.
+A refresh-rate change was chosen because it does not move windows. Size changes through the text-size strip, and Keep and Revert as buttons, were checked by the owner afterwards (see the mode list section above).
 
 ### Sleep, wake and identity
 
@@ -168,11 +188,13 @@ Release build, packaged app, both displays awake and unchanged, panel closed, me
 | --- | --- | --- |
 | Idle CPU, menu closed | At most 0.1% of one core over 10 minutes | 0.02 s of CPU in 600 s, which is 0.003% |
 | Recurring wakeups | None | 1 idle wakeup in 10 minutes |
-| Memory, menu closed | At most 50 MiB after first use | 15 MB physical footprint before the panel was ever opened. After first use: not measured yet |
+| Memory, menu closed | At most 50 MiB after first use | 15 MB physical footprint before the panel was ever opened. 41 MB (peak 44 MB) after the owner had opened and closed it several times and dragged sliders |
 | Menu open | Under 100 ms warm, no DDC on the main thread | Not timed. Capabilities come from the cache, and DDC runs on each display's own queue |
 | Brightness drag | At most 20 writes a second, last value wins, final value sent | 17 writes for 40 commands in 1.31 s, and the monitor ended on the last value |
 
-The process had 3 threads while idle. A separate debug-build process that builds and renders the whole panel off screen peaked at 67 MB, which is an upper bound for "panel open" and says little about "after it closed". The real figure needs someone to open and close the panel once.
+The process had 3 threads while idle. A separate debug-build process that builds and renders the whole panel off screen peaked at 67 MB, which is an upper bound for "panel open".
+
+Checked by the owner in the panel: both monitors appear by name, and both screens follow their brightness slider while it is dragged.
 
 Launch at login was not exercised. The login item service reports "not found" for the packaged app before it has ever been registered, and registering it would have changed the owner's login items.
 
