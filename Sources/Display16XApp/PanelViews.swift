@@ -211,7 +211,7 @@ struct SizeStrip: View {
             HStack {
                 Text("Larger text")
                 Spacer()
-                Text(shown.mode.sizeLabel + (shown.isDefault ? " · Default" : ""))
+                Text(shown.mode.sizeLabel + (shown.isDefault ? " · Default" : "") + (shown.isNativeUnscaled ? " · Native" : ""))
                     .monospacedDigit()
                 Spacer()
                 Text("More space")

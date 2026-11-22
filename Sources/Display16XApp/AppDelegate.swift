@@ -28,8 +28,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Safe mode: Shift held at launch, or --safe.
-        let safeMode = options.safeMode || NSEvent.modifierFlags.contains(.shift)
+        // Safe mode: --safe, or Shift held while the app starts. Shift has to stay down for
+        // a moment, so a capital letter typed elsewhere at the wrong instant does not count.
+        if options.safeMode {
+            start(safeMode: true)
+        } else if options.snapshotPath == nil, NSEvent.modifierFlags.contains(.shift) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                MainActor.assumeIsolated {
+                    self.start(safeMode: NSEvent.modifierFlags.contains(.shift))
+                }
+            }
+        } else {
+            start(safeMode: false)
+        }
+    }
+
+    private func start(safeMode: Bool) {
         let context = AppContext(safeMode: safeMode)
         if let path = options.snapshotPath {
             self.context = context
