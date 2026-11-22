@@ -34,7 +34,7 @@ dist/display16x list                       # connected and remembered displays
 dist/display16x get brightness --main
 dist/display16x set brightness 60% --tag 1
 dist/display16x step volume -1 --name "LEN P32p-20"
-dist/display16x set resolution 2560x1440 --pointer
+dist/display16x set resolution 2560x1440 --pointer --try   # asks Keep or Revert, goes back on its own
 dist/display16x features                   # every feature and its operations
 ```
 
@@ -45,7 +45,7 @@ dist/display16x features                   # every feature and its operations
 | Area | State |
 | --- | --- |
 | Display records with stable tags, matched across reconnects and restarts | Built, unit-tested, checked on hardware |
-| Resolution list, text-size strip, refresh rate, Keep and Revert with a timed revert | Built and unit-tested. Hardware check of the mode change is pending |
+| Resolution list, text-size strip, refresh rate, Keep and Revert with a timed revert | A refresh-rate change with the timed revert was verified on hardware. Size changes and the Keep and Revert buttons are unit-tested only |
 | DDC brightness, contrast, volume and input, one serial queue per display | Brightness verified on a Lenovo P32p-20 and an LG SDQHD by an independent read. Volume, contrast and mute are read on hardware and written only in unit tests. Input switching is never run on hardware |
 | Native brightness for built-in and Apple displays | Built. No such display was available to test |
 | Software dimming through color tables | Built and unit-tested. The table write works on hardware. Off by default until someone has watched it |

@@ -113,7 +113,9 @@ public final class ModeService {
 
     // MARK: Changing the mode
 
-    public func change(_ request: ModeRequest, for tag: DisplayTag, matching: ModeMatching, origin: ChangeOrigin) async -> ModeChangeReport {
+    /// - Parameter timedRevert: Ask for Keep or Revert even though the change did not come
+    ///   from the interface.
+    public func change(_ request: ModeRequest, for tag: DisplayTag, matching: ModeMatching, origin: ChangeOrigin, timedRevert: Bool = false) async -> ModeChangeReport {
         guard let live = registry.live[tag] else { return ModeChangeReport(failure: ModeApplyError.displayNotFound.reason) }
         let current = system.currentMode(for: live.systemID)
         let available = system.availableModes(for: live.systemID)
@@ -123,7 +125,7 @@ public final class ModeService {
         if let current, resolution.mode.sameMode(as: current) {
             return ModeChangeReport(requested: resolution.mode, actual: current, verified: true, deviation: resolution.deviation)
         }
-        let interactive = origin == .interface
+        let interactive = origin == .interface || timedRevert
         if interactive, let current {
             // Recorded before the change, so a crash during the countdown can still be undone.
             let original = pending[tag]?.previousMode ?? current
@@ -168,7 +170,7 @@ public final class ModeService {
 
     // MARK: Rotation
 
-    public func rotate(to degrees: Int, for tag: DisplayTag, origin: ChangeOrigin) async -> RotationChangeReport {
+    public func rotate(to degrees: Int, for tag: DisplayTag, origin: ChangeOrigin, timedRevert: Bool = false) async -> RotationChangeReport {
         guard [0, 90, 180, 270].contains(degrees) else {
             return RotationChangeReport(requested: degrees, actual: nil, verified: false, failure: "rotation must be 0, 90, 180 or 270", awaitsConfirmation: false)
         }
@@ -182,7 +184,7 @@ public final class ModeService {
         if previous == degrees {
             return RotationChangeReport(requested: degrees, actual: previous, verified: true, failure: nil, awaitsConfirmation: false)
         }
-        let interactive = origin == .interface
+        let interactive = origin == .interface || timedRevert
         if interactive {
             let original = pending[tag]?.previousRotation ?? previous
             recovery.update { $0.unconfirmedRotations[tag] = original }

@@ -32,7 +32,7 @@ display16x \(AppPaths.version) — command line for Display 16X
   display16x features                     Every feature and what can be done with it
 
   display16x get <feature> <display> [--stored]
-  display16x set <feature> <value> <display> [--confirm] [--no-verify] [--exact]
+  display16x set <feature> <value> <display> [--confirm] [--no-verify] [--exact] [--try]
   display16x step <feature> <+N|-N> <display> [--fine]
   display16x toggle <feature> <display>
   display16x keep <display>               Keep a mode change that is waiting
@@ -43,6 +43,9 @@ display16x \(AppPaths.version) — command line for Display 16X
               on or off for switches. WIDTHxHEIGHT for resolution, Hz for refreshRate,
               degrees for rotation, an input name for input.
 
+  --try                              For resolution, refreshRate and rotation: ask Keep or
+                                     Revert on screen, and go back on its own after a few
+                                     seconds. Answer with "display16x keep" or "revert"
   --controller ddc|native|software   Address one controller instead of the control's owner
   --timeout SECONDS                  How long to wait for the app (default 10)
   --json                             Print the raw result
@@ -229,6 +232,7 @@ case "set":
     options.confirmed = arguments.flags.contains("--confirm")
     options.verification = arguments.flags.contains("--no-verify") ? .none : .readBack
     options.matching = arguments.flags.contains("--exact") ? .exact : .nearest
+    options.timedRevert = arguments.flags.contains("--try")
     let value = parseValue(arguments.positional[2], for: target)
     send(Command(.set, target.id, on: arguments.selector, value: value, origin: .command, options: options), arguments: arguments)
 

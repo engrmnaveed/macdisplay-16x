@@ -299,7 +299,7 @@ public final class CommandEngine {
             request.hiDPI = current?.isHiDPI
         }
 
-        let report = await modes.change(request, for: tag, matching: command.options.matching, origin: command.origin)
+        let report = await modes.change(request, for: tag, matching: command.options.matching, origin: command.origin, timedRevert: command.options.timedRevert)
         if let failure = report.failure {
             return DisplayResult(
                 tag: tag, name: name, outcome: .failed,
@@ -332,7 +332,7 @@ public final class CommandEngine {
         guard case .choice(let text)? = command.value, let degrees = Int(text.replacingOccurrences(of: "°", with: "").trimmingCharacters(in: .whitespaces)) else {
             return entry(.failed, detail: "rotation needs 0, 90, 180 or 270")
         }
-        let report = await modes.rotate(to: degrees, for: tag, origin: command.origin)
+        let report = await modes.rotate(to: degrees, for: tag, origin: command.origin, timedRevert: command.options.timedRevert)
         if let failure = report.failure {
             return entry(.failed, requested: degrees, actual: report.actual, detail: failure)
         }

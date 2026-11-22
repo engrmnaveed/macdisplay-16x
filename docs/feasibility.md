@@ -135,6 +135,16 @@ Not tested: a connection that carries video and no DDC. There is none on this de
 
 So the interface works on an M5 Pro. What is still open is what it looks like: the run was not watched, the behavior after wake was not observed, and no custom color profile was present. Color tables stay off by default until those three are checked.
 
+### Mode change with the timed revert
+
+The Lenovo's refresh rate was changed from 60 to 50 Hz at 3200 × 1800 HiDPI with `display16x set refreshRate 50 --tag 1 --try`, which asks Keep or Revert the way the panel does.
+
+- The change was applied in a persistent configuration transaction and read back as 50 Hz within two seconds.
+- Nobody answered. After 15 seconds the app went back to 60 Hz, and a separate probe read 60 Hz.
+- The recovery file held the mode to return to during the countdown and was empty afterwards.
+
+A refresh-rate change was chosen because it does not move windows. A size change through the text-size strip takes the same path and has not been run on hardware, and neither have Keep and Revert as buttons.
+
 ### Sleep, wake and identity
 
 - The displays woke at 00:05. The app saw the LG leave and return four seconds later. The Lenovo stayed connected.

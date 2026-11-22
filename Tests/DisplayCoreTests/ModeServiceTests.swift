@@ -49,6 +49,28 @@ struct ModeServiceTests {
         }
     }
 
+    @Test("A command can ask for the countdown, and then it reverts like an interactive change")
+    func commandWithTimedRevert() async throws {
+        let rig = await makeRig()
+        let result = await rig.whileSettling {
+            await rig.run(.set, .refreshRate, on: .tag(1), value: .choice("30"), options: CommandOptions(timedRevert: true))
+        }
+        #expect(result.entries.first?.outcome == .confirmed)
+        #expect(result.entries.first?.detail?.contains("keep or revert within 15 seconds") == true)
+        #expect(rig.modes.pending[tag]?.previousMode?.sameMode(as: defaultMode) == true)
+        #expect(rig.modeSystem.current[Fixture.lenovoID]?.refreshRate == 30)
+
+        rig.scheduler.advance(by: 15.1)
+        #expect(await eventually { rig.modeSystem.applied.count == 2 })
+        rig.scheduler.advance(by: 1.1)
+        #expect(await eventually { rig.modes.pending.isEmpty && rig.recovery.document.unconfirmedModes.isEmpty })
+        #expect(rig.modeSystem.current[Fixture.lenovoID]?.sameMode(as: defaultMode) == true)
+
+        // Options a client does not send keep their defaults.
+        let old = try JSONDecoder().decode(CommandOptions.self, from: Data(#"{"confirmed":true}"#.utf8))
+        #expect(old == CommandOptions(confirmed: true))
+    }
+
     @Test("An interactive change offers Keep and Revert, and Keep ends the countdown")
     func keep() async {
         let rig = await makeRig()

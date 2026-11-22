@@ -64,6 +64,9 @@ public struct CommandOptions: Codable, Sendable, Equatable {
     public var confirmed: Bool
     /// For `get`: read the device instead of reporting the tracked value.
     public var refresh: Bool
+    /// For mode and rotation changes from a surface with nobody watching by default: ask
+    /// for Keep or Revert anyway, and go back on its own when unanswered.
+    public var timedRevert: Bool
 
     public init(
         controller: ControllerKind? = nil,
@@ -71,7 +74,8 @@ public struct CommandOptions: Codable, Sendable, Equatable {
         matching: ModeMatching = .nearest,
         verification: CommandVerification = .readBack,
         confirmed: Bool = false,
-        refresh: Bool = false
+        refresh: Bool = false,
+        timedRevert: Bool = false
     ) {
         self.controller = controller
         self.skipPropagation = skipPropagation
@@ -79,6 +83,19 @@ public struct CommandOptions: Codable, Sendable, Equatable {
         self.verification = verification
         self.confirmed = confirmed
         self.refresh = refresh
+        self.timedRevert = timedRevert
+    }
+
+    /// Every option has a default, so a client built before an option existed still works.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        controller = try container.decodeIfPresent(ControllerKind.self, forKey: .controller)
+        skipPropagation = try container.decodeIfPresent(Bool.self, forKey: .skipPropagation) ?? false
+        matching = try container.decodeIfPresent(ModeMatching.self, forKey: .matching) ?? .nearest
+        verification = try container.decodeIfPresent(CommandVerification.self, forKey: .verification) ?? .readBack
+        confirmed = try container.decodeIfPresent(Bool.self, forKey: .confirmed) ?? false
+        refresh = try container.decodeIfPresent(Bool.self, forKey: .refresh) ?? false
+        timedRevert = try container.decodeIfPresent(Bool.self, forKey: .timedRevert) ?? false
     }
 }
 

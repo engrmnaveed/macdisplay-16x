@@ -6,6 +6,12 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The CLI can ask for the countdown too
+
+The architecture gives the timed revert to interactive changes only, because nobody is there to confirm a change from the CLI. That stays the default. An opt-in was added: `display16x set resolution … --try` (also for refresh rate and rotation) asks Keep or Revert on screen and goes back on its own, and `display16x keep` or `revert` answers it. Someone typing a mode they are not sure their monitor can show gets the same safety net as someone using the panel. It is one option on the command, and the engine and the mode service treat it exactly like an interactive change.
+
+On hardware: the Lenovo went from 60 to 50 Hz, was left unanswered, and returned to 60 Hz after 15 seconds.
+
 ## 23 November 2026 · A monitor can report a control it does not have
 
 The Lenovo P32p-20 answers a volume query with "50 of 100" and ignores every volume write. A change sent through the app read back as 50 each time, and an independent read agreed. Its capabilities string leaves volume out, and in this case the string was right.
