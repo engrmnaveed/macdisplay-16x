@@ -6,6 +6,30 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · Software dimming is lost when the screen is unlocked, and the app cannot see it
+
+Mac17,9, macOS 27.2.1, LG SDQHD on DisplayPort, checked twice by the owner. Details and timings are in the feasibility notes.
+
+With software dimming on and a monitor in the software range, lock the screen, let the displays sleep, wake and unlock. The monitor comes back dimmed and a couple of seconds later returns to its own lowest brightness and stays there. macOS puts its own color table back around the unlock. It sends no display reconfiguration for it.
+
+The app cannot find this out by looking. A process that has set a color table keeps reading its own table back after the system has stopped using it. Only another process sees the truth. So "check, and write again if it is gone" does not work, and the build that tried it changed nothing. Writing again does work: a new value sent after the unlock took effect at once.
+
+What follows for the product:
+
+- Software dimming has to be written again blindly at the moments the system is known to reset it: unlock, wake, the return of the user's session, reconfiguration, and a few bounded moments after each. Not on a timer.
+- The panel cannot honestly say "confirmed" for software dimming. It can say what the app last wrote.
+- While awake it looks right: smooth through the switchover, clearly darker than the monitor's own minimum, and back to normal on the way up. The owner confirmed this on both monitors.
+
+Status: open. The owner asked to set it aside for now. Software dimming stays off by default.
+
+**Decision needed:** none yet. It becomes a decision if blind rewrites turn out not to be enough: whether software dimming ships in v0.1 at all, or with a note that it is lost at unlock until the brightness is touched.
+
+## 23 November 2026 · Other programs on the DDC channel answer each other's questions
+
+Three programs were reading the same monitor after a wake: this app, a read-only probe and another display utility. The probe asked the LG for brightness and received a valid, correctly checksummed reply about contrast, which was the answer to the app's question a moment earlier.
+
+A reply is only an answer if it names the feature that was asked for. The parser already requires that, and the captured reply is now a test. The wider point is for users: with two display utilities running, each will see more failed reads and retries, and a utility that does not check the feature code will show wrong values. Worth a line in the user-facing notes about running alongside other display tools.
+
 ## 23 November 2026 · A display sleep can last a second, and the app still rewrites every value
 
 Mac17,9, macOS 27.2.1, Lenovo P32p-20 on HDMI, LG SDQHD on DisplayPort, BetterDisplay running. The displays went to sleep on the idle timer and the owner woke them 1.4 seconds later. This was the first time restore after wake ran on hardware.

@@ -135,7 +135,30 @@ Not tested: a connection that carries video and no DDC. There is none on this de
 
 The same path through the app, with the displays awake and software dimming switched on for the test: `display16x set softwareBrightness 80% --tag 2` was confirmed, a separate read of the LG's table showed it scaled to 0.830 (the 0.15 zero level plus 80% of the rest), the Lenovo's table stayed a plain ramp, and setting 100% put the LG's table back to a plain ramp. With software dimming on, the LG's 63% hardware brightness sits at 0.704 on the composite scale, as the 0.2 switchover says it should.
 
-So the interface works on an M5 Pro, in a spike and through the app. What is still open is what it looks like: nobody was asked to watch, the behavior after wake was not observed, and no custom color profile was present. Color tables stay off by default until those three are checked.
+So the interface works on an M5 Pro, in a spike and through the app.
+
+#### Software dimming by eye (01:48 to 02:17, checked by the owner)
+
+- **Looks right while awake.** On both monitors the picture dims smoothly through the switchover with no step, the bottom of the scale is clearly darker than the monitor's own lowest brightness, and dragging back up returns the picture to normal.
+- **A fast drag lagged, and no longer does.** On a quick move from 29% to the bottom, the monitor got three commands (27, 21, 0) at least 50 ms apart, and the software part was applied only after the last of them. The software part now goes first. The owner confirmed the lag is gone.
+- **It is lost after the screen is locked and the displays sleep. Open.** With the LG at the bottom of the software range, the screen was locked, the displays slept for 75 seconds, and the owner woke and unlocked. The LG came back dimmed, and a couple of seconds later went to its own lowest brightness and stayed there. This happened twice, the second time with a build that looks at the table again at unlock and at 1, 3 and 8 seconds after wake and unlock.
+- **Why the second build did not help.** It writes the table again only when it finds it replaced, and it never found that. Read from inside the app, the table still looked like the app's own. Read at the same time from a separate process (`spikes/gamma-table-write-probe.swift`, read-only), the LG's table was a plain ramp. So a process that has set a table keeps reading its own table back after the system has stopped using it. There was no reconfiguration callback either.
+- **Writing still works.** A new value sent through the app after the unlock showed up in the separate process's read at once (0.745 for 70%, 0.788 for 75%).
+
+What follows: the table has to be written again without asking whether it is still there, at unlock and at a few bounded moments after wake and unlock. That change is not made yet. Until it is made and watched, color tables stay off by default. A custom color profile was not present in any of these checks.
+
+#### A 75 second display sleep, measured (01:54)
+
+The read-only wake probe across the same sleep, with BetterDisplay and Display 16X running:
+
+| | Lenovo P32p-20 (HDMI) | LG SDQHD (DisplayPort) |
+| --- | --- | --- |
+| First query after wake | No reply | Answered |
+| First usable answer | 0.93 s after wake | At once |
+| Queries answered in 20 s | 41 of 44 | 40 of 44 |
+| Last unusable reply | 1.95 s | 3.35 s |
+
+Neither monitor left the system, and IDs and UUIDs did not change. The LG sent the "not ready" null message at 0.47, 1.50 and 2.89 seconds. At 3.35 seconds the probe, asking for brightness, received a valid reply about contrast: the answer to a question the app had asked on the same channel. That reply is now a test fixture. The app's restore went out 3.2 seconds after the wake and every write was accepted on the first attempt.
 
 ### The mode list, public and private
 
