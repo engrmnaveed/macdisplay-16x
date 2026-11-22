@@ -165,6 +165,9 @@ public final class CommandEngine {
                     : await controls.refresh(control, for: tag, forcing: command.options.controller)
                 switch reading {
                 case .success(let value):
+                    if control == .brightness, controls.hasActiveSoftwareDimming(tag) {
+                        return entry(.accepted, actual: value, detail: "the software dimming part is what the app last wrote. It cannot be read back")
+                    }
                     return entry(.confirmed, actual: value)
                 case .failure(let failure):
                     guard let stored else { return entry(.failed, detail: failure.reason) }

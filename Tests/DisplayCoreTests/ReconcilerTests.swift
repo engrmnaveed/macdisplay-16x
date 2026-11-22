@@ -327,7 +327,7 @@ struct ReconcilerTests {
         #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
     }
 
-    @Test("A reset that comes after the wake is caught by a few bounded checks, and then the app is idle again")
+    @Test("The table is written again at a few bounded moments after wake, and then the app is idle again")
     func lateColorTableReset() async {
         let rig = Rig { $0.global.colorTablesEnabled = true }
         rig.plug(Fixture.lenovo())
@@ -337,24 +337,26 @@ struct ReconcilerTests {
         await wake(rig)
         let writesAfterWake = rig.colorBackend.writeCount
 
-        // Nothing changed: the checks look and write nothing.
+        // The app cannot see whether the system took the table away, so it writes at each
+        // of the bounded moments either way.
         rig.scheduler.advance(by: 1.01)
-        #expect(rig.colorBackend.writeCount == writesAfterWake, "a table that is still in use is not written again")
+        #expect(rig.colorBackend.writeCount == writesAfterWake + 1)
 
         // The system puts its own table back two seconds after the wake settled, silently.
         rig.colorBackend.systemReset()
         rig.scheduler.advance(by: 2.0)
         #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
 
-        // After the last check nothing is left scheduled. A reset after that waits for the
+        // After the last moment nothing is left scheduled. A reset after that waits for the
         // next event or for the panel to open.
         rig.scheduler.advance(by: 10)
         await rig.idle()
-        #expect(rig.scheduler.pendingCount == 0, "no check repeats")
+        #expect(rig.colorBackend.writeCount == writesAfterWake + 3, "three moments, no more")
+        #expect(rig.scheduler.pendingCount == 0, "nothing repeats")
         rig.colorBackend.systemReset()
         rig.scheduler.advance(by: 60)
         #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
-        rig.coordinator.checkColorTables()
+        rig.coordinator.refreshColorTables()
         #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
         #expect(rig.scheduler.pendingCount == 0)
     }
@@ -372,33 +374,6 @@ struct ReconcilerTests {
         #expect(rig.colorBackend.writeCount == 0)
     }
 
-    @Test("The table found after a reset becomes the one to dim from, unless it is not a usable table")
-    func baselineAfterReset() async {
-        let rig = Rig { $0.global.colorTablesEnabled = true }
-        rig.plug(Fixture.lenovo())
-        await rig.start()
-        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
-        let dimmed = rig.colorBackend.written[Fixture.lenovoID]!
-
-        // A display that is not ready reports an empty table. It is never dimmed from.
-        rig.colorBackend.reported[Fixture.lenovoID] = ColorTable(red: [0, 0, 0, 0], green: [0, 0, 0, 0], blue: [0, 0, 0, 0])
-        rig.bus.publish(.screenUnlocked)
-        #expect(rig.colorBackend.adopted.isEmpty)
-        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed, "written again over the table known before")
-        rig.colorBackend.reported[Fixture.lenovoID] = nil
-
-        // The system comes back with another table of its own, for example a new profile.
-        let warmer = ColorTable(red: [0, 0.3, 0.6, 0.9], green: [0, 0.3, 0.6, 0.9], blue: [0, 0.25, 0.5, 0.75])
-        rig.colorBackend.systemReset()
-        rig.colorBackend.baseline = warmer
-        rig.bus.publish(.screenUnlocked)
-        #expect(rig.colorBackend.adopted == [Fixture.lenovoID])
-        let now = rig.colorBackend.written[Fixture.lenovoID]!
-        #expect(now != dimmed)
-        #expect(abs(now.blue[3] / now.red[3] - warmer.blue[3] / warmer.red[3]) < 0.001, "the system's own balance is kept under the dimming")
-        #expect(now.red[3] < warmer.red[3], "and it is dimmed")
-    }
-
     @Test("In safe mode a replaced color table is left alone")
     func safeModeLeavesColorTables() async {
         let rig = Rig(safeMode: true) { $0.global.colorTablesEnabled = true }
@@ -409,7 +384,7 @@ struct ReconcilerTests {
         let pending = rig.scheduler.pendingCount
         rig.colorBackend.systemReset()
         rig.bus.publish(.screenUnlocked)
-        rig.coordinator.checkColorTables()
+        rig.coordinator.refreshColorTables()
         #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
         #expect(rig.scheduler.pendingCount == pending, "and no check is scheduled")
     }

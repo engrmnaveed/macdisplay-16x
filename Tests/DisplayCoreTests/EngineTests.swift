@@ -194,16 +194,27 @@ struct CommandEngineTests {
         #expect(abs(rig.controls.trackedValue(.brightness, for: tag)! - 0.8) < 0.000_1)
 
         let result = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.1))
-        #expect(result.entries.first?.outcome == .confirmed)
+        #expect(result.entries.first?.outcome == .accepted, "the software part cannot be read back, so this is never confirmed")
         #expect(ddc.values[.hardwareBrightness] == 0)
         let table = try #require(rig.colorBackend.written[Fixture.lenovoID])
         // Half of the software range, between the 0.15 zero level and 1.
         #expect(abs(table.red.last! - 0.575) < 0.000_1)
 
+        // Asking again reads the monitor, and still cannot vouch for the software part.
+        let asked = await rig.run(.get, .brightness, on: .tag(1), options: CommandOptions(refresh: true))
+        #expect(asked.entries.first?.outcome == .accepted)
+        #expect(asked.entries.first?.detail?.contains("cannot be read back") == true)
+        #expect(asked.entries.first?.actual?.summary == "0.100")
+        let software = await rig.run(.get, .softwareBrightness, on: .tag(1), options: CommandOptions(refresh: true))
+        #expect(software.entries.first?.outcome == .accepted)
+        #expect(software.entries.first?.detail?.contains("stored value") == true)
+
         let back = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.6))
-        #expect(back.entries.first?.outcome == .confirmed)
+        #expect(back.entries.first?.outcome == .confirmed, "with the software part back at neutral the monitor's answer decides")
         #expect(ddc.values[.hardwareBrightness] == 50)
         #expect(rig.colorBackend.written[Fixture.lenovoID] == nil, "above the switchover the table is back to the system's own")
+        let askedAbove = await rig.run(.get, .brightness, on: .tag(1), options: CommandOptions(refresh: true))
+        #expect(askedAbove.entries.first?.outcome == .confirmed)
     }
 
     @Test("While dragging, a part that does not change on the device is not sent again")
@@ -296,7 +307,7 @@ struct CommandEngineTests {
         await rig.start()
         #expect(rig.engine.availability(of: .brightness, for: DisplayTag(1)) == .available(.softwareGamma))
         let result = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
-        #expect(result.entries.first?.outcome == .confirmed)
+        #expect(result.entries.first?.outcome == .accepted, "software dimming cannot be read back")
         #expect(rig.colorBackend.written[Fixture.lenovoID] != nil)
     }
 

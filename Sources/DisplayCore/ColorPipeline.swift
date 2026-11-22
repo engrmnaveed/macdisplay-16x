@@ -18,25 +18,6 @@ public struct ColorTable: Sendable, Equatable {
     }
 
     public var count: Int { red.count }
-
-    /// True when both tables give the same picture. A table read back from the system can
-    /// differ from the one written by a rounding step.
-    public func isClose(to other: ColorTable, tolerance: Float = 0.006) -> Bool {
-        guard count == other.count, green.count == other.green.count, blue.count == other.blue.count else { return false }
-        for (mine, theirs) in [(red, other.red), (green, other.green), (blue, other.blue)] {
-            for index in mine.indices where abs(mine[index] - theirs[index]) > tolerance { return false }
-        }
-        return true
-    }
-
-    /// A table that can be dimmed from: it has entries and each channel reaches a usable
-    /// level. A display that is asleep or switching can report a table that does not.
-    public var isPlausibleBaseline: Bool {
-        guard count > 1, green.count == count, blue.count == count else { return false }
-        return [red, green, blue].allSatisfy { channel in
-            (channel.last ?? 0) >= 0.5 && channel.allSatisfy { $0 >= 0 && $0 <= 1 }
-        }
-    }
 }
 
 /// The stages of the pipeline, in the order they are applied. v0.1 implements dimming.
@@ -109,10 +90,6 @@ public protocol ColorBackend: AnyObject {
     /// The table with none of our adjustments, captured before the first write.
     func baselineTable(for display: SystemDisplayID) -> ColorTable?
     func write(_ table: ColorTable, to display: SystemDisplayID) -> Bool
-    /// The table in use right now, whoever wrote it. Nil when it cannot be read.
-    func currentTable(for display: SystemDisplayID) -> ColorTable?
-    /// Our table was found replaced. The table in use becomes the one to adjust from.
-    func adoptCurrentTableAsBaseline(for display: SystemDisplayID)
     /// Returns the display to the system's own table.
     func clear(_ display: SystemDisplayID)
     /// Returns every display to the system's own tables, for quit.
@@ -129,14 +106,11 @@ public final class ColorPipeline {
     public private(set) var isSuspended = false
     /// The reason the last write was refused, if it was.
     public private(set) var blockedReason: String?
-    /// The table this pipeline last wrote, to tell when the system has put its own back.
-    private var lastWritten: ColorTable?
 
     public enum ReapplyOutcome: Sendable, Equatable {
-        /// Nothing to do: no adjustment is active, or ours is still the table in use.
-        case intact
-        /// The table had been replaced and was written again.
-        case rewritten
+        /// No adjustment is active, so the system's own table stays in charge.
+        case nothingToWrite
+        case written
         case failed
     }
 
@@ -160,7 +134,6 @@ public final class ColorPipeline {
         guard display != self.display else { return }
         backend.clear(self.display)
         self.display = display
-        lastWritten = nil
     }
 
     @discardableResult
@@ -187,24 +160,17 @@ public final class ColorPipeline {
         flush()
     }
 
-    /// False when an adjustment should be showing and the table in use is not the one that
-    /// was written. The system puts its own tables back on reconfiguration, wake and unlock,
-    /// and does not say so.
-    public var isIntact: Bool {
-        guard !isNeutral, let lastWritten, let current = backend.currentTable(for: display) else { return true }
-        return current.isClose(to: lastWritten)
-    }
-
-    /// Writes the table again if the system has replaced it. The table found in its place is
-    /// the system's current one, so it becomes the baseline, unless it is not a usable table.
+    /// Writes the table again without asking whether it is still in use. The system puts its
+    /// own tables back on reconfiguration, wake and unlock, and it cannot be caught at it: a
+    /// process that has set a table keeps reading its own table back after the system has
+    /// stopped using it (measured on macOS 27.2.1, see the feasibility notes). So the callers
+    /// write blindly at the few moments the system is known to do this. The table is always
+    /// composed over the baseline captured before the first write, so writing again never
+    /// dims twice.
     @discardableResult
     public func reapply() -> ReapplyOutcome {
-        if isNeutral { return .intact }
-        if let lastWritten, let current = backend.currentTable(for: display) {
-            if current.isClose(to: lastWritten) { return .intact }
-            if current.isPlausibleBaseline { backend.adoptCurrentTableAsBaseline(for: display) }
-        }
-        return flush() ? .rewritten : .failed
+        if isNeutral { return .nothingToWrite }
+        return flush() ? .written : .failed
     }
 
     /// The table that the current stages produce over a given baseline.
@@ -222,22 +188,18 @@ public final class ColorPipeline {
             // At neutral nothing is written, so the system's own table stays in charge.
             backend.clear(display)
             blockedReason = nil
-            lastWritten = nil
             return true
         }
         if case .unsafe(let reason) = backend.safety() {
             backend.clear(display)
             blockedReason = reason
-            lastWritten = nil
             return false
         }
         guard let baseline = backend.baselineTable(for: display) else {
             blockedReason = "the display's color table could not be read"
             return false
         }
-        let table = composedTable(over: baseline)
-        let written = backend.write(table, to: display)
-        if written { lastWritten = table }
+        let written = backend.write(composedTable(over: baseline), to: display)
         blockedReason = written ? nil : "the display refused the color table"
         return written
     }
@@ -245,6 +207,9 @@ public final class ColorPipeline {
 
 /// Provides `softwareBrightness` by driving the dimming stage of a display's color pipeline.
 /// Raw values are the gain applied to the image: 1 leaves it untouched.
+///
+/// The control is write-only. What is on screen cannot be read back from inside the process
+/// that wrote the table, so a change is reported as accepted, never as confirmed.
 @MainActor
 public final class SoftwareDimmingController: DisplayController {
     public nonisolated let kind = ControllerKind.softwareGamma
@@ -259,7 +224,7 @@ public final class SoftwareDimmingController: DisplayController {
     public var capability: ControlCapability {
         ControlCapability(
             addressing: .absolute,
-            readability: .readable,
+            readability: .writeOnly,
             noticesOutsideChanges: false,
             rawMinimum: minimumGain,
             rawMaximum: 1,
@@ -279,11 +244,7 @@ public final class SoftwareDimmingController: DisplayController {
 
     public func read(_ control: ControlID, access: ControlAccess) async -> Result<RawReading, ControlFailure> {
         guard control == .softwareBrightness else { return .failure(.unsupported) }
-        // A read is only true if the table is really in use, so a table the system replaced
-        // is written again first.
-        if pipeline.reapply() == .failed {
-            return .failure(.unavailable(pipeline.blockedReason ?? "the color table could not be written"))
-        }
+        // The gain last written. It says nothing about what the system shows now.
         return .success(RawReading(value: currentGain, maximum: 1))
     }
 

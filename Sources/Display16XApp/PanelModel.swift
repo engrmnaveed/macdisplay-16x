@@ -84,7 +84,7 @@ final class PanelModel: ObservableObject {
     func opened() {
         context.permissions.refresh()
         context.coordinator.redetectStale()
-        context.coordinator.checkColorTables()
+        context.coordinator.refreshColorTables()
         rebuild()
         for card in cards {
             var features: [FeatureID] = []

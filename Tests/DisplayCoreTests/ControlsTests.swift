@@ -229,55 +229,43 @@ struct ColorPipelineTests {
         #expect(pipeline.blockedReason == "a connected display uses a custom color profile")
     }
 
-    @Test("Reapply writes the table again after the system reset it, and only then")
+    @Test("Reapply writes the table again every time, because a reset cannot be seen")
     func reapply() {
         let backend = FakeColorBackend()
         let pipeline = ColorPipeline(display: Fixture.lenovoID, backend: backend)
         pipeline.set(.uniformGain(0.5), for: .dimming)
-        #expect(pipeline.isIntact)
-        #expect(pipeline.reapply() == .intact)
-        #expect(backend.writeCount == 1, "a table that is still in use is not written again")
+        let dimmed = backend.written[Fixture.lenovoID]
 
-        backend.systemReset()
-        #expect(!pipeline.isIntact)
-        #expect(pipeline.reapply() == .rewritten)
-        #expect(backend.written[Fixture.lenovoID] != nil)
+        // Whether or not the system replaced the table, it is written, and it is the same
+        // table: composed over the baseline from before the first write, never over itself.
+        #expect(pipeline.reapply() == .written)
         #expect(backend.writeCount == 2)
-        #expect(pipeline.isIntact)
+        #expect(backend.written[Fixture.lenovoID] == dimmed)
+        backend.systemReset()
+        #expect(pipeline.reapply() == .written)
+        #expect(pipeline.reapply() == .written)
+        #expect(backend.written[Fixture.lenovoID] == dimmed, "writing again never dims twice")
 
         let neutral = ColorPipeline(display: Fixture.lgID, backend: backend)
-        #expect(neutral.reapply() == .intact)
-        #expect(backend.writeCount == 2, "a neutral pipeline has nothing to reapply")
+        let writes = backend.writeCount
+        #expect(neutral.reapply() == .nothingToWrite)
+        #expect(backend.writeCount == writes, "a neutral pipeline has nothing to write")
+
+        backend.safetyState = .unsafe("a connected display uses a custom color profile")
+        #expect(pipeline.reapply() == .failed)
     }
 
-    @Test("A table read back with rounding still counts as ours, so dimming never compounds")
-    func readBackRounding() {
-        let backend = FakeColorBackend()
-        let pipeline = ColorPipeline(display: Fixture.lenovoID, backend: backend)
-        pipeline.set(.uniformGain(0.5), for: .dimming)
-        let written = backend.written[Fixture.lenovoID]!
-        // What an 8-bit table would hand back.
-        let rounded = ColorTable(
-            red: written.red.map { ($0 * 255).rounded() / 255 },
-            green: written.green.map { ($0 * 255).rounded() / 255 },
-            blue: written.blue.map { ($0 * 255).rounded() / 255 }
-        )
-        backend.reported[Fixture.lenovoID] = rounded
-        #expect(pipeline.reapply() == .intact)
-        #expect(backend.adopted.isEmpty)
-        #expect(backend.writeCount == 1)
-    }
-
-    @Test("Reading software dimming puts a replaced table back first, so the answer is true")
-    func readHeals() async {
+    @Test("Software dimming is write-only: the app reports what it wrote, not what is on screen")
+    func softwareDimmingIsWriteOnly() async {
         let backend = FakeColorBackend()
         let pipeline = ColorPipeline(display: Fixture.lenovoID, backend: backend)
         let controller = SoftwareDimmingController(pipeline: pipeline)
+        #expect(controller.capability.readability == .writeOnly)
         _ = await controller.write(.softwareBrightness, raw: 0.4, access: .standard)
-        let dimmed = backend.written[Fixture.lenovoID]
+        // The system takes the table away. The controller still answers with its own value.
         backend.systemReset()
         #expect(await controller.read(.softwareBrightness, access: .standard) == .success(RawReading(value: Double(Float(0.4)), maximum: 1)))
-        #expect(backend.written[Fixture.lenovoID] == dimmed)
+        #expect(backend.written[Fixture.lenovoID] == nil, "and a read writes nothing")
     }
 
     @Test("Only the dimming stage is implemented, and it comes after the reserved image stages")

@@ -296,18 +296,8 @@ final class FakeColorBackend: ColorBackend {
     var clearedAll = 0
     var baseline = ColorTable.identity(size: 4)
 
-    /// What a display reports when the table cannot be trusted, for example while asleep.
-    var reported: [SystemDisplayID: ColorTable] = [:]
-    var adopted: [SystemDisplayID] = []
-
     func safety() -> ColorTableSafety { safetyState }
     func baselineTable(for display: SystemDisplayID) -> ColorTable? { baseline }
-    func currentTable(for display: SystemDisplayID) -> ColorTable? { reported[display] ?? written[display] ?? baseline }
-
-    func adoptCurrentTableAsBaseline(for display: SystemDisplayID) {
-        adopted.append(display)
-        if let current = currentTable(for: display) { baseline = current }
-    }
 
     var onWrite: (() -> Void)?
 
@@ -328,7 +318,8 @@ final class FakeColorBackend: ColorBackend {
         clearedAll += 1
     }
 
-    /// What a reconfiguration or wake does: the system puts its own tables back.
+    /// What a reconfiguration, wake or unlock does: the system puts its own tables back.
+    /// The app has no way to see this, so the fake offers none either.
     func systemReset() { written.removeAll() }
 }
 

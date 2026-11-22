@@ -45,7 +45,10 @@ public final class GammaTableBackend: ColorBackend {
     }
 
     /// The table in use before we changed anything. It is captured once per connection and
-    /// only while none of our own tables is applied, so dimming never compounds.
+    /// only while none of our own tables is applied, so dimming never compounds. It cannot be
+    /// captured again later: once this process has written a table, reading returns that
+    /// table, also after the system has gone back to its own. It is dropped when the last of
+    /// our tables is cleared, so the next adjustment starts from a fresh read.
     public func baselineTable(for display: SystemDisplayID) -> ColorTable? {
         if let cached = baselines[display] { return cached }
         guard !active.contains(display), let table = GammaTableBackend.readTable(display.rawValue) else { return nil }
@@ -57,16 +60,6 @@ public final class GammaTableBackend: ColorBackend {
         let status = CGSetDisplayTransferByTable(display.rawValue, UInt32(table.count), table.red, table.green, table.blue)
         if status == .success { active.insert(display) }
         return status == .success
-    }
-
-    public func currentTable(for display: SystemDisplayID) -> ColorTable? {
-        GammaTableBackend.readTable(display.rawValue)
-    }
-
-    /// Called when our table was found replaced: what is in use now is the system's own.
-    public func adoptCurrentTableAsBaseline(for display: SystemDisplayID) {
-        guard let table = GammaTableBackend.readTable(display.rawValue) else { return }
-        baselines[display] = table
     }
 
     public func clear(_ display: SystemDisplayID) {

@@ -400,6 +400,7 @@ public final class ControlService {
         track(.brightness, value: target, for: tag, origin: origin, recompose: false)
 
         var results: [ControlWriteResult] = []
+        var hardwareResult: ControlWriteResult?
         // The software part goes first. It takes effect at once, while a command to the
         // monitor waits its turn in the queue and the monitor takes its own time, so the
         // other order makes a fast drag across the switchover lag visibly.
@@ -408,7 +409,9 @@ public final class ControlService {
             if skipUnchanged, let tracked = values[control], mapping(for: control, tag: tag, owner: owner).isSameRaw(tracked, value) {
                 continue
             }
-            results.append(await write(control, value: value, for: tag, origin: origin, verification: verification, recompose: false))
+            let result = await write(control, value: value, for: tag, origin: origin, verification: verification, recompose: false)
+            results.append(result)
+            if control == .hardwareBrightness { hardwareResult = result }
         }
 
         if let failure = results.first(where: { $0.outcome == .failed }) {
@@ -420,9 +423,20 @@ public final class ControlService {
             }
             return .failed(failure.detail ?? "the change failed", actual: actual)
         }
-        let confirmed = !results.isEmpty && results.allSatisfy { $0.outcome == .confirmed }
+        // Confirmed means read back from the device. Software dimming cannot be read back,
+        // so a brightness it has a share in is accepted at best. Returning the software part
+        // to neutral leaves nothing of ours on screen, and then the hardware part decides.
+        let softwareActive = (parts.software ?? 1) < 1 && owner(of: .softwareBrightness, for: tag) != nil
+        let confirmed = !softwareActive && hardwareResult?.outcome == .confirmed
         let detail = results.compactMap(\.detail).first
         return ControlWriteResult(outcome: confirmed ? .confirmed : .accepted, actual: target, detail: detail)
+    }
+
+    /// True while software dimming is doing part of the work for this display. That part
+    /// cannot be read back, so a brightness that includes it is never reported as confirmed.
+    public func hasActiveSoftwareDimming(_ tag: DisplayTag) -> Bool {
+        guard owner(of: .softwareBrightness, for: tag) != nil else { return false }
+        return (settings.recordSettings(tag).values[.softwareBrightness] ?? 1) < 1
     }
 
     /// Reads the hardware part from the device and returns the composite value.
