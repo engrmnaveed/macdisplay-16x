@@ -60,6 +60,7 @@ public enum HardwareProbe {
         case .unsafe(let reason): lines.append("Color tables: blocked. \(reason)")
         }
         lines.append("Displays: \(snapshots.count)")
+        lines.append(contentsOf: layoutLines(snapshots))
 
         for snapshot in snapshots {
             let id = snapshot.systemID
@@ -150,6 +151,26 @@ public enum HardwareProbe {
                 }
             }
             scheduler.invalidate()
+        }
+        return lines
+    }
+
+    /// The arrangement, the main display, mirroring and the lid, read-only. Added in v0.2.
+    @MainActor
+    static func layoutLines(_ snapshots: [DisplaySnapshot]) -> [String] {
+        let layout = SystemLayout()
+        var lines: [String] = []
+        for snapshot in snapshots {
+            guard let frame = layout.frame(of: snapshot.systemID) else { continue }
+            var text = "  layout: system display \(snapshot.systemID.rawValue) at \(frame.x),\(frame.y), \(frame.width) × \(frame.height) points"
+            if layout.isMain(snapshot.systemID) { text += ", main" }
+            if let source = layout.mirrorSource(of: snapshot.systemID) { text += ", mirrors \(source.rawValue)" }
+            lines.append(text)
+        }
+        switch SystemLid.readState() {
+        case .some(true): lines.append("  lid: closed. The built-in panel is out of use while it is")
+        case .some(false): lines.append("  lid: open")
+        case .none: lines.append("  lid: none on this Mac")
         }
         return lines
     }

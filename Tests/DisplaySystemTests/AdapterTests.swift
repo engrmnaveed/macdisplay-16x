@@ -310,3 +310,45 @@ struct ModeMergeTests {
         #expect(atDefault.firstIndex(where: \.isCurrent) == 1)
     }
 }
+
+@Suite("Layout adapters")
+@MainActor
+struct LayoutAdapterTests {
+    @Test("The lid property is read as closed or open, and a Mac without one reports none")
+    func lidProperty() {
+        #expect(SystemLid.interpret(true) == true)
+        #expect(SystemLid.interpret(NSNumber(value: 0)) == false)
+        #expect(SystemLid.interpret("closed") == nil)
+        #expect(SystemLid.clamshellMessage == 0xE003_4100)
+    }
+
+    @Test("The main display the layout adapter reports sits at the origin, read-only")
+    func mainAtOrigin() {
+        let layout = SystemLayout()
+        let online = SystemDisplayInventory.onlineDisplayIDs().map(SystemDisplayID.init)
+        guard !online.isEmpty else { return }
+        let mains = online.filter { layout.isMain($0) && layout.mirrorSource(of: $0) == nil }
+        #expect(mains.count == 1)
+        #expect(mains.first.flatMap { layout.frame(of: $0) }?.origin == .zero)
+    }
+
+    @Test("The connection adapter says whether this macOS offers disconnecting")
+    func connectionAvailability() {
+        let connection = SystemConnection()
+        switch connection.availability {
+        case .available: #expect(DisplayConnection.isAvailable)
+        case .unavailable(let reason): #expect(!reason.isEmpty)
+        }
+        #expect(PrivateCapabilities.current.summary.contains { $0.hasPrefix("Display connection:") })
+    }
+
+    @Test("A layout plan that names a display that is not connected is refused before any transaction")
+    func unknownDisplay() {
+        let layout = SystemLayout()
+        guard case .failure(let error) = layout.apply(LayoutPlan(origins: [SystemDisplayID(0xFFFF_FFF0): .zero])) else {
+            Issue.record("a plan for a display that is not connected went through")
+            return
+        }
+        #expect(error == .displayNotFound)
+    }
+}

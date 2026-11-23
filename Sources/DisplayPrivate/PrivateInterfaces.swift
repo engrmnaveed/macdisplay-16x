@@ -48,6 +48,8 @@ public struct PrivateCapabilities: Sendable, Equatable {
     public var nativeBrightness: Bool
     public var rotation: Bool
     public var windowServerModes: Bool
+    /// Taking a display out of use and bringing it back. Added in v0.2.
+    public var displayConnection: Bool = DisplayConnection.isAvailable
 
     public static let current = PrivateCapabilities(
         avServiceI2C: AVServiceDirectory.isAvailable,
@@ -62,6 +64,7 @@ public struct PrivateCapabilities: Sendable, Equatable {
             "Native brightness: \(nativeBrightness ? "available" : "missing")",
             "Rotation: \(rotation ? "available" : "missing")",
             "Window server mode list: \(windowServerModes ? "available" : "missing")",
+            "Display connection: \(displayConnection ? "available" : "missing")",
         ]
     }
 }
@@ -346,5 +349,28 @@ public enum WindowServerModes {
         guard let configure = PrivateLibraries.skyLight.symbol("SLSConfigureDisplayMode", as: ConfigureFunction.self) else { return false }
         configure(configuration, display, number)
         return true
+    }
+}
+
+// MARK: Display connection
+
+/// Takes a display out of use without unplugging it, and brings it back, through the
+/// window server's enable flag inside an ordinary display configuration. The name and the
+/// argument order are the ones the MIT-licensed displayplacer uses for `enabled:false`.
+public enum DisplayConnection {
+    private typealias EnableFunction = @convention(c) (OpaquePointer, UInt32, Bool) -> Int32
+
+    private static var function: EnableFunction? {
+        PrivateLibraries.skyLight.symbol("SLSConfigureDisplayEnabled", as: EnableFunction.self)
+    }
+
+    public static var isAvailable: Bool { function != nil }
+
+    /// Adds "enable" or "disable" for one display to an open display configuration. The
+    /// caller completes the configuration and waits for the reconfiguration to settle.
+    /// Returns the window server's status, or nil when the call is missing.
+    public static func setEnabled(_ enabled: Bool, display: UInt32, in configuration: OpaquePointer) -> Int32? {
+        guard let function else { return nil }
+        return function(configuration, display, enabled)
     }
 }
