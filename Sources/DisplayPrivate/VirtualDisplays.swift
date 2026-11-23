@@ -32,11 +32,15 @@ public struct VirtualDisplayRequest: Sendable, Equatable {
         public var width: UInt32
         public var height: UInt32
         public var refreshRate: Double
+        /// 0 for SDR. Another value asks for HDR through the initializer that takes a transfer
+        /// function. Added in v0.4.
+        public var transferFunction: UInt32
 
-        public init(width: UInt32, height: UInt32, refreshRate: Double) {
+        public init(width: UInt32, height: UInt32, refreshRate: Double, transferFunction: UInt32 = 0) {
             self.width = width
             self.height = height
             self.refreshRate = refreshRate
+            self.transferFunction = transferFunction
         }
     }
 
@@ -125,10 +129,24 @@ public enum VirtualDisplayFactory {
         return unsafeBitCast(pointer, to: T.self)
     }
 
+    private typealias InitModeWithTransfer = @convention(c) (UnsafeMutableRawPointer, Selector, UInt32, UInt32, Double, UInt32) -> UnsafeMutableRawPointer?
+    private static let initModeWithTransfer = NSSelectorFromString("initWithWidth:height:refreshRate:transferFunction:")
+
+    /// A mode can carry a transfer function, which is how a virtual screen offers HDR. The
+    /// runtime gives the initializer's shape as @36@0:8I16I20d24I32. Added in v0.4.
+    public static var canMakeHDRModes: Bool {
+        NSClassFromString("CGVirtualDisplayMode").map { class_respondsToSelector($0, initModeWithTransfer) } ?? false
+    }
+
     private static func settings(for request: VirtualDisplayRequest) -> NSObject? {
         guard let initialize = implementation("CGVirtualDisplayMode", initMode, as: InitMode.self), let settings = make("CGVirtualDisplaySettings") else { return nil }
-        let modes = request.modes.compactMap { mode in
-            allocate("CGVirtualDisplayMode").flatMap { retained(initialize($0, initMode, mode.width, mode.height, mode.refreshRate)) }
+        let withTransfer = implementation("CGVirtualDisplayMode", initModeWithTransfer, as: InitModeWithTransfer.self)
+        let modes = request.modes.compactMap { mode -> AnyObject? in
+            if mode.transferFunction != 0 {
+                guard canMakeHDRModes, let withTransfer else { return nil }
+                return allocate("CGVirtualDisplayMode").flatMap { retained(withTransfer($0, initModeWithTransfer, mode.width, mode.height, mode.refreshRate, mode.transferFunction)) }
+            }
+            return allocate("CGVirtualDisplayMode").flatMap { retained(initialize($0, initMode, mode.width, mode.height, mode.refreshRate)) }
         }
         guard modes.count == request.modes.count, !modes.isEmpty else { return nil }
         settings.setValue(NSNumber(value: UInt32(request.hiDPI ? 1 : 0)), forKey: "hiDPI")

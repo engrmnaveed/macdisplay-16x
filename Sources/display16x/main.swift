@@ -80,6 +80,7 @@ display16x \(AppPaths.version) — command line for Display 16X
       OPTIONS: 16:9  2560x1440  hidpi|lodpi  @60,120  portrait  step=160  smallest=1280
       cap=12  modes=2560x1440,1920x1080  diagonal=27  match  connect  link  unlink
       with-display=on|off  mirror=on|off  follow-rotation=on|off  restore-layout=on|off
+      hdr=on|only|off
 
   display16x hdr [show] <display>         Whether HDR is on
   display16x hdr on|off|toggle <display> [--try]   Switch HDR, as System Settings does

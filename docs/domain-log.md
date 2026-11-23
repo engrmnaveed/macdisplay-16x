@@ -6,6 +6,13 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · Virtual HDR: an option on v0.3's virtual screens, built on a code macOS has not confirmed
+
+**For the v0.3 session, through the planning thread.** "Virtual HDR" is a v0.4 row about v0.3's screens, so it touched four of v0.3's files, additively and with no change to what a screen did before: an optional `hdr` in a screen's definition (`hdr=on` adds HDR modes next to the SDR ones, `hdr=only` offers HDR alone), the same in what the window server is asked to make, a transfer function on each requested mode, and the words in the help. A screen saved before has no HDR and is made exactly as before.
+
+- **macOS takes a transfer function per virtual mode**, through an initializer whose shape the runtime reports. The app passes 2, the PQ code of CTA-861, which the framebuffer registry also uses. **Whether macOS accepts it and then offers HDR for the screen is not proven**: the check that would show it (`spikes/virtual-hdr-write-probe.swift`) was carried forward by the owner.
+- A macOS without that initializer refuses an HDR screen with the reason, and SDR screens are made as before.
+
 ## 24 November 2026 · v0.4 surfaces: where they plug into the interface pass's surfaces, and what they say
 
 **For the interface session, through the planning thread.** The v0.4 surfaces are new files built from the skin's values and pieces only (`SkinBoundaryTests` passes), and add nothing to the skin. To reach them, four existing files got one optional entry point each, defaulting to nothing, so the panel and the settings window are drawn exactly as before when it is absent: `PanelView` and `DisplayDetail` take an optional color model, and `SettingsView` takes one for its Advanced tab. The render harness's sample desk carries a sample color system. Every picture is in the render harness, groups "color", "settings" and "floating".

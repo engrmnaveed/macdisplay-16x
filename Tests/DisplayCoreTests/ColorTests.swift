@@ -487,3 +487,33 @@ import Testing
         #expect(FeatureRegistry.colorFeatures.allSatisfy { $0.id.rawValue.count < 20 })
     }
 }
+
+@MainActor
+@Suite struct VirtualHDRTests {
+    @Test("A virtual screen takes hdr=on for HDR modes next to the SDR ones, hdr=only for HDR alone, and hdr=off")
+    func words() throws {
+        var definition = VirtualScreenDefinition(id: 1, name: "Studio")
+        _ = try VirtualScreenSpec.apply("2560x1440 hdr=on", to: &definition).get()
+        #expect(definition.hdr == .alongside)
+        #expect(definition.detail.hasSuffix(", HDR"))
+        #expect(VirtualHDR.alongside.transferFunctions == [0, 2])
+        _ = try VirtualScreenSpec.apply("hdr=only", to: &definition).get()
+        #expect(definition.hdr == .only && definition.detail.hasSuffix(", HDR only"))
+        #expect(VirtualHDR.only.transferFunctions == [2])
+        _ = try VirtualScreenSpec.apply("hdr=off", to: &definition).get()
+        #expect(definition.hdr == nil)
+        #expect((try? VirtualScreenSpec.apply("hdr=maybe", to: &definition).get()) == nil)
+    }
+
+    @Test("A screen saved before v0.4 has no HDR, and the specification carries it to the system")
+    func savedAndSent() async throws {
+        let old = Data(#"{"id":3,"name":"Old","aspect":{"width":16,"height":9},"portrait":false,"modes":{"generated":{"largest":1920,"smallest":1280,"step":160,"cap":4}},"refreshRates":[60],"hiDPI":true,"identity":{"vendor":5654,"product":790,"serial":3},"wantsConnected":false,"restoreLayout":true}"#.utf8)
+        let decoded = try? JSONDecoder().decode(VirtualScreenDefinition.self, from: old)
+        #expect(decoded?.hdr == nil)
+        let rig = ColorRig()
+        await rig.startWithDesk()
+        await rig.enable(.virtualScreensEnabled)
+        _ = await rig.run(.set, .virtualCreate, value: .choice("Studio;16:9 1920x1080 hdr=only connect"))
+        #expect(rig.advanced.virtualSystem.made.values.first?.hdr == .only)
+    }
+}
