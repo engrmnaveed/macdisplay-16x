@@ -14,7 +14,8 @@ cd "$(dirname "$0")/.."
 
 allowed='00000000-AAAA-BBBB-CCCC-000000000000
 11111111-2222-4333-8444-555555555555
-AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE'
+AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE
+99999999-8888-4777-8666-555555555555'
 
 pattern='[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}'
 found=$(git ls-files -z | xargs -0 grep -nIoE "$pattern" 2>/dev/null | grep -viF "$allowed" || true)
