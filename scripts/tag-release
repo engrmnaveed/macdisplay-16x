@@ -28,9 +28,9 @@ git fetch --quiet origin main
 commit="$(git rev-parse origin/main)"
 short="$(git log -1 --format='%h %s' "$commit")"
 
-on_main="$(git show "$commit:scripts/release-version")"
+on_main="$(git show "${commit}:scripts/release-version")"
 [[ "$on_main" == "$version" ]] || fail "origin/main ($short) says $on_main in scripts/release-version, not $version. Merge the prepared version first"
-git show "$commit:CHANGELOG.md" | grep -qx "## $version" || fail "CHANGELOG.md on origin/main has no '## $version' section"
+git show "${commit}:CHANGELOG.md" | grep -qx "## $version" || fail "CHANGELOG.md on origin/main has no '## $version' section"
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
     fail "the tag $tag exists in this repository already"
 fi
