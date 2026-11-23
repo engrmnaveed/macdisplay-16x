@@ -134,8 +134,8 @@ final class LayoutRig {
     let indicator: IndicatorCoordinator
     var notices: [ProtectionNotice] = []
 
-    init(safeMode: Bool = false, layoutAvailable: Bool = true, recoveryPersistence: MemoryPersistence = MemoryPersistence(), configure: ((inout SettingsDocument) -> Void)? = nil) {
-        rig = Rig(safeMode: safeMode, recoveryPersistence: recoveryPersistence, features: .full, configure: configure)
+    init(safeMode: Bool = false, layoutAvailable: Bool = true, recoveryPersistence: MemoryPersistence = MemoryPersistence(), features: FeatureRegistry = .full, configure: ((inout SettingsDocument) -> Void)? = nil) {
+        rig = Rig(safeMode: safeMode, recoveryPersistence: recoveryPersistence, features: features, configure: configure)
         layout = LayoutService(
             registry: rig.registry, system: layoutAvailable ? layoutSystem : nil, settings: rig.settings,
             recovery: rig.recovery, bus: rig.bus, scheduler: rig.scheduler, gate: rig.gate

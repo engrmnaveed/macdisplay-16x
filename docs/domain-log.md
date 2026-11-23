@@ -6,6 +6,32 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.3 core: what it adds to the core, and the rules it adopted
+
+**Where v0.3 touches what earlier milestones built.** No existing behavior changed, and every earlier test passes unchanged. Two additions:
+
+1. An optional `advanced` section in the settings document, next to v0.2's `layout`, with the three switches, the override changes waiting to be written and the saved virtual screens. The settings version stays 1, so a v0.2 build reads the file and ignores the section.
+2. The v0.2 test rig takes the feature list as a parameter, as v0.2 did for the v0.1 rig.
+
+Everything else is in new files: the override model and service, the virtual screen model and service, the v0.3 features and their command extension, and a list of files written outside the app's folders, kept in its own file next to the recovery store and never touched by reset, export or import.
+
+**Where the architecture did not fit, and what was done instead.**
+
+- **The reserved `virtual` kind had nothing to set it.** The inventory reports every display macOS lists as built in or external. The app now wraps the inventory and marks the displays it made itself as virtual, so the registry records them so and the connection policy, which counts only built-in and external displays as physical, never lets a virtual screen stand in for the last physical display. No core file changed for it.
+- **The reserved privileged path had no shape.** It is a plan: steps (create a folder, write, delete, delete a folder if empty, move aside, put back), the displays it reaches, notes, and what finishes it. The preview is the plan printed whole, every byte included, and the administrator step runs exactly its steps. The text of the shell commands is built in the core and unit-tested, quoting included.
+- **Virtual screen commands cannot use a display selector**, because a screen that is not connected has no record yet, and a new one has none at all. They are app-wide features that take the screen's name. A connected screen is also an ordinary display by its tag, for its mode, brightness and arrangement.
+
+**Rules adopted where the documents left room:**
+
+- **A write outside the app's folders without `--confirm` prints its preview and changes nothing.** The panel shows the same preview before the administrator prompt.
+- **Writing needs the feature switched on. Removing never does.** Turning a feature off must not trap the files it wrote.
+- **The main display is not reconnected to activate an override.** Its result says "accepted", with the advice to replug the cable or log out, because the file is written and not yet read.
+- **Sizes are typed as the display shows them**, in the frame it is turned to, as the size strip names them, and kept in the panel's own frame.
+- **Removal deletes only files carrying the app's marker, and only empty folders the app itself created.** A file found by its marker that this account's list does not hold, for example one written from another account, is listed and removable, and its folders are left alone.
+- **A full reset moves the system's saved display settings into the app's own folder instead of deleting them**, so "put back" can undo it. The backup folder is made by the app before the administrator step, so it belongs to the user and not to root.
+- **Virtual screens follow the automation rules of v0.2.** Restoring at launch and after wake is a restore, connecting with a linked display is automation, both pass the gate and stop after three in two minutes with a notice. A connect by hand starts them again. An automatic change is nobody's choice: it never changes whether the user wants the screen.
+- **A virtual screen's number is never reused**, also after a settings reset, because a new screen with an old serial number would bind to the old record and take its settings.
+
 ## 23 November 2026 · v0.3 spikes: macOS 27 reads an override when the display reconnects, and a virtual screen lives only while the app holds it
 
 Apple M5 Pro (Mac17,9), macOS 27.2.1, the LG SDQHD on USB-C (rotated 270°) and the Lenovo P32p-20 on HDMI. Checked with the owner at the desk from 21:44 to 21:51, with three administrator prompts the owner answered. The measurements are in the feasibility notes.
