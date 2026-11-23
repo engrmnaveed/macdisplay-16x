@@ -6,6 +6,33 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · Releases: one certificate keeps the same signing requirement across builds, and Homebrew now rewards that too
+
+The release mechanism is built on its own branch (runbook: [release.md](release.md)). Checked on the Mac17,9 with macOS 27.2.1, the Command Line Tools with Swift 6.4.2, and Homebrew 7.0.15. No tag, release, secret or GitHub setting was created.
+
+**Decision 12, the signing identity for releases: still open. Decision needed.** The workflow works with each answer, chosen by which secrets the signing environment holds: a Developer ID with notarization, one project certificate without notarization, or none (ad hoc). The findings below make the project certificate a much better fallback than ad hoc.
+
+**The designated requirement test.** Two different builds of the app (versions 0.1.0 and 0.1.1, different code hashes) were signed with one self-signed code signing certificate, held in a throwaway keychain file outside the login keychain and the search list, and deleted afterwards. No password prompt or system dialog appeared.
+
+- Both builds had the identical designated requirement: `identifier "com.16xbrains.macdisplay16x" and certificate leaf = H"…"`, where the hash is the certificate's.
+- The second build satisfied the first build's requirement. That is the check macOS makes against a stored Accessibility grant, and the one Homebrew makes at an upgrade.
+- Ad hoc builds, for comparison, each have the requirement `cdhash H"…"` naming their own code, and the second fails the first's.
+- The certificate was untrusted on this Mac, as a self-signed one is, and signing and verifying worked anyway.
+
+What it means: a project certificate should keep the Accessibility grant across updates. It is not proven with the grant itself, which needs a person to grant Accessibility to one release and update to the next. The owner checks that with the first two releases signed this way. The requirement names that exact certificate, so renewing or replacing it costs every user the grant once: make it valid for many years, keep a backup, never create it again. The release workflow warns before publishing when a release's requirement no longer matches the previous release's.
+
+**What Homebrew's current rules change** (read from the documentation and source that ship with Homebrew 7.0.15):
+
+- **Upgrades keep the first-launch approval only for the same signer.** When `brew upgrade` replaces an app the user has approved, Homebrew carries the approval over to the new version only if it satisfies the old version's designated requirement. Otherwise it warns that the signer changed and macOS asks again. So with a project certificate, Homebrew users allow the first launch once, ever. With ad hoc, at every update. This is a second reason for a stable identity, next to Accessibility.
+- **Taps need trust since Homebrew 6.0.** Casks from a tap that is not Homebrew's own load only when trusted. Installing by the full name, `brew install --cask engrmnaveed/tap/display16x`, trusts that one cask, so the guides use it.
+- **Quarantine cannot be switched off from Homebrew any more.** `brew install` has no `--no-quarantine` option in 7.0. Every cask download is quarantined, and only a Developer ID with notarization opens without the user's approval. A user who wants to skip it removes the attribute with `xattr`.
+- **Homebrew unpacks a ZIP with `unzip`.** The first archive built on this Mac with `ditto` carried each file's `com.apple.provenance` attribute as a separate `._` file. Unpacked with `unzip`, those files land inside the bundle and the signature no longer verifies ("file added"), which macOS treats as a damaged app. The archive now leaves extended attributes out, and CI unpacks it with `unzip` and verifies it. Space 16X archives its app the same way, so its published ZIPs are worth the same check.
+- **Unchanged from the plan:** the official cask repository accepts only apps that pass Gatekeeper, so it stays out of reach until a Developer ID. A cask can quit the menu bar app for an upgrade, and Homebrew opens it again afterwards. The cask's `zap` removes `~/Library/Application Support/com.16xbrains.macdisplay16x`, the only folder the app writes: the code writes nothing else, and this Mac has no preferences file, cache or saved state for it. Homebrew cannot remove the Accessibility entry or a login item, so the installation guide tells users how.
+
+**The hardened runtime, which notarization needs.** The command line tool signed ad hoc with the hardened runtime resolved the same private interfaces as without it (all four, and nine of nine reserved), and its read-only DDC queries got replies from both monitors. The app itself has not run with the hardened runtime. CI now compares the private interfaces with and without it on every pull request, and the notarization step compares them again on the signed copy.
+
+**Where the signing secrets live: a deviation from the roadmap's wording.** The roadmap says the workflow signs with what the `release` environment holds. The build keeps the signing secrets in a second environment, `release-signing`, as Space 16X does, and `release` holds the tap's deploy key and the required reviewer. That gives one approval per release, after the app is signed, so the signed ZIP can be downloaded from the run and tried before it is published. A reviewer on `release-signing` as well would gate signing too, at the cost of a second approval.
+
 ## 23 November 2026 · v0.1 Core is complete, with a short list held for later
 
 The owner called the core done on 23 November and asked for the branch to be pushed. All four stages are built, 224 unit tests pass, and everything the owner could check at the desk has been checked. The full list of what was and was not run on hardware is at the end of the 23 November section of the feasibility notes.

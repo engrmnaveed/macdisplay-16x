@@ -112,7 +112,6 @@ jobs:
             security import "$certificate" -P "$MACOS_CERTIFICATE_PASSWORD" \
               -T /usr/bin/codesign -f pkcs12 -k "$keychain"
             security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
-            security list-keychains -d user -s "$keychain"
             rm -f "$certificate"
           fi
           unset MACOS_CERTIFICATE_BASE64 MACOS_CERTIFICATE_PASSWORD
@@ -128,12 +127,16 @@ jobs:
               export APPLE_API_KEY_PATH="$signing_dir/AuthKey_$APPLE_API_KEY_ID.p8"
               printf '%s' "$APPLE_API_KEY_BASE64" | base64 --decode > "$APPLE_API_KEY_PATH"
               unset APPLE_API_KEY_BASE64
+              # codesign finds the Developer ID and Apple's intermediate certificates
+              # through the search list, as in GitHub's guide for macOS runners.
+              security list-keychains -d user -s "$keychain"
               scripts/package-macos.sh
               # Signs a copy with the hardened runtime, checks the private interfaces
               # still resolve, notarizes, staples and archives it.
               archive="$(scripts/notarize-macos.sh)"
               ;;
             certificate)
+              # Signs from the keychain file directly, leaving the search list alone.
               DISPLAY16X_SIGN_IDENTITY="$MACOS_SIGN_IDENTITY" DISPLAY16X_SIGN_KEYCHAIN="$keychain" \
                 scripts/package-macos.sh
               archive="$(scripts/archive-macos.sh)"

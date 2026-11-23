@@ -6,6 +6,16 @@ It targets Apple silicon, and it is built to do nothing when nothing is happenin
 
 **Status: v0.1 Core is complete (23 November 2026).** It runs on the developer's Mac with two external monitors. It is not signed for distribution or tested on other hardware yet. See [what works](#what-works-today) and, for what has not been run on hardware, the [feasibility notes](docs/feasibility.md#where-v01-core-stands-at-the-end-of-23-november).
 
+## Install
+
+Releases are published as a Homebrew cask and as a ZIP on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases), from 0.1.0 on, for Apple silicon Macs with macOS 14 or later:
+
+```sh
+brew install --cask engrmnaveed/tap/display16x
+```
+
+The [installation guide](docs/install.md) covers Homebrew, the direct download with its checksum and attestation, allowing the first launch, the Accessibility permission for the keys and what happens to it after an update, and removal. The [release runbook](docs/release.md) is how a release is made.
+
 ## Build and run
 
 You need an Apple silicon Mac with macOS 14 or later and the Command Line Tools (`xcode-select --install`). Xcode is not required.
@@ -27,15 +37,20 @@ The app appears as a display icon in the menu bar and has no Dock icon. Click th
 
 ## Checks
 
-Every pull request runs the same five steps on an Apple silicon runner, and they can be run locally:
+Every pull request runs these steps on an Apple silicon runner, and they can be run locally:
 
 ```sh
-scripts/check-identifiers.sh   # no real display UUIDs in tracked files
+scripts/check-identifiers.sh       # no real display UUIDs in tracked files
 swift build
 swift test
 scripts/package-macos.sh
-scripts/smoke-test.sh          # the bundle and the command line tool, read-only
+scripts/smoke-test.sh              # the bundle and the command line tool, read-only
+scripts/check-version.sh           # bundle, tool, scripts/release-version and CHANGELOG.md agree
+scripts/check-hardened-runtime.sh  # private interfaces resolve the same under the hardened runtime
+scripts/archive-macos.sh           # the release ZIP and its SHA-256 file
 ```
+
+CI also checks the ZIP after `unzip`, as Homebrew unpacks it, and runs `brew style` on the cask rendered for each signing level. The version is written only in `scripts/release-version`.
 
 Captured hardware output that becomes a test fixture carries made-up serial numbers, UUIDs and manufacture dates, never the real ones.
 
