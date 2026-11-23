@@ -18,7 +18,8 @@ struct ProtectionTests {
 
         rig.rig.modeSystem.current[Fixture.lenovoID] = wide
         await rig.settling { await rig.rig.reconfigure() }
-        await rig.advance(2)
+        // The displays were plugged in at start, so the check waits until five seconds after.
+        await rig.advance(6)
         #expect(rig.rig.modeSystem.current[Fixture.lenovoID]?.sameMode(as: standard) == true)
         #expect(rig.rig.events.contains { if case .modeChanged(let change) = $0 { return change.origin == .restore }; return false })
         #expect(rig.notices.first?.kind == .restored)
@@ -80,7 +81,7 @@ struct ProtectionTests {
 
         rig.layoutSystem.outsideMove(Fixture.lgID, to: DisplayPoint(x: 3200, y: 0))
         await rig.settling { await rig.rig.reconfigure() }
-        await rig.advance(2)
+        await rig.advance(6)
         #expect(rig.layoutSystem.frames[Fixture.lgID]?.origin == Fixture.lgFrame.origin)
         #expect(rig.layoutSystem.applied.count == 1)
 
@@ -124,9 +125,40 @@ struct ProtectionTests {
         muted.protection.setProtectMode(true, for: muted.lenovoTag)
         muted.rig.modeSystem.current[Fixture.lenovoID] = wide
         await muted.settling { await muted.rig.reconfigure() }
-        await muted.advance(2)
+        await muted.advance(6)
         #expect(muted.rig.modeSystem.applied.count == 1)
         #expect(muted.notices.isEmpty)
+    }
+
+    @Test("At a wake where the LG leaves for 3.6 seconds and the Lenovo drops to its default meanwhile, nothing is written")
+    func wakeWithMonitorAway() async {
+        let rig = LayoutRig()
+        let sharp = Fixture.mode(3200, 1800)
+        await rig.startWithBoth()
+        let lenovo = rig.lenovoTag
+        rig.rig.modeSystem.current[Fixture.lenovoID] = sharp
+        rig.protection.setProtectMode(true, for: lenovo)
+        rig.protection.setProtectLayout(true)
+        await rig.advance(10)
+
+        // Measured at 11:39 on 23 November: wake, the LG removed at 0.17 s, the Lenovo at
+        // 1920 × 1080 while it is away, both back at 3.6 s.
+        rig.rig.sequencer.systemWillSleep()
+        rig.rig.sequencer.systemDidWake()
+        rig.rig.scheduler.advance(by: 0.17)
+        rig.rig.unplug(Fixture.lgID)
+        rig.rig.modeSystem.current[Fixture.lenovoID] = standard
+        await rig.rig.reconfigure()
+        rig.rig.scheduler.advance(by: 2.4)
+        await rig.advance(0.1)
+        rig.rig.plug(Fixture.lg())
+        rig.rig.modeSystem.current[Fixture.lenovoID] = sharp
+        await rig.rig.reconfigure()
+        await rig.advance(10)
+
+        #expect(rig.rig.modeSystem.applied.isEmpty)
+        #expect(rig.layoutSystem.applied.isEmpty)
+        #expect(rig.notices.isEmpty)
     }
 
     @Test("The limiter counts within its window and starts again on a new target")

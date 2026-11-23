@@ -6,6 +6,21 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.2: links need one line in the packaging script
+
+The `display16x://` handler is built: it runs behind its own switch, off by default, checks a token the panel shows, goes through the engine and opens x-callback-url callbacks. macOS only routes a scheme to an app whose `Info.plist` declares it under `CFBundleURLTypes`. The plist is written by `scripts/package-macos.sh`, which v0.2 was asked to leave alone until the release branch has merged. **Change needed after that merge:** add a `CFBundleURLTypes` entry with the scheme `display16x` to the generated `Info.plist`. Until then links do nothing, and the URL scheme row of the feature inventory is built but not reachable.
+
+## 23 November 2026 · At a wake, macOS runs the remaining monitor in another mode while the LG is away
+
+Mac17,9, macOS 27.2.1, Lenovo P32p-20 on HDMI, LG SDQHD on DisplayPort, a display sleep of at least 27 minutes, seen by the read-only layout watch. The LG left 0.17 seconds after the wake and returned 3.6 seconds after it, as before. New: while it was away, the Lenovo ran at 1920 × 1080, its default size, instead of the 3200 × 1800 it had before and after. When the LG returned, macOS put both monitors back as they were, size and arrangement included. Details in the feasibility notes.
+
+What it means for the product:
+
+- macOS keeps a configuration per set of connected displays and applies it by itself. A monitor that is away for a few seconds changes the set, and the others change with it. These transient modes are not outside changes and must not be "corrected".
+- Anything that restores a mode, rotation or arrangement has to wait until the set of displays has stopped changing, not only until the wake has settled. The wake settles at 3 seconds and the LG returned at 3.6. v0.2 protection waits for 5 seconds without a display arriving or leaving. A fixed value in the code for now.
+- If it had acted at once, it would have written 3200 × 1800 into macOS's configuration for the Lenovo alone, which changes what the user sees the next time the LG is unplugged.
+- The value restore of v0.1 is not affected: it does not touch modes.
+
 ## 23 November 2026 · v0.2 core: what it adds to the v0.1 core, and the rules it adopted
 
 **Where v0.2 touches the v0.1 core.** No existing behavior changed: every v0.1 test passes unchanged. Five additions, each a hook the architecture reserved or the smallest step that leaves v0.1 alone:

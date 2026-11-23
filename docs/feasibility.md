@@ -491,6 +491,22 @@ Not yet seen for an arrangement, main display or mirroring change, because makin
 
 `spikes/layout-probe.swift --watch` was left running from 11:13 to log every callback and the layout one second after the last one, so the next wake on this desk is recorded without anyone touching the layout.
 
+### A wake seen by the layout watch (11:39)
+
+The displays had been asleep since before 11:12, with nobody at the Mac, when they woke at 11:39:48. `layout-probe --watch` logged, in seconds after the "screens did wake" notification:
+
+| Seconds | What macOS reported |
+| --- | --- |
+| 0.00 | A reconfiguration with no flags for both displays |
+| 0.17 | The LG: removed, disabled, desktop shape. The Lenovo: mode, desktop shape |
+| 1.2 | One display online. **The Lenovo at 1920 × 1080**, its default size, instead of 3200 × 1800 |
+| 3.62 | The LG: moved, mode, added, enabled, desktop shape. The Lenovo: mode, desktop shape |
+| 4.7 | Both online. The Lenovo back at 3200 × 1800 at the origin, the LG back at (−2304, −248), 270°, both unchanged |
+
+- **While the LG is away, macOS runs the Lenovo in another mode.** It looks like the configuration macOS keeps for the Lenovo alone. When the LG returns, the two-display configuration comes back, size and arrangement included, with no help from any app.
+- **The app's wake pass runs before the LG is back.** The wake settles 3 seconds after the notification and the LG returned at 3.6. Mode protection acting at that moment would see the Lenovo "wrong", put 3200 × 1800 back, and write it into macOS's configuration for the Lenovo alone. Protection now waits until the set of connected displays has been the same for 5 seconds, and a unit test replays this wake.
+- The LG's absence lasted 3.45 seconds, in line with 3.3 seconds measured on 22 and 23 November.
+
 ### Prepared, not run: the checks that change the layout
 
 `spikes/layout-write-probe.swift` holds one step per check. Each records the layout, applies one transaction "for this session" (logging out undoes it too), logs the callbacks, holds for 8 seconds, puts the recorded layout back and compares. Ctrl-C also puts it back. It refuses to disconnect the main display or the only display.
@@ -508,6 +524,40 @@ None of them has run. Each needs the owner at the desk and a yes in the session.
 ### Shortcuts actions and the Command Line Tools
 
 An App Intent with a parameter and an App Shortcuts provider compiles and links with Swift 6.4.2 from the Command Line Tools: the AppIntents framework and its Swift module are in the SDK. The build step that extracts the intents' metadata into the app bundle, `appintentsmetadataprocessor`, ships with Xcode only. The Command Line Tools hold its build specification and not the tool. Shortcuts discovers an app's actions from that metadata, so an app built without it offers none. This was not tried against the Shortcuts app, because that means registering a test app with the system. Shortcuts actions are left out of v0.2 (see the domain log).
+
+### Where v0.2 stands at the end of 23 November
+
+Built and unit-tested with fakes (308 tests pass, 84 of them new): arrangement, the main display, placement, mirroring, disconnect and reconnect with the connection policy, Keep and Revert for all of them, protection of mode, rotation and the saved layout, presets, shortcuts, links, settings export, import and reset, the CLI verbs and the plain panel entries.
+
+Run on hardware, read-only: the layout probe, the layout watch across one wake, the hardware report's new layout section, and the adapters' read path (frames, main display, mirror source, the lid, the connection interface's presence). They agree with each other.
+
+Not run on hardware, because each one changes the layout and needs the owner: every write of the layout adapter and the connection adapter, and so every v0.2 feature end to end. The app was not started: the owner's copy of Display 16X 0.1.0 is running from the main checkout and holds the settings folder and both DDC channels.
+
+Not measured: the idle and memory budgets with v0.2. Nothing in v0.2 repeats: every wait is one-shot (the countdown, the protection check, the gathering of size steps), the lid is followed through notifications, and shortcuts are system hot keys.
+
+#### The checks for the owner, in order
+
+Before starting: record the layout with `layout-probe`, and decide which Display 16X runs. Starting the v0.2 build means quitting the running 0.1.0 copy, and an ad hoc build loses the Accessibility grant (shortcuts do not need it, the brightness keys do).
+
+| # | Check | How | Done when |
+| --- | --- | --- | --- |
+| 1 | Empty transaction | `layout-write-probe noop --yes` | The callbacks it causes, if any, are logged |
+| 2 | Move and back | `layout-write-probe move 5 --yes` | Flags logged, layout matches the record afterwards |
+| 3 | Main display and back | `layout-write-probe main 5 --yes` | As above, the menu bar moves and returns |
+| 4 | Mirror and back | `layout-write-probe mirror 5 4 --yes` | As above, the LG shows the Lenovo's picture and returns |
+| 5 | Disconnect and back | `layout-write-probe disconnect 5 --yes` | The LG leaves the online list, returns under the same display ID with its mode, 270° and place |
+| 6 | Main display from the CLI | `display16x set main on --tag 2 --try`, left unanswered | Back after 15 seconds |
+| 7 | Placement and Keep | `display16x set placement right:start --tag 2 --of-tag 1 --try`, then `display16x keep` | Stays; then `display16x revert` puts the LG back left |
+| 8 | Mirroring | `display16x set mirror on --tag 2 --of-tag 1 --try`, Revert in the window | Back at once |
+| 9 | Disconnect | `display16x disconnect --tag 2 --try` unanswered, then `disconnect --tag 2` and quit the app | Back after 15 seconds; back at quit |
+| 10 | The panel | Actions menu and the arrangement canvas, Keep and Revert | Same results as 6 to 9 |
+| 11 | Saved layout across wake | `display16x set protectLayout on`, display sleep of 10 minutes or more | The LG leaves and returns, the log shows no layout or mode write |
+| 12 | Saved layout after an outside change | Move the LG in System Settings | Put back once, with the notice |
+| 13 | Preset from a shortcut | `display16x preset save Desk`, change the main display, `display16x shortcut add ctrl+opt+1 set preset Desk`, press the keys | The setup returns |
+| 14 | Budgets | Ten minutes idle with the panel closed, then memory after use | Within the PRD's targets |
+| 15 | Lid, optional | Turn on "Built-in panel off while an external display is attached", open the lid | The built-in panel comes on and the app turns it off; the log shows the lid events |
+
+The links (`display16x://`) cannot be checked yet: macOS only sends them to an app whose bundle declares the scheme, and the packaging script does not declare it.
 
 ## Running the probes
 

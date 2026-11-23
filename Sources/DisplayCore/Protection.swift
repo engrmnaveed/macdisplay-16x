@@ -75,6 +75,9 @@ public final class ConfigurationProtection: RestoreStage {
     /// After a reconfiguration, how long to wait before comparing with the targets. Long
     /// enough for the app's own change to be read back and followed.
     public var checkDelay: TimeInterval = 1.5
+    /// How long the set of connected displays must stay the same before a target is put
+    /// back. The LG on the test desk returns 3.3 to 3.6 seconds after it leaves at a wake.
+    public var topologyQuiet: TimeInterval = 5
     public var onNotice: (@MainActor (ProtectionNotice) -> Void)?
 
     public init(registry: DisplayRegistry, settings: SettingsStore, modes: ModeService, layout: LayoutService, sequencer: EventSequencer, gate: AutomationGate, bus: EventBus, scheduler: any Scheduler) {
@@ -162,22 +165,16 @@ public final class ConfigurationProtection: RestoreStage {
         switch event {
         case .modeChanged(let change) where !change.origin.isAutomatic:
             modeChangedByApp(change)
+        case .displayAdded, .displayRemoved:
+            // macOS applies its own configuration for the new set of displays. A check
+            // already waiting starts its wait again.
+            lastTopologyChange = scheduler.now
+            if let occasion = pendingOccasion { scheduleCheck(occasion: occasion) }
         case .reconfigurationSettled:
             guard !layout.isApplying, !sequencer.isInWakeTransition else { return }
-            scheduleCheck()
+            scheduleCheck(occasion: "after a change made elsewhere")
         default:
             break
-        }
-    }
-
-    /// One-shot, after the reconfiguration has had time to be read back.
-    private func scheduleCheck() {
-        guard hasAnyTarget else { return }
-        checkWork?.cancel()
-        checkWork = scheduler.schedule(after: checkDelay) { [weak self] in
-            guard let self else { return }
-            self.checkWork = nil
-            Task { @MainActor in await self.enforceAll(occasion: "after a change made elsewhere") }
         }
     }
 
@@ -189,27 +186,36 @@ public final class ConfigurationProtection: RestoreStage {
         }
     }
 
+    /// One-shot. It runs once the reconfiguration has been read back and the set of
+    /// connected displays has not changed for `topologyQuiet`. At a wake one monitor can
+    /// leave and return seconds later, and while it is away macOS runs the others in its
+    /// configuration for the smaller set. Putting a target back in that moment would
+    /// write that configuration too.
+    private func scheduleCheck(occasion: String) {
+        guard hasAnyTarget else { return }
+        let sinceTopology = lastTopologyChange.map { scheduler.now.timeIntervalSince($0) } ?? .infinity
+        let delay = max(checkDelay, topologyQuiet - sinceTopology)
+        checkWork?.cancel()
+        pendingOccasion = occasion
+        checkWork = scheduler.schedule(after: delay) { [weak self] in
+            guard let self else { return }
+            self.checkWork = nil
+            self.pendingOccasion = nil
+            Task { @MainActor in await self.enforceAll(occasion: occasion) }
+        }
+    }
+
+    private var lastTopologyChange: Date?
+    private var pendingOccasion: String?
+
     // MARK: Restore stage
 
+    /// After wake, on reconnect and at start. The targets are compared once the displays
+    /// have settled, through the same quiet wait as a change made elsewhere.
     public func run(for tag: DisplayTag, trigger: RestoreTrigger) async {
         if trigger == .reconnect, sequencer.isInWakeTransition { return }
         if case .blocked = gate.check(.restore) { return }
-        await enforce(tag, occasion: trigger.occasion)
-        scheduleLayoutCheck(occasion: trigger.occasion)
-    }
-
-    private var layoutCheckWork: ScheduledWork?
-
-    /// Displays become ready one by one. The arrangement is looked at once, shortly after
-    /// the last of them.
-    private func scheduleLayoutCheck(occasion: String) {
-        guard protectsLayout, settings.document.layout.savedLayout != nil else { return }
-        layoutCheckWork?.cancel()
-        layoutCheckWork = scheduler.schedule(after: 1) { [weak self] in
-            guard let self else { return }
-            self.layoutCheckWork = nil
-            Task { @MainActor in await self.enforceLayout(occasion: occasion) }
-        }
+        scheduleCheck(occasion: trigger.occasion)
     }
 
     // MARK: Enforcement
