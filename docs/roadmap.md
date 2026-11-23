@@ -197,6 +197,8 @@ Raised by build work in the [domain log](domain-log.md). The maintainer decides.
 | 7 | One rotation test on the owner's desk | Done with the owner present: 90° on one monitor, left unanswered, back on its own after 15 seconds, arrangement unchanged. |
 | 9 | A DDC run with no other display utility running | Done. Results were identical. Idle utilities cost no replies. A program that is reading at that moment does. |
 | 12 | The signing identity for releases | One project certificate, kept as a release secret. Two builds signed with it have the identical signing requirement, so the Accessibility grant and Homebrew's first-launch approval should carry across updates. Users allow the first launch by hand once. The certificate is made to last many years, backed up by the owner, and never created again, because replacing it costs every user the grant once. A Developer ID with notarization replaces it when the Apple Developer Program membership is there, and that switch costs the grant once too. |
+| 13 | Whether layout protection switches itself on | It stays off. The app offers the switch at the moment the user arranges displays through it. macOS already puts the arrangement back by itself after a cable change. |
+| 14 | Safe mode when no display is left in use | When the last display in use goes away while the app holds others disconnected, the app reconnects them at once, in safe mode too. Without a picture nobody can act, and it only undoes the app's own change. |
 
 The rules are written out in the [core architecture](core-architecture.md), sections 5 and 7.
 
@@ -207,8 +209,6 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 5 | Labels for vendor-specific input values | Shown by number, the user can rename | Keep numbers. Add a table of confirmed labels later, from hardware reports | Later |
 | 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac, separate from the project certificate, whose key stays with the owner and the release secrets | Next development round |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
-| 13 | Whether layout protection switches itself on | Off. Restoring a mode, a rotation or the arrangement happens only for a display where the user switched protection on | Keep it off, and offer the switch at the moment the user arranges displays through the app. macOS already puts the arrangement back by itself after a cable change | v0.2 |
-| 14 | Safe mode when the last display in use goes away while the app holds others disconnected | The reconnect goes through the gate, which safe mode keeps closed, so the Mac could be left without a picture until logout | Let this one reconnect through even in safe mode. With no picture there is no way for the user to act, and it only undoes the app's own change | v0.2 |
 | 15 | Shortcuts actions | Left out, because the Command Line Tools cannot produce their metadata | Leave them out for now. Revisit at the public release: building releases with Xcode on CI would bring them back and would end "builds with the Command Line Tools alone" for releases only | Public release |
 
 ### Core changes waiting for the core session
