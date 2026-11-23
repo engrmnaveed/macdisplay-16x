@@ -6,6 +6,14 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · Release 0.3.0: releases can be approved out of order, and removing the app leaves v0.3's files behind
+
+**Prepared as the second release, ad hoc signed like 0.2.0**, while 0.2.0's run still waits at Publish for approval. Two things about releases as a process, and one about uninstalling, came out of it.
+
+- **A version approved late used to become the latest release.** Each run waits for its own approval, so a lower version can be published after a higher one. GitHub then marks the version published last as the latest release, and the tap would get the older cask. From 0.3.0's workflow on, a release published after a later version is not marked as the latest, and the tap keeps the later cask. A run uses the workflow at its own tag, so **0.2.0's run does not have this**: approve or reject it before 0.3.0 is published. If 0.2.0 comes last anyway, `gh release edit v0.3.0 --latest` puts it right. That command has not been tried.
+- **The signer check now compares with the release just below the new version**, not the one published last, and says when a lower version is tagged but not published. It cannot read the signature of a version that has no release yet. So if the first certificate-signed release is approved before the last ad hoc one, its notes lack the sentence about the Accessibility grant, and the run tells the reviewer to add it. The rule that avoids all of this is to approve releases in version order. The runbook says so.
+- **Uninstalling does not remove what v0.3 wrote outside the app's folder**: override files in `/Library/Displays`, and the color profiles macOS made for virtual screens in `/Library/ColorSync/Profiles/Displays`. The cask's uninstall and `--zap` remove the app and its settings folder only. The installation guide now lists the commands to run first. `display16x override delete all` also works without the running app, but not once the app, with the tool inside it, is gone. **Decision needed:** whether the cask's uninstall should remove the overrides itself. It would ask for an administrator password while `brew uninstall` runs, and that has not been tried. Recommendation: keep the documented steps for 0.3.0, and decide after the check of the app's own removal on hardware.
+
 ## 23 November 2026 · v0.3 built at unit-test level: decisions for the maintainer, and what the app has not done on hardware
 
 All five stages are built on the branch, with 440 unit tests passing. The writing checks proved macOS's side with probes. **The app's own override write, its virtual screens and mirror-based HiDPI have not run on hardware.** The checks for a later round are listed in order in the feasibility notes.
