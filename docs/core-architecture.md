@@ -82,14 +82,14 @@ One serial queue per display by default, with a reserved option to share one que
 - **Silence is not proof that a monitor lacks DDC.** A probe that gets no answer keeps what was learned before. After a connect or a wake the monitor is asked again a few bounded times, then left alone until the next wake or until the panel opens.
 - **Nothing automatic talks to a monitor while the displays are asleep.** If the app starts while they are asleep, it behaves as if it had seen them go to sleep.
 
-Reads happen at connect, on an explicit refresh, and while the panel is open. Nothing reads on a background timer. Periodic readback is not planned.
+Reads happen at connect, once after a wake has settled, on an explicit refresh, and while the panel is open. Nothing reads on a background timer. Periodic readback is not planned.
 
 ## 5. Brightness is one scale built from parts
 
 `brightness` is a composite control over three addressable parts: `softwareBrightness` below a switchover point, `hardwareBrightness` across the hardware range, and reserved upscaling above it. Parameters per display: switchover point, hardware floor, whether zero may turn the image fully black.
 
 - On the composite scale, 0 to 1 covers software dimming and the hardware range, and 1 is the top of the hardware range. Upscaling, when it exists, is addressed as values above 1. A mapping from the scale to nits per display is reserved.
-- Safety floors: automatic restores never go below a minimum level, and keys and scrolling cannot reach black unless the user allowed it.
+- Safety floors: an automatic restore never takes the software part below a minimum level, so nobody comes back to a picture too dark to read. The floor applies when the user returns (start, wake, unlock, the return of their session), not to rewrites during a session. Hardware brightness the user set by hand is restored exactly as set. Keys and scrolling cannot reach black unless the user allowed it.
 
 ### The color pipeline
 
@@ -119,9 +119,13 @@ The menu, keys, CLI, and later URL and Shortcuts actions all build a `Command` a
 
 - **Event bus**, typed: app launched and terminating; display added, removed, controllers ready; reconfiguration began and settled (debounced); sleep; wake, then wake settled after a delay; lock and unlock; session active and inactive; mode changed (rotation included); mode confirmation changed; value changed; gate changed; permissions changed; settings changed. Delays are settings. Nothing polls. Sleep is taken from the notification, because the per-display "asleep" flag lags behind it. A size change on one display is reported by macOS as a move of that display, so a consumer that watches for arrangement changes must not count those. Reserved events: disconnect and reconnect by the app as distinct from physical ones, screen saver start and stop, lid open and close, audio output changed, capture stopped, active groups changed.
 - **`AutomationGate`**: every automatic write (restore, reapply, and later protection, sync and auto-connect) passes through one gate. It is closed until startup finishes, during sleep, while another user's session is active, and in **safe mode** (Shift held through the first 0.8 seconds of launch, or `--safe`). Safe mode does nothing automatic at all. Even an unconfirmed mode change left by a crash waits in the recovery store for the next normal start.
-- **Reconciler**: holds desired state per record and reapplies it on wake settled and on reconnect, through the gate. A pending-restore queue is persisted and retried when the same record reappears. Only ranged and on/off values are restored, never one-shot actions such as input switching.
+- **Reconciler**: holds desired state per record. On wake settled and on reconnect it reconciles that state with the monitor, through the gate, by the rule below. A pending-restore queue is persisted and retried when the same record reappears. Only ranged and on/off values are restored, never one-shot actions such as input switching.
 - **Only a value the user set through the app is desired state.** A value that was only read from the monitor is a belief and is never written back. Seeing another value on the monitor ends the restore of that control. A value set on a remembered display is stored and applied when the display returns.
-- **A wake is not a standby.** The idle timer followed by a mouse move produces a sleep and wake pair, many times a day, and the monitors lose nothing. DDC has no change notifications, so after a wake the app cannot tell a monitor that forgot a value from a user who changed it elsewhere. The default for DDC values after wake is an [open decision](roadmap.md#5-open-decisions). Software dimming is not part of that question: it lives in the app and is always written again.
+- **A wake is not a standby.** The idle timer followed by a mouse move produces a sleep and wake pair, many times a day, and the monitors lose nothing. DDC has no change notifications, so after a wake the app cannot tell a monitor that forgot a value from a user who changed it elsewhere.
+- **After wake and on reconnect the default is to read and adopt.** Once the wake has settled, each DDC control with a tracked value is read once, and the tracked value takes what the monitor reports. Nothing is written. A read that gets no answer keeps the tracked value, and the control is read again when the panel opens.
+- **Restore after wake** is a setting per display, off by default, for monitors that forget their values. It reads first and writes only a value the monitor no longer has.
+- A value the user set while the display was away is a pending command, not a restore. It is applied when the display returns, whatever the setting.
+- Software dimming is outside this rule. It lives in the app and is always written again.
 - Wake and reconnect work runs as an **ordered pipeline of stages**: link and adapter recovery (reserved), configuration restore (reserved), value restore (implemented), protection and group layout (reserved). A stage can be added without reordering the others.
 - A **connection policy** is the single place that decides whether a display may be disconnected: it never removes the last eligible physical display, and it carries model and lid rules. Multi-step connection changes are cancellable and are cancelled by sleep and user switching. *Reserved for v0.2.*
 

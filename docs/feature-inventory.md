@@ -159,7 +159,7 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | Dimming curve | Adjusts how quickly gamma dimming darkens | Later | software dimmer |
 | Software zero level | Sets how dark the software range gets at zero | v0.1 | brightness composition |
 | Restore policy | Restores all, all but brightness, or nothing at start and wake | v0.1 | reconciler |
-| Restore floor | Keeps automatic restores above a minimum level | v0.1 | brightness composition |
+| Restore floor | Keeps an automatic restore of software dimming above a minimum level | v0.1 | brightness composition |
 | Dark-wake guard | Rejects low values captured during a dark wake | v0.1 | reconciler |
 | Auto-brightness setting | Turns system auto-brightness on or off for Apple displays | v0.1 | controllers and capabilities |
 | Outside change tracking | Follows brightness changed by system controls | v0.1 | change origin |

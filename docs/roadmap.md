@@ -91,7 +91,7 @@ Left before v0.1 is called done:
 
 1. Watch software dimming across a lock and unlock.
 2. Measure how soon each monitor accepts DDC after a real standby.
-3. Settle the [open decisions](#5-open-decisions) marked v0.1.
+3. Build the after-wake default and the restore floor as [decided](#5-open-decisions), and settle the open decisions marked v0.1.
 4. One rotation run through the timed revert, or ship rotation marked unverified.
 5. Register the login item once.
 6. Run the app and the budget measurements on a MacBook Air M1, with its built-in panel.
@@ -128,12 +128,21 @@ HDR switching, XDR brightness on capable hardware, color profile and color mode 
 
 Raised by build work in the [domain log](domain-log.md). The maintainer decides. Until then the build keeps its current behavior.
 
+### Decided on 23 November 2026
+
+| # | Decision | Outcome |
+| --- | --- | --- |
+| 1 | Mode list in v0.1 | The window server's private list, with the public list as the fallback. With the public list alone, Revert could not return to a hidden mode. |
+| 2 | DDC values after wake and on reconnect | Read and adopt what the monitor reports. "Restore after wake" is a setting per display, off by default, for monitors that forget. It reads first and writes only a value the monitor no longer has. |
+| 3 | Software dimming by default | Off in v0.1. Revisit once it has been watched across a lock and with a custom color profile. |
+| 4 | The restore floor | Hardware brightness set by hand is restored exactly as set. The floor applies to the software part only, when the user returns. |
+
+The rules are written out in the [core architecture](core-architecture.md), sections 5 and 7.
+
+### Open
+
 | # | Decision | Current behavior | Recommendation | Needed for |
 | --- | --- | --- | --- | --- |
-| 1 | Use the window server's private mode list in v0.1, with the public list as the fallback | Built this way | Confirm. With the public list alone, Revert could not return to a hidden mode and the owner was left on the wrong size | v0.1 |
-| 2 | Default for DDC values after wake | Restore what the user set through the app, 3 seconds after wake | Read and adopt what the monitor reports. Offer "restore after wake" per display for monitors that forget. Most monitors remember, and a restore undoes changes made with the monitor's buttons or another utility | v0.1 |
-| 3 | Software dimming on by default | Off | Keep it off in v0.1. Revisit once it has been watched across a lock and with a custom color profile | v0.1 |
-| 4 | The restore floor for values the user set by hand | A brightness set to 10% comes back as 15% | Restore hardware brightness as it was set. Apply the floor to the software part only, where a restore could leave the picture unreadable | v0.1 |
 | 5 | Labels for vendor-specific input values | Shown by number, the user can rename | Keep numbers. Add a table of confirmed labels later, from hardware reports | Later |
 | 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild | A local code-signing certificate now, Developer ID for releases. The packaging script already takes a certificate name | v0.1 |
 | 7 | One rotation test on the owner's desk | Never run | One run on the monitor that is not rotated, through the timed revert, with the owner present | v0.1 |
