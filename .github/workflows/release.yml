@@ -50,6 +50,7 @@ jobs:
     environment: release-signing
     outputs:
       signing: ${{ steps.sign.outputs.signing }}
+      changed_from: ${{ steps.signer.outputs.changed_from }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -190,6 +191,7 @@ jobs:
       # The Accessibility grant and Homebrew's first-launch approval both follow the
       # designated requirement. Say so before publishing when this release breaks them.
       - name: Same signer as the last release
+        id: signer
         run: |
           previous="$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')"
           if [[ -z "$previous" || "$previous" == "$GITHUB_REF_NAME" ]]; then
@@ -202,12 +204,16 @@ jobs:
           old_requirement="$(codesign -d -r- "$old/app/Display 16X.app" 2>&1 | sed -n 's/^\(# \)\{0,1\}designated => //p')"
           if [[ "$old_requirement" == cdhash* ]]; then
             echo "$previous was ad hoc signed, so its users grant Accessibility again with this update in any case."
+            echo "- $previous was ad hoc signed, so updating from it costs users the Accessibility grant. The release notes say so." >> "$GITHUB_STEP_SUMMARY"
+            # The release notes tell those users, unless this release is ad hoc too and says it anyway.
+            echo "changed_from=$previous" >> "$GITHUB_OUTPUT"
           elif codesign --verify -R="$old_requirement" "$UNPACKED_APP"; then
             echo "This release satisfies the designated requirement of $previous. The Accessibility grant and Homebrew's approval carry over."
           else
             message="This release does not satisfy the designated requirement of $previous ($old_requirement). Users will have to grant Accessibility again, and Homebrew will not carry their first-launch approval over."
             echo "::warning::$message"
             echo "- **Signer changed:** $message" >> "$GITHUB_STEP_SUMMARY"
+            echo "changed_from=$previous" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -236,6 +242,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       SIGNING: ${{ needs.build.outputs.signing }}
+      CHANGED_FROM: ${{ needs.build.outputs.changed_from }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -258,7 +265,7 @@ jobs:
           read -r app_digest _ < "$release/$app.sha256"
           scripts/render-cask "$version" "$app_digest" "$SIGNING" > "$release/display16x.rb"
           # The version's CHANGELOG.md section, then the text every release carries.
-          scripts/release-notes "$version" "$SIGNING" > "$RUNNER_TEMP/release-notes.md"
+          scripts/release-notes "$version" "$SIGNING" "$CHANGED_FROM" > "$RUNNER_TEMP/release-notes.md"
           echo "RELEASE_DIR=$release" >> "$GITHUB_ENV"
 
       - name: Attest build provenance
@@ -282,7 +289,9 @@ jobs:
           TAP_REPO: engrmnaveed/homebrew-tap
         run: |
           if [[ -z "$HOMEBREW_TAP_DEPLOY_KEY" ]]; then
-            echo "::notice::HOMEBREW_TAP_DEPLOY_KEY is not set. Commit display16x.rb from the release to $TAP_REPO/Casks by hand."
+            message="HOMEBREW_TAP_DEPLOY_KEY is not set, so the tap was not updated and brew install does not find this version. Commit display16x.rb from the release to $TAP_REPO as Casks/display16x.rb by hand."
+            echo "::warning::$message"
+            echo "- **Homebrew tap not updated:** $message" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           umask 077
