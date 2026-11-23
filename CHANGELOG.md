@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-HDR and color: switch HDR on the displays that have it, choose color profiles with one to fall back to and one for HDR, see how each display's link carries the picture, and keep Night Shift out of the way in HDR. Every feature here is off until you turn it on, in Settings under Advanced or with `display16x set hdrControls on`, `profileControls on`, `nightShiftInHDR on` and `upscaling on`, and each says what it costs next to its switch. Until then Display 16X does what 0.3.0 did.
+## 0.4.0
+
+HDR and color: switch HDR on the displays that have it, choose color profiles with one to fall back to and one for HDR, see how each display's link carries the picture, and keep Night Shift out of the way in HDR. Every feature here is off until you turn it on, in Settings under Advanced or with `display16x set hdrControls on`, `profileControls on`, `nightShiftInHDR on` and `upscaling on`, and each says what it costs next to its switch. Until then Display 16X does what 0.3.0 did. The app has not yet used any of these features on a real display: they are unit-tested, and what test programs proved on hardware is listed below.
 
 ### HDR
 
@@ -23,18 +25,23 @@ HDR and color: switch HDR on the displays that have it, choose color profiles wi
 
 ### The link
 
-- `display16x color modes --tag 2` lists the ways the link can carry the picture, by depth, encoding, range and transfer, in macOS's own order. `display16x color rates --tag 1` lists refresh rates the link offers that macOS leaves out of the mode list, such as 24 and 25 Hz at 4K. `display16x color dithering --tag 1` says whether the GPU dithers. macOS offers no documented way to choose any of these, so the app shows them and does not change them.
+- `display16x color modes --tag 2` lists the ways the link can carry the picture, by depth, encoding, range and transfer, in macOS's own order. `display16x color rates --tag 1` lists refresh rates the link offers that macOS leaves out of the mode list, such as 24 and 25 Hz at 4K. `display16x color dithering --tag 1` says whether the GPU dithers. **On macOS 27 all three are read-only:** macOS offers no documented way to choose a link color mode, a rate outside the mode list, or dithering, so the app shows them and does not change them.
 - `display16x probe --color` adds HDR and color to the hardware report, without sending anything to a monitor.
 
 ### Brightness above SDR white
 
-- With HDR on, a display could go brighter than SDR white, from its page, with `display16x set upscale 50% --tag 2`, or with the brightness keys past 100%, which stop at 100% first. It has limits per display and never survives a sleep, a lock or the app. **It does not brighten anything yet:** the app's color pipeline cannot write a value above white, and the panel says so until it can.
+- With HDR on, a display could go brighter than SDR white, from its page, with `display16x set upscale 50% --tag 2`, or with the brightness keys past 100%, which stop at 100% first. It has limits per display and never survives a sleep, a lock or the app. **This software upscaling is not active yet and brightens nothing:** the app's color pipeline cannot write a value above white, and the panel and the command line say so until it can.
+
+### Not included
+
+- Direct XDR upscaling, which would drive a built-in XDR panel's own brightness above white. No XDR panel was in use while this release was built, and for a built-in display the app says it is not built yet.
+- Choosing a link color mode, a rate outside the mode list, or dithering, as above.
 
 ### What was checked on hardware
 
 On an Apple M5 Pro Mac with macOS 27.2.1, an LG SDQHD on USB-C and a Lenovo P32p-20 on HDMI, with small test programs and the hardware report, not yet through the app:
 
-- HDR switched on and off on the LG through System Settings' own switch. The display went dark for a moment and did not leave the system, its mode stayed, and macOS's own color table stayed in place. Its headroom went from 1 to 2.95 potential, which is its 295 nits over 100. Ordinary windows looked paler in HDR.
+- HDR switched on and off on the LG through System Settings' own switch. The display went dark for a moment and did not leave the system, its mode stayed, and its color table stayed as it was. Its headroom went from 1 to 2.95 potential, which is its 295 nits over 100. Ordinary windows looked paler in HDR.
 - A color profile assigned to the LG took effect at once, and giving the monitor's own back removed it cleanly.
 - Night Shift was switched on and off.
 - The link's color modes, the rates the mode list leaves out, dithering and Night Shift's state read the same through the app's own code as through the test programs.

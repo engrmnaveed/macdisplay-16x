@@ -32,17 +32,17 @@ The cask puts **Display 16X.app** in Applications and links the `display16x` com
 
 ## Install the release ZIP
 
-Download `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file from the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) into one folder. Check the download and unpack it there. The commands use version 0.3.0 as an example.
+Download `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file from the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) into one folder. Check the download and unpack it there. The commands use version 0.4.0 as an example.
 
 ```sh
-shasum -a 256 -c display16x-0.3.0-macos-arm64.zip.sha256
-ditto -x -k display16x-0.3.0-macos-arm64.zip .
+shasum -a 256 -c display16x-0.4.0-macos-arm64.zip.sha256
+ditto -x -k display16x-0.4.0-macos-arm64.zip .
 ```
 
 The SHA-256 file only shows that the download is complete, since it comes from the same place. Each release also has a GitHub build-provenance attestation, which shows that the ZIP was built by this repository's release workflow from the tagged commit. Check it with the [GitHub CLI](https://cli.github.com/):
 
 ```sh
-gh attestation verify display16x-0.3.0-macos-arm64.zip \
+gh attestation verify display16x-0.4.0-macos-arm64.zip \
   --repo engrmnaveed/macdisplay-16x \
   --signer-workflow engrmnaveed/macdisplay-16x/.github/workflows/release.yml
 ```
@@ -108,7 +108,7 @@ A requirement that starts with `identifier "com.16xbrains.macdisplay16x" and cer
    - `display16x virtual discard all --confirm` discards your virtual screens and the color profiles macOS made for them.
    - `display16x override delete all --confirm` removes every display override Display 16X wrote. Then replug those displays, or log out and in, so macOS stops offering the added sizes. This one also works when the app is not running, as long as the app is still installed.
    - If a full reset moved macOS's saved display arrangements aside, `display16x override put-back --confirm` puts them back.
-3. Quit Display 16X from its panel. Changes made over DDC, such as brightness and volume, stay in the monitor.
+3. Quit Display 16X from its panel. Changes made over DDC, such as brightness and volume, stay in the monitor. HDR and a color profile you chose through the app stay too, as if you had set them in System Settings, where you can change them back.
 4. Remove the app:
    - **Homebrew:** `brew uninstall --cask display16x`. Add `--zap` to also remove the settings folder.
    - **ZIP:** move **Display 16X.app** from Applications to the Trash, and remove the link you made, for example `rm ~/.local/bin/display16x`.

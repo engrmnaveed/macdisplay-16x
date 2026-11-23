@@ -6,7 +6,7 @@ A free, open-source menu bar utility for the display controls macOS leaves out: 
 
 It targets Apple silicon, and it is built to do nothing when nothing is happening: no timers, no polling, and nothing that renders frames unless you turn a feature on.
 
-**Status: 0.3.0, with v0.3 Advanced scaling, after 0.2.0 brought v0.2 Layout and a redesigned interface (24 November 2026). v0.4 HDR and color is built on its branch and not released.** The scaling, HDR and color features are off until you switch them on, and the app's own use of them has run in unit tests only. It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
+**Status: 0.4.0, with v0.4 HDR and color, after 0.3.0 brought v0.3 Advanced scaling and 0.2.0 brought v0.2 Layout and a redesigned interface (24 November 2026).** The scaling, HDR and color features are off until you switch them on, and the app's own use of them has run in unit tests only. It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
 
 ## Install
 
