@@ -169,6 +169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
         guard let context, let button = statusItem?.button else { return }
+        let clock = ContinuousClock()
+        let began = clock.now
         // The panel's content is built now and released when it closes.
         let model = PanelModel(context: context)
         let layoutModel = LayoutPanelModel(context: context, hotKeys: layoutSurfaces?.hotKeys)
@@ -190,6 +192,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         hosting.view.window?.makeKey()
+        // For the budget "the panel opens in under 100 ms warm", in the verbose log.
+        let took: Duration = clock.now - began
+        Log.app.debug("The panel opened in \(took.components.seconds * 1_000 + took.components.attoseconds / 1_000_000_000_000_000) ms.")
         model.opened()
         updateKeyCapture()
     }
