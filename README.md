@@ -1,3 +1,5 @@
+<img src="packaging/AppIcon.png" width="96" alt="The Display 16X icon: a display with its menu bar line, in aqua on navy">
+
 # Display 16X
 
 A free, open-source menu bar utility for the display controls macOS leaves out: every resolution and HiDPI mode, hardware brightness and volume on external monitors, software dimming, and brightness and volume keys that work on a monitor that is not Apple's. By [16X Brains](https://16xbrains.com/), under the MIT License.
@@ -67,7 +69,7 @@ The interface is drawn in three layers, so that a new look is a small change:
 | The pieces | `Sources/Display16XApp/Design/Primitives.swift` | How a bar, a text-size stop, a chip, a card or a banner is drawn from those values. |
 | The surfaces | `Sources/Display16XApp/Surfaces/` | Which pieces a surface is made of, and its words. A surface has no color, font, radius, distance or symbol of its own, and a test fails when one does. |
 
-The app icon is one square picture of 1024 pixels. `scripts/make-icon.sh MASTER.png` makes `packaging/AppIcon.icns` from it with `sips` and `iconutil`, and the packaging script puts that file into the bundle when it is there.
+The app icon is drawn by a script, the way the pieces are: `swift packaging/icon/draw-icon.swift packaging/AppIcon.png` draws the 1024-pixel picture, and `scripts/make-icon.sh packaging/AppIcon.png` makes `packaging/AppIcon.icns` from it with `sips` and `iconutil`. The packaging script puts that file into the bundle. The mark is the one the app draws in its panel and in the menu bar.
 
 A re-skin is held to two measures by the tests: `SkinContrastTests` measures the skin's color pairs in light, dark and both increased-contrast looks, and the render run fails when a control would reach VoiceOver without a name.
 

@@ -6,6 +6,13 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The app icon is chosen
+
+**Decision made by the owner, in the interface session:** the icon is the code-drawn candidate A, a display with its menu bar line standing on a foot, in aqua on the family's navy. It is the mark the app already draws in its panel and in the menu bar, and it is drawn by a script in the repository, as Space 16X's icon is, so it can be changed and made again.
+
+- **No candidate was made with Gemini.** Gemini in the built-in browser showed "Sign in" both times it was opened, so by the owner's rule the work stopped there and nothing was sent or downloaded. The three candidates shown were drawn in code and offered as extras. The owner chose from those.
+- **The icon is in the bundle from the next package on.** The copy in daily use is `897c40f`, from before the icon, and has to be replaced once more. The planning thread arranges that with the owner. An ad hoc signed bundle is a new signature each time, so the Accessibility entry has to be added again after the replacement.
+
 ## 23 November 2026 · The budgets on screen, and the owner's word on them
 
 Apple M5 Pro (Mac17,9), macOS 27.2.1, the Lenovo P32p-20 and the LG SDQHD. This branch at `897c40f` has been the owner's copy in daily use since 19:59. Figures are in the feasibility notes.
