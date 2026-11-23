@@ -120,6 +120,8 @@ The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
 
 **Status on 23 November 2026.** Merged into `main` as pull request 3. CI now runs the version check, the archive with an unpack-and-verify step, the cask style check on all three signing levels, and the comparison of the private interfaces with and without the hardened runtime, and all of it passed on the GitHub runner. The tag-triggered workflow has never run, because that needs a published tag. Before the first tag the owner has four steps, listed in [release.md](release.md): create the project certificate and back it up, add its three secrets to the `release-signing` environment, add the tap's deploy key to the `release` environment, and then tag `v0.1.0`. Both environments exist since 23 November, limited to `v*` tags, with the owner as required reviewer on `release` and no secrets yet. The other one-time settings are in place too: `main` accepts changes only through a pull request with the CI check passing, `v*` tags can be created, moved or deleted only by a repository admin, published releases are immutable, and private vulnerability reporting is on. With the first two releases the owner checks that the Accessibility permission survives an update.
 
+**Where the first tag goes.** `v0.1.0` is tagged on the last commit of `main` before v0.2 merges, because later commits hold v0.2 under "Unreleased". The release workflow runs from the tagged commit, so this works after v0.2 has merged. The other choice is to skip 0.1.0 and make 0.2.0 the first release. The owner decides when the certificate is ready.
+
 ### Interface pass
 
 The v0.1 interface was built to exercise the core, and it looks like it. This milestone gives the app a designed interface before the public release. The design is our own, to the [interface direction](../PRD.md#interface-direction) in the PRD.
@@ -148,13 +150,15 @@ Every change to arrangement, mirroring, the main display or a connection is reve
 
 Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
 
-**Built, and closed by the owner on 23 November 2026 with check 11 left for a later version.** All five stages are on the branch `claude/v0-2-layout-14c08e`, with 315 unit tests passing, not pushed. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
+**Built, and closed by the owner on 23 November 2026 with check 11 left for a later version.** All five stages are on the branch `claude/v0-2-layout-14c08e`, with 324 unit tests passing, not pushed. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
 
-To do before v0.2 is released, all at unit-test level and none of it needing the desk. The first is the core session's finished change. The other two came out of its review of how v0.2 uses the core, and they sit in v0.2's own files:
+Three more things were done after the checks, at unit-test level. The first is the core session's change. The other two came out of its review of how v0.2 uses the core:
 
-- **Take in the automation origin.** Merge the branch `core/automation-origin` and move the rule-driven writes, layout protection and connection automation, from restore to automation. Undoing an unconfirmed change and reconnecting at quit or at the next start stay restores.
-- **One unreadable stored command must cost one preset or shortcut, not the settings file.** Today a stored command that a build cannot read makes it set the whole file aside and start from defaults. This matters before the release, because afterwards v0.2 builds are the older builds.
-- **Check the gate before each protection write.** Protection checks the gate once per pass and then changes mode and rotation display by display, so a write can still go out after the Mac has begun to sleep.
+- **The automation origin is in.** Layout protection and the automatic turn-off of the built-in panel write as automation. Undoing an unconfirmed change, reconnecting at quit or at the next start, and reconnecting when no display is left stay restores, because they put back the app's own change.
+- **One unreadable stored command costs one preset or shortcut.** The lists are read entry by entry, and what was dropped is logged with its name.
+- **The gate is checked before each protection write**, and again between a rotation write and the mode write that follows it.
+
+The branch waits for the owner's word to go to `main` through a pull request.
 
 Carried forward to a later version, by the owner's word:
 
@@ -234,4 +238,4 @@ Changes to what v0.1 built are made by the session that built it, on the line of
 
 | Change | Why | Lands on | Status |
 | --- | --- | --- | --- |
-| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Built by the core session on 23 November 2026, on the branch `core/automation-origin` cut from the v0.2 branch, with 321 unit tests passing, not pushed. It waits to be merged into the v0.2 branch. Nothing from outside can claim the origin: the socket and links always run as commands |
+| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Built by the core session on 23 November 2026, on the branch `core/automation-origin` cut from the v0.2 branch, with 321 unit tests passing, not pushed. Merged into the v0.2 branch the same day, where the rule-driven writes now use it. Nothing from outside can claim the origin: the socket and links always run as commands |
