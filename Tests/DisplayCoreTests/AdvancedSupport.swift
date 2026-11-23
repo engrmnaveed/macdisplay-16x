@@ -56,6 +56,7 @@ final class FakeVirtualScreenSystem: VirtualScreenSystem {
     var refuseNext: String?
     private var nextID: UInt32 = 40
     weak var inventory: FakeInventory?
+    weak var layoutSystem: FakeLayoutSystem?
     var onChange: (@MainActor () -> Void)?
 
     func create(_ specification: VirtualScreenSpecification) -> Result<SystemDisplayID, VirtualScreenError> {
@@ -74,6 +75,9 @@ final class FakeVirtualScreenSystem: VirtualScreenSystem {
         )
         snapshot.kind = .virtual
         inventory?.displays.append(snapshot)
+        // macOS puts a new screen beside the main display.
+        let largest = specification.modes.first?.size ?? PointSize(width: 1920, height: 1080)
+        layoutSystem?.frames[id] = DisplayFrame(x: 3200, y: 0, width: largest.width, height: largest.height)
         onChange?()
         return .success(id)
     }
@@ -81,6 +85,8 @@ final class FakeVirtualScreenSystem: VirtualScreenSystem {
     func destroy(_ display: SystemDisplayID) {
         destroyed.append(display)
         inventory?.displays.removeAll { $0.systemID == display }
+        layoutSystem?.frames[display] = nil
+        layoutSystem?.mirrors = layoutSystem?.mirrors.filter { $0.value != display } ?? [:]
         onChange?()
     }
 
@@ -127,6 +133,7 @@ final class AdvancedRig {
         commands = AdvancedCommands(registry: rig.registry, settings: rig.settings, overrides: overrides, virtualScreens: virtualScreens, layout: layoutRig.layout)
         rig.engine.extensions = [layoutRig.commands, commands]
         virtualSystem.inventory = rig.inventory
+        virtualSystem.layoutSystem = layoutRig.layoutSystem
         virtualSystem.onChange = { [weak self] in self?.rig.sequencer.systemReconfigured() }
         virtualScreens.onNotice = { [weak self] text in self?.notices.append(text) }
     }

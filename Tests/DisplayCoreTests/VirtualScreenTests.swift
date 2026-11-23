@@ -273,3 +273,65 @@ import Testing
         #expect(advanced.virtualScreens.definitions[0].wantsConnected)
     }
 }
+
+@Suite(.timeLimit(.minutes(1))) struct MirrorHiDPITests {
+    /// The LG with a matched screen linked to it with mirroring, mirror-based HiDPI on.
+    @MainActor func linked() async -> AdvancedRig {
+        let advanced = AdvancedRig()
+        await advanced.startWithDesk()
+        await advanced.enable(.virtualScreensEnabled)
+        await advanced.enable(.mirrorHiDPIEnabled)
+        _ = await advanced.run(.set, .virtualCreate, on: .tag(advanced.lgTag.rawValue), value: .choice("LG HiDPI;match mirror=on"))
+        return advanced
+    }
+
+    @Test("Connecting the screen makes the LG show its picture, and the status says the GPU is busy")
+    @MainActor func starts() async {
+        let advanced = await linked()
+        _ = await advanced.run(.set, .virtualConnect, value: .choice("LG HiDPI"))
+        let screen = advanced.virtualScreens.live.values.first!
+        #expect(advanced.layoutRig.layoutSystem.mirrors[Fixture.lgID] == screen, "the LG mirrors the screen")
+        #expect(advanced.virtualSystem.made[screen]?.hiDPI == true)
+        #expect(advanced.virtualSystem.made[screen]?.maximumPixels == PointSize(width: 5760, height: 5120), "2880 × 2560 as HiDPI")
+        #expect(advanced.virtualScreens.activeMirrors.map(\.display) == [advanced.lgTag])
+    }
+
+    @Test("Disconnecting the screen gives the LG its own picture back first")
+    @MainActor func endsFirst() async {
+        let advanced = await linked()
+        _ = await advanced.run(.set, .virtualConnect, value: .choice("LG HiDPI"))
+        var orderOK = false
+        advanced.layoutRig.layoutSystem.onApply = { [layout = advanced.layoutRig.layoutSystem, system = advanced.virtualSystem, rig = advanced.rig] in
+            if layout.mirrors[Fixture.lgID] == nil, system.destroyed.isEmpty { orderOK = true }
+            rig.sequencer.systemReconfigured()
+        }
+        _ = await advanced.run(.set, .virtualDisconnect, value: .choice("LG HiDPI"))
+        #expect(orderOK, "the mirror ended before the screen went")
+        #expect(advanced.layoutRig.layoutSystem.mirrors.isEmpty)
+        #expect(advanced.virtualScreens.activeMirrors.isEmpty)
+    }
+
+    @Test("Switching mirror-based HiDPI off ends the mirror and leaves the screen")
+    @MainActor func switchOff() async {
+        let advanced = await linked()
+        _ = await advanced.run(.set, .virtualConnect, value: .choice("LG HiDPI"))
+        let result = await advanced.run(.set, .mirrorHiDPIEnabled, value: .flag(false))
+        #expect(result.report?.contains("no longer shows") == true)
+        #expect(advanced.layoutRig.layoutSystem.mirrors.isEmpty)
+        #expect(advanced.virtualScreens.live.count == 1)
+    }
+
+    @Test("Nothing is mirrored in safe mode, even for a screen linked with mirroring")
+    @MainActor func safeMode() async {
+        let advanced = AdvancedRig(safeMode: true) { document in
+            document.advanced.virtualScreensEnabled = true
+            document.advanced.mirrorHiDPIEnabled = true
+            document.advanced.virtualScreens = [VirtualScreenDefinition(id: 3, name: "LG HiDPI", association: VirtualAssociation(display: DisplayTag(2), mirror: true), wantsConnected: true)]
+        }
+        await advanced.startWithDesk()
+        let service = advanced.virtualScreens
+        await advanced.layoutRig.settling { await service.start() }
+        #expect(advanced.virtualSystem.made.isEmpty)
+        #expect(advanced.layoutRig.layoutSystem.mirrors.isEmpty)
+    }
+}

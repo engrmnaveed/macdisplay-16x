@@ -238,6 +238,10 @@ public final class VirtualScreenService {
             definition.wantsConnected = false
             save(definition)
         }
+        guard live[id] != nil else { changed(); return .success(()) }
+        // A display showing this screen gets its own picture back first, so it returns to
+        // its own mode and place, the way v0.2 ends a mirror.
+        await endMirror(of: definition, origin: origin)
         guard let display = live.removeValue(forKey: id) else { changed(); return .success(()) }
         system?.destroy(display)
         _ = await bus.next(within: settleTimeout, scheduler: scheduler) { event in
@@ -320,6 +324,23 @@ public final class VirtualScreenService {
         if origin.isAutomatic, case .blocked = gate.check(origin) { return }
         let report = await layout.change(origin: origin) { LayoutPlanner.mirror($0, association.display, of: tag) }
         if let failure = report.failure { Log.core.notice("\(definition.name) could not be shown on display \(association.display): \(failure).") }
+    }
+
+    /// Displays showing a virtual screen's picture now: mirror-based HiDPI at work.
+    public var activeMirrors: [(screen: String, display: DisplayTag)] {
+        guard let layout, layout.isAvailable else { return [] }
+        let snapshot = layout.snapshot()
+        return definitions.compactMap { definition in
+            guard let tag = definition.tag, let target = definition.association?.display, snapshot.entry(target)?.mirrorOf == tag else { return nil }
+            return (definition.name, target)
+        }
+    }
+
+    private func endMirror(of definition: VirtualScreenDefinition, origin: ChangeOrigin) async {
+        guard let tag = definition.tag, let target = definition.association?.display, let layout, layout.isAvailable,
+              layout.snapshot().entry(target)?.mirrorOf == tag else { return }
+        let report = await layout.change(origin: origin) { LayoutPlanner.unmirror($0, target) }
+        if let failure = report.failure { Log.core.notice("Display \(target) still shows \(definition.name): \(failure).") }
     }
 
     // MARK: Events

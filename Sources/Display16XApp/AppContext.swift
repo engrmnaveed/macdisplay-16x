@@ -176,10 +176,16 @@ final class AppContext {
         automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
         listeners = adapters.listeners(sequencer)
         permissions = PermissionBroker(probe: adapters.permissionProbe, bus: bus, settings: settings)
-        engine.statusProvider = { [permissions, colorBackend, loginItem] in
+        engine.statusProvider = { [permissions, colorBackend, loginItem, virtualScreens, overrides] in
             var lines = ["version: \(AppPaths.version)"]
             lines.append(contentsOf: permissions.statusLines)
             lines.append("login item service: \(loginItem.systemStatus)")
+            let mirrors = virtualScreens.activeMirrors
+            lines.append("virtual screens: \(virtualScreens.live.count) connected, \(virtualScreens.definitions.count) saved")
+            if !mirrors.isEmpty {
+                lines.append("mirror-based HiDPI running, the GPU copies a whole screen at every refresh: " + mirrors.map { "\($0.screen) on \($0.display)" }.joined(separator: ", "))
+            }
+            lines.append("overrides written: \(overrides.written().count)")
             switch colorBackend.safety() {
             case .safe: lines.append("color tables: safe to use")
             case .unsafe(let reason): lines.append("color tables: blocked. \(reason)")
