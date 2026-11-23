@@ -6,6 +6,12 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · Release 0.4.0: two releases waiting at once, and a release run with no macOS runner
+
+- **GitHub can fail to find a macOS runner for a release.** 0.3.0's packaging job waited 15 minutes and was cancelled with "The job was not acquired by Runner of type hosted even after multiple attempts", next to GitHub's notice that jobs for macOS arm64 runners may queue longer because of capacity. Its checks job had found a macOS runner six minutes earlier, and 0.2.0's packaging job had waited five minutes for one. Nothing was signed or published. GitHub offers no setting for how long a hosted job may wait. From 0.4.0's workflow on, a run that ends without a release says in its summary why, and for a job with no runner, that **Re-run failed jobs** runs it again with nothing to undo. The runbook says the same. No check was changed.
+- **A release run needs a macOS runner twice**, for the checks and for packaging. If runners stay short, the two could become one job that packages what it has just tested. That changes how the release reuses CI unchanged, so it was not done. It is an option for the maintainer, not a recommendation.
+- **Two releases can wait at once, and the order of approval does not matter** for tags from 0.3.0 on: the higher version stays the latest release and keeps the tap, and while both are ad hoc signed the notes are the same either way. The order matters once, at the change to the certificate: approve the last ad hoc release first, or add the sentence about the Accessibility grant to the first certificate release's notes by hand.
+
 ## 24 November 2026 · Brightness above SDR white: built up to the one hook only the core can give
 
 **Request for the core session, through the planning thread: one transform in the color pipeline.** Everything else for "software upscaling" is built at unit-test level and stays inert until then, saying why in the panel and on the command line.
