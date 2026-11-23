@@ -51,12 +51,51 @@ public enum AVServiceMatcher {
     }
 }
 
+/// Names how each external display is attached, by pairing it with the link macOS
+/// describes for a monitor of the same identity.
+public enum ConnectionMatcher {
+    public struct Link: Sendable, Equatable {
+        public var edid: EDIDInfo?
+        public var type: ConnectionType
+
+        public init(edid: EDIDInfo?, type: ConnectionType) {
+            self.edid = edid
+            self.type = type
+        }
+    }
+
+    public struct Outcome: Sendable, Equatable {
+        public var types: [SystemDisplayID: ConnectionType] = [:]
+        /// Display to index into the links array.
+        public var pairs: [SystemDisplayID: Int] = [:]
+    }
+
+    /// A display with no link of its own is left out, which reads as not known. So is one
+    /// of two identical monitors on different kinds of port: which unit is on which port
+    /// cannot be told from identity, and a wrong label is worse than none.
+    public static func match(displays: [AVServiceMatcher.DisplayFacts], links: [Link]) -> Outcome {
+        let matched = AVServiceMatcher.match(displays: displays, services: links.map(\.edid))
+        var outcome = Outcome(pairs: matched.pairs)
+        for display in displays {
+            guard let index = matched.pairs[display.id] else { continue }
+            if matched.ambiguous.contains(display.id) {
+                let twins = links.filter { $0.edid?.vendor == display.vendor && $0.edid?.product == display.model }
+                if Set(twins.map(\.type)).count > 1 { continue }
+            }
+            outcome.types[display.id] = links[index].type
+        }
+        return outcome
+    }
+}
+
 /// The window server's list of connected displays, with identifiers filled in from EDID.
 @MainActor
 public final class SystemDisplayInventory: DisplayInventory {
     /// The DDC channel of each external display, refreshed with every topology read.
     public private(set) var services: [SystemDisplayID: AVService] = [:]
     public private(set) var ambiguousServices: Set<SystemDisplayID> = []
+    /// The link macOS describes for each external display, for the hardware report.
+    public private(set) var links: [SystemDisplayID: PortLink] = [:]
 
     /// Vendor code macOS uses when it knows nothing about a display.
     static let unknownVendor: UInt32 = 0x756E_6B6E
@@ -99,6 +138,20 @@ public final class SystemDisplayInventory: DisplayInventory {
         services = matched.pairs.mapValues { available[$0] }
         ambiguousServices = matched.ambiguous
 
+        // How each one is attached. Read here and nowhere else: once per topology read.
+        let described = PortLinkDirectory.displayLinks()
+        let connections = ConnectionMatcher.match(
+            displays: external.map {
+                AVServiceMatcher.DisplayFacts(
+                    id: SystemDisplayID($0), vendor: CGDisplayVendorNumber($0), model: CGDisplayModelNumber($0), serial: CGDisplaySerialNumber($0)
+                )
+            },
+            links: described.map {
+                ConnectionMatcher.Link(edid: EDIDInfo(bytes: $0.edid), type: ConnectionType(portType: $0.portType, isTunneled: $0.isTunneled))
+            }
+        )
+        links = connections.pairs.mapValues { described[$0] }
+
         return ids.map { id in
             let systemID = SystemDisplayID(id)
             let builtIn = CGDisplayIsBuiltin(id) != 0
@@ -135,7 +188,8 @@ public final class SystemDisplayInventory: DisplayInventory {
                 rotation: Int(CGDisplayRotation(id).rounded()),
                 mirrorSource: mirror == kCGNullDirectDisplay ? nil : SystemDisplayID(mirror),
                 physicalSize: size.width > 0 ? PhysicalSize(widthMillimeters: size.width, heightMillimeters: size.height) : nil,
-                isPlaceholder: isPlaceholder
+                isPlaceholder: isPlaceholder,
+                connection: builtIn ? .builtIn : connections.types[systemID] ?? .unknown
             )
         }
     }

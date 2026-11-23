@@ -17,6 +17,9 @@ public final class LiveDisplay {
     public internal(set) var needsRedetection = false
     var lastDetection: Date?
     public internal(set) var pipeline: ColorPipeline?
+    /// How each value is known in this connection. Read it through
+    /// `ControlService.knowledge(of:for:)`, which also answers for composite brightness.
+    public internal(set) var valueKnowledge: [ControlID: ValueKnowledge] = [:]
 
     init(tag: DisplayTag, snapshot: DisplaySnapshot) {
         self.tag = tag
@@ -24,6 +27,11 @@ public final class LiveDisplay {
     }
 
     public var systemID: SystemDisplayID { snapshot.systemID }
+
+    /// How the display is attached: the Mac's own port, built-in, or not known.
+    public var connection: ConnectionType {
+        snapshot.kind == .builtIn ? .builtIn : snapshot.connection
+    }
 }
 
 public struct TopologyChange: Sendable, Equatable {

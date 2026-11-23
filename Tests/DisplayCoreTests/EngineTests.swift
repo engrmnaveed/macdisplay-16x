@@ -142,7 +142,7 @@ struct CommandEngineTests {
         let stored = try #require(await rig.run(.get, .brightness, on: .tag(1)).entries.first)
         #expect(stored.outcome == .accepted)
         #expect(stored.actual == .number(0.75))
-        #expect(stored.detail == "stored value")
+        #expect(stored.detail == "stored value, read back from the monitor")
 
         // Someone used the monitor's own buttons.
         ddc.values[.hardwareBrightness] = 40

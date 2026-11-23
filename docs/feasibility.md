@@ -587,6 +587,58 @@ Still to do, for a later version: check 11 as planned above (layout protection o
 
 Also seen: `AppleClamshellCausesSleep` read 1 at 11:12 and 12:17 and 0 from about 12:50, after the built-in panel had been turned off, and stayed 0 after it came back. Whether the app caused it is not known.
 
+## 23 November 2026 · How a display is connected · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
+
+Read-only and unattended, for the interface pass: the card of a display says "External" today and should name the connection. Only the I/O registry and the window server's display list were read. Nothing was sent to a monitor, no DDC and no I2C, and the owner's Display 16X 0.1.0 kept running throughout. Other display utilities were not inspected.
+
+The probe is [`spikes/connection-probe.swift`](../spikes/connection-probe.swift). It prints no serial number, UUID or EDID. Its output with the displays awake:
+
+```text
+Ports macOS lists:
+  USB-C 1: active transports: none
+  USB-C 2: active transports: none
+  USB-C 3: active transports: CC, USB2, DisplayPort
+  MagSafe 3 1: active transports: CC
+  HDMI 1: active transports: DisplayPort
+  SD Card 1: active transports: none
+
+DisplayPort links macOS reports: 2
+  LEN P32p-20: port HDMI, the Mac's own port HDMI 1 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at 8.1 Gbps (HBR3), through a converter
+  LG SDQHD: port USB-C, the Mac's own port USB-C 3 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at 8.1 Gbps (HBR3)
+
+Displays: 2
+  LEN P32p-20: matched by vendor, model and serial number to the HDMI port
+  LG SDQHD: matched by vendor, model and serial number to the USB-C port
+```
+
+What this shows:
+
+- **macOS describes each of the Mac's ports and each display link in the I/O registry.** A port entry (class `IOPort`) carries its type in words ("USB-C", "HDMI", "MagSafe 3", "SD Card") and what is active on it. Each display has a link entry (class `IOPortTransportStateDisplayPort`) under its port, with the type of the Mac's own port, whether the picture is tunneled, the lane count and rate, and the monitor's EDID. Reading them needs no private symbol, only public IOKit calls. The names are undocumented.
+- **The EDID in the link entry pairs it with a display.** Both monitors matched on vendor, model and serial number, the same way the DDC channel is paired.
+- **Every external display is a DisplayPort link as far as the Mac is concerned,** the one on the HDMI port too: the Mac drives its HDMI port through a converter, and the link entry says so. So "DisplayPort" tells two connections apart no better than "external" does. The port does.
+- **The Lenovo is on the Mac's HDMI port. The LG is on a USB-C port that carries DisplayPort, not tunneled.** These notes call the LG's connection DisplayPort throughout, which is the signal. The port also has USB 2 active. That fits a USB-C cable to the monitor's own USB-C input as well as a DisplayPort cable with a small USB device in its plug, and nothing macOS reports tells the two apart.
+- **macOS does not know the far end of the cable.** A USB-C port can lead to a monitor's USB-C input, a DisplayPort plug, or an adapter to HDMI. A converter in the path is visible, as it is inside the Mac's own HDMI port, but not what it converts to.
+
+With the displays asleep at 16:26 (both reported asleep, the Mac idle for 650 seconds), the same read gave:
+
+```text
+  LEN P32p-20: port HDMI, the Mac's own port HDMI 1 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at 8.1 Gbps (HBR3), through a converter
+  LG SDQHD: port USB-C, the Mac's own port USB-C 3 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at No Link
+```
+
+- **The link entries stay through a display sleep,** still marked active and still holding the EDID, so the connection stays known. The LG's direct link is down while it sleeps ("No Link"). The Lenovo's is not, because that link ends at the converter inside the Mac.
+
+The app's own read, through the same inventory the running app uses and without a DDC query, named the Lenovo "HDMI" and the LG "USB-C" on this Mac (a read-only unit test, `ConnectionMatcherTests.inventory`).
+
+Not checked, because nothing on this desk offers it or the Mac was unattended:
+
+- A Thunderbolt dock or a Thunderbolt display. The link entry has a "Tunneled" flag, and the app reads a tunneled link as Thunderbolt. That reading has not met one.
+- An adapter (USB-C to HDMI, a hub), a DisplayLink adapter, AirPlay, Sidecar, a virtual display. The last four should have no link entry and read as not known.
+- Two units of one model on different kinds of port. The app leaves both as not known, by a unit test only.
+- Another Mac and another macOS release. Since which release the registry has these entries is not known. On the CI runner, a virtual Mac, there is nothing to read and the connection is not known.
+- Which cable the LG is on. The owner can say.
+- How a value is known (read back, sent, not known), the other fact built in the same change, has run in unit tests only. Nothing on the desk ran this build.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:
@@ -605,9 +657,10 @@ swiftc -O spikes/gamma-table-write-probe.swift -o /tmp/gamma-probe && /tmp/gamma
 swiftc -O spikes/ddc-write-probe.swift -o /tmp/ddc-write-probe && /tmp/ddc-write-probe "P32p"
 swiftc -O spikes/ddc-reliability-probe.swift -o /tmp/ddc-reliability-probe && /tmp/ddc-reliability-probe
 swiftc -O spikes/layout-probe.swift -o /tmp/layout-probe && /tmp/layout-probe   # add --watch to follow changes
+swiftc -O spikes/connection-probe.swift -o /tmp/connection-probe && /tmp/connection-probe
 ```
 
-The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header.
+The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header.
 
 To list the display-related functions a system framework exports on a given macOS version:
 

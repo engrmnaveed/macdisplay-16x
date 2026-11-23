@@ -189,6 +189,43 @@ public struct ControlMapping: Sendable, Equatable {
     }
 }
 
+// MARK: How a value is known
+
+/// How the app knows the value in use of a control on a connected display.
+///
+/// It is a fact about this connection, kept in memory and never stored: a display that
+/// leaves and returns starts again at `unknown`, and so does every display at the start of
+/// the app, until the monitor has been read or written.
+public enum ValueKnowledge: String, Codable, Sendable, CaseIterable {
+    /// The monitor reported this value: when the display was checked, after wake, in the
+    /// read that follows a write, or when the panel asked.
+    case readBack
+    /// The app sent this value and nothing has confirmed it. Software dimming is always
+    /// this, because a color table cannot be read back.
+    case sent
+    /// No value is known, or the value shown is one remembered from before that the
+    /// monitor has not confirmed since: it was not asked, or it did not answer.
+    case unknown
+
+    /// The word a surface shows next to the value.
+    public var label: String {
+        switch self {
+        case .readBack: "confirmed"
+        case .sent: "sent"
+        case .unknown: "not known"
+        }
+    }
+
+    /// What a `get` says about the value it returns without asking the monitor again.
+    public var storedValueDetail: String {
+        switch self {
+        case .readBack: "stored value, read back from the monitor"
+        case .sent: "stored value, sent and not read back"
+        case .unknown: "stored value"
+        }
+    }
+}
+
 // MARK: Controller boundary
 
 public enum ControlFailure: Error, Codable, Sendable, Equatable {

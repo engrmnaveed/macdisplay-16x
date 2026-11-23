@@ -208,6 +208,59 @@ public enum DisplayKind: String, Codable, Sendable {
     case displayLink
 }
 
+/// How a connected display is attached, named for the Mac's own end of the cable.
+///
+/// macOS knows which of its ports a display hangs off and whether the picture travels
+/// inside a Thunderbolt connection. It does not know what is at the far end: a USB-C port
+/// can lead to a monitor's USB-C input, to a DisplayPort plug, or to an adapter. So the
+/// label never claims more than the port. It is a fact about the connection in use, never
+/// stored with the display's record.
+public enum ConnectionType: String, Codable, Sendable, CaseIterable {
+    case builtIn
+    case hdmi
+    /// A port macOS itself calls DisplayPort. Apple silicon Macs have none, so today a
+    /// monitor on a DisplayPort cable shows as the port that cable is plugged into.
+    case displayPort
+    /// A USB-C port carrying the picture directly.
+    case usbC
+    /// The picture travels inside a Thunderbolt or USB4 connection: a dock, a hub or a
+    /// Thunderbolt display.
+    case thunderbolt
+    /// macOS does not say, or says something this build does not know.
+    case unknown
+
+    public var isKnown: Bool { self != .unknown }
+
+    /// The words a surface shows.
+    public var label: String {
+        switch self {
+        case .builtIn: "Built-in"
+        case .hdmi: "HDMI"
+        case .displayPort: "DisplayPort"
+        case .usbC: "USB-C"
+        case .thunderbolt: "Thunderbolt"
+        case .unknown: "Not known"
+        }
+    }
+
+    /// From what macOS reports about a link: its own description of the Mac's port, and
+    /// whether the picture is tunneled. Anything else is not known.
+    public init(portType: String?, isTunneled: Bool? = nil) {
+        let words = (portType ?? "").lowercased().filter { $0.isLetter || $0.isNumber }
+        if isTunneled == true || words.contains("thunderbolt") {
+            self = .thunderbolt
+        } else if words.contains("hdmi") {
+            self = .hdmi
+        } else if words.contains("displayport") {
+            self = .displayPort
+        } else if words.contains("usbc") || words.contains("typec") {
+            self = .usbC
+        } else {
+            self = .unknown
+        }
+    }
+}
+
 public enum MatchRule: String, Codable, Sendable, CaseIterable {
     /// EDID identifiers, with the system UUID and then the port only to tell identical monitors apart.
     case automatic
@@ -299,6 +352,9 @@ public struct DisplaySnapshot: Sendable, Equatable {
     public var physicalSize: PhysicalSize?
     /// The temporary generic display macOS can report during wake. Never trusted.
     public var isPlaceholder: Bool
+    /// How the display is attached, as far as macOS reports it. Read it through
+    /// `LiveDisplay.connection`, which also answers for the built-in panel.
+    public var connection: ConnectionType
 
     public init(
         systemID: SystemDisplayID,
@@ -310,7 +366,8 @@ public struct DisplaySnapshot: Sendable, Equatable {
         rotation: Int = 0,
         mirrorSource: SystemDisplayID? = nil,
         physicalSize: PhysicalSize? = nil,
-        isPlaceholder: Bool = false
+        isPlaceholder: Bool = false,
+        connection: ConnectionType = .unknown
     ) {
         self.systemID = systemID
         self.identifiers = identifiers
@@ -322,6 +379,7 @@ public struct DisplaySnapshot: Sendable, Equatable {
         self.mirrorSource = mirrorSource
         self.physicalSize = physicalSize
         self.isPlaceholder = isPlaceholder
+        self.connection = connection
     }
 }
 

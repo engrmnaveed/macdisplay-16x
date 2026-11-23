@@ -38,6 +38,30 @@ Every surface of the app was drawn off screen from made-up monitors, in light an
 
 **The last v0.2 commit changed spacing and nothing else.** The arrangement panels were drawn at the commit that broke up their views for the older compiler and at the one before it. Rows of the display list are 4 points closer together, and the items of the protection group and of the integration group 2 points each, so the panel is 12 to 16 points shorter. Every element, every text and the accessibility tree are the same, and the Keep windows and the protection offer are identical.
 
+## 23 November 2026 · Two facts for the panel: how a value is known, and how a display is connected
+
+Asked for by the planning thread for the interface pass, built by the core session. Unit tests and a read-only look at the I/O registry. Nothing was written to a display and the app was not started.
+
+**How a value is known.** Each control of a connected display now says one of three things about the value in use: read back from the monitor (the PRD's "confirmed"), only sent, or not known. It follows what the app does anyway. No read was added for it.
+
+- **Read back:** the monitor reported the value when the display was checked, in the read that follows a write, in the read after wake, or when the panel asked.
+- **Sent:** the app wrote it and nothing confirmed it: a drag in progress, a monitor that did not answer the read after a write, a control that cannot be read. Software dimming is always sent. A brightness it has a share in is sent at best, and read back again once dimming is back at neutral.
+- **Not known:** no value, or a value remembered from before that the monitor has not confirmed in this connection.
+- **Across sleep:** when the Mac or the displays go to sleep, what was read back stops counting, because a monitor can wake with other values. The read the app makes once the wake has settled renews it: the same value or a new one both count as read back. A monitor that does not answer then stays not known, with its last value still shown, until the panel reads it or the user sets something. A value that was only sent stays sent while asleep, since nothing was claimed for it, and the same read after wake then decides for it too. A control that cannot be read is never asked and stays sent.
+- **Across a reconnect:** a display that leaves takes its facts with it. When it returns, the check it gets anyway reads its controls, and those are read back. A returning monitor that says nothing has values that are not known.
+- **At start:** the same as a returning display. With the startup policy "trust the stored value" nobody asks the monitor, so the value is not known. In safe mode a monitor seen before is not compared either, and stays not known until the panel reads it.
+- **Decision needed:** whether sleep should end "read back" at once, as built, or only when the monitor then fails to answer. Built this way because the facts say what is known now, and between falling asleep and the read after wake nothing is.
+
+**How a display is connected.** macOS describes the Mac's ports and each display link in the I/O registry (measurements in the feasibility notes). What it knows is the Mac's own end: which port, and whether the picture travels inside a Thunderbolt connection. It does not know the far end of the cable.
+
+- **The label names the Mac's own port:** HDMI, USB-C, built-in, or Thunderbolt when the picture is tunneled through a dock, a hub or a Thunderbolt display. "DisplayPort" is kept for a port macOS itself calls that, which no Apple silicon Mac has.
+- **On this desk the Lenovo reads HDMI and the LG reads USB-C.** The planning documents and the feasibility notes call the LG's connection DisplayPort. That is the signal, and by that word the Lenovo is DisplayPort too: the Mac feeds its HDMI port through a converter. The signal does not tell connections apart. The port does.
+- **A USB-C port can end in a monitor's USB-C input, a DisplayPort plug or an HDMI adapter,** and macOS cannot tell which. So a user with a DisplayPort cable sees "USB-C", which is true of the Mac's end and may not be the word they would use.
+- **Decision needed:** keep "USB-C" for a USB-C port that carries the picture directly, or show "DisplayPort" there. The second matches the desk notes and reads wrong with an HDMI adapter. It is one line in the mapping.
+- **Not known is a real answer:** a display with no link entry (AirPlay, Sidecar, a virtual display, a USB graphics adapter, an older macOS), a port type in words this build does not know, and two identical monitors on different kinds of port, where a label would be a guess.
+- **A display sleep does not change it.** The link entry stays while the displays sleep.
+- **Not seen on hardware:** Thunderbolt, an adapter, identical monitors, another Mac. Which cable the LG is on is for the owner to say.
+
 ## 23 November 2026 · v0.2 Layout closed by the owner with three things left for a later version
 
 The owner ended the v0.2 build session after the hardware checks. Left open, to be picked up and verified by a later version's improvements:
