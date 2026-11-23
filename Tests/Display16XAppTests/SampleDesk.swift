@@ -70,11 +70,12 @@ final class SampleDesk {
             ),
             name: "LEN P32p-20",
             isMain: main,
-            physicalSize: PhysicalSize(widthMillimeters: 700, heightMillimeters: 390)
+            physicalSize: PhysicalSize(widthMillimeters: 700, heightMillimeters: 390),
+            connection: .hdmi
         )
     }
 
-    /// A tall monitor on DisplayPort, turned on its side. Serial and UUID are made up.
+    /// A tall monitor on one of the Mac's USB-C ports, turned on its side. Serial and UUID are made up.
     static func lg(main: Bool = false) -> DisplaySnapshot {
         DisplaySnapshot(
             systemID: lgID,
@@ -84,7 +85,8 @@ final class SampleDesk {
             ),
             name: "LG SDQHD",
             isMain: main,
-            rotation: 270
+            rotation: 270,
+            connection: .usbC
         )
     }
 

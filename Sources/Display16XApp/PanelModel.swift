@@ -25,7 +25,11 @@ final class PanelModel: ObservableObject {
         var isBuiltIn = false
         /// Width divided by height as the display stands on the desk, for its small picture.
         var aspect = 16.0 / 9.0
-        /// Whether each value on the card was read back or only sent.
+        /// How the display is connected to the Mac, and its diagonal where the display says it.
+        var connection = ConnectionType.unknown
+        var inches: Int?
+        /// How each value on the card is known, from the core. Nil for a control the
+        /// display does not have.
         var brightnessKnowledge: ValueKnowledge?
         var contrastKnowledge: ValueKnowledge?
         var volumeKnowledge: ValueKnowledge?
@@ -80,8 +84,6 @@ final class PanelModel: ObservableObject {
 
     private let context: AppContext
     private var subscription: EventBus.Subscription?
-    /// Controls whose last change through this panel was accepted and not read back.
-    private var unconfirmed: [DisplayTag: Set<ControlID>] = [:]
 
     init(context: AppContext) {
         self.context = context
@@ -111,10 +113,9 @@ final class PanelModel: ObservableObject {
             if card.volume.isAvailable { features.append(contentsOf: [.volume, .mute]) }
             guard !features.isEmpty else { continue }
             let wanted = features
-            Task { [weak self, context] in
+            Task { [context] in
                 for feature in wanted {
-                    let result = await context.engine.execute(Command(.get, feature, on: .tag(card.tag.rawValue), origin: .interface, options: CommandOptions(refresh: true)))
-                    if let control = PanelModel.control(for: feature) { self?.note(result, control: control) }
+                    _ = await context.engine.execute(Command(.get, feature, on: .tag(card.tag.rawValue), origin: .interface, options: CommandOptions(refresh: true)))
                 }
             }
         }
@@ -133,6 +134,11 @@ final class PanelModel: ObservableObject {
             case .mute: cards[index].isMuted = change.value >= 0.5
             default: break
             }
+        case .valueKnowledgeChanged(let tag):
+            // How a value is known can change while the value stays: a drag ends and the
+            // last write is read back, or the Mac goes to sleep.
+            guard let index = cards.firstIndex(where: { $0.tag == tag }) else { return }
+            setKnowledge(&cards[index])
         case .displayAdded, .displayRemoved, .controllersReady, .modeChanged, .modeConfirmationChanged,
              .reconfigurationSettled, .permissionsChanged, .gateChanged, .wakeSettled:
             rebuild()
@@ -163,14 +169,15 @@ final class PanelModel: ObservableObject {
         cards = registry.live.keys.sorted().compactMap { tag -> Card? in
             guard let live = registry.live[tag], let record = registry.record(for: tag) else { return nil }
             let mode = context.modes.currentMode(for: tag)
-            let isBuiltIn: Bool = record.kind == .builtIn
+            let inches: Int? = PanelText.inches(record.physicalSizeOverride ?? record.physicalSize)
             let caption: String = PanelText.caption(
-                isBuiltIn: isBuiltIn, inches: PanelText.inches(record.physicalSizeOverride ?? record.physicalSize),
-                isMain: live.snapshot.isMain, isMirrored: live.snapshot.mirrorSource != nil
+                inches: inches, connection: live.connection, isMain: live.snapshot.isMain, isMirrored: live.snapshot.mirrorSource != nil
             )
             var card = Card(tag: tag, name: record.displayName, caption: caption, isChecking: live.isDetecting)
             card.isMain = live.snapshot.isMain
-            card.isBuiltIn = isBuiltIn
+            card.isBuiltIn = record.kind == .builtIn
+            card.connection = live.connection
+            card.inches = inches
             card.aspect = PanelText.aspect(frame: frames[tag], mode: mode)
             card.brightness = state(.brightness, tag: tag)
             card.contrast = state(.contrast, tag: tag)
@@ -193,10 +200,7 @@ final class PanelModel: ObservableObject {
             }
 
             let composition = context.controls.composition(for: tag)
-            let softwareShare: Bool = composition.hasSoftware && (!composition.hasHardware || card.brightness.value < composition.switchover)
-            card.brightnessKnowledge = knowledge(.brightness, tag: tag, state: card.brightness, alwaysSent: softwareShare)
-            card.contrastKnowledge = knowledge(.contrast, tag: tag, state: card.contrast)
-            card.volumeKnowledge = knowledge(.volume, tag: tag, state: card.volume)
+            setKnowledge(&card)
             card.softwareNote = PanelText.dimmingNote(
                 hasSoftware: composition.hasSoftware, hasHardware: composition.hasHardware, switchover: composition.switchover,
                 globallyOn: document.global.colorTablesEnabled ?? SettingsDefaults.colorTablesEnabled,
@@ -225,33 +229,13 @@ final class PanelModel: ObservableObject {
 
     // MARK: What is known
 
-    /// A value with a software share is only ever sent. So is one whose last change the
-    /// display accepted without reading it back. Everything else was read from the display.
-    private func knowledge(_ control: ControlID, tag: DisplayTag, state: ControlState, alwaysSent: Bool = false) -> ValueKnowledge? {
-        guard state.isAvailable else { return nil }
-        if alwaysSent || unconfirmed[tag]?.contains(control) == true { return .sent }
-        return .confirmed
-    }
-
-    private func note(_ result: CommandResult, control: ControlID) {
-        var changed = false
-        for entry in result.entries {
-            switch entry.outcome {
-            case .confirmed: changed = unconfirmed[entry.tag]?.remove(control) != nil || changed
-            case .accepted: changed = unconfirmed[entry.tag, default: []].insert(control).inserted || changed
-            case .failed: break
-            }
-        }
-        if changed { rebuild() }
-    }
-
-    static func control(for feature: FeatureID) -> ControlID? {
-        switch feature {
-        case .brightness: .brightness
-        case .contrast: .contrast
-        case .volume: .volume
-        default: nil
-        }
+    /// How each value on the card is known: read back from the display, only sent, or not
+    /// known. The core keeps this fact, and the command line prints the same one.
+    private func setKnowledge(_ card: inout Card) {
+        let controls = context.controls
+        card.brightnessKnowledge = card.brightness.isAvailable ? controls.knowledge(of: .brightness, for: card.tag) : nil
+        card.contrastKnowledge = card.contrast.isAvailable ? controls.knowledge(of: .contrast, for: card.tag) : nil
+        card.volumeKnowledge = card.volume.isAvailable ? controls.knowledge(of: .volume, for: card.tag) : nil
     }
 
     // MARK: Commands
@@ -259,7 +243,6 @@ final class PanelModel: ObservableObject {
     private func run(_ command: Command, report: Bool = true) {
         Task { [weak self, context] in
             let result = await context.send(command)
-            if report, let control = PanelModel.control(for: command.feature) { self?.note(result, control: control) }
             guard report, let self else { return }
             if let failure = result.error {
                 self.message = failure.prefix(1).uppercased() + failure.dropFirst() + "."

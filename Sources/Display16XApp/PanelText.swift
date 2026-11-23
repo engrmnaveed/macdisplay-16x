@@ -12,19 +12,35 @@ enum PanelText {
         return inches > 0 ? inches : nil
     }
 
-    /// The line under a display's name: "32-inch · Main display".
-    static func caption(isBuiltIn: Bool, inches: Int?, isMain: Bool, isMirrored: Bool) -> String {
+    /// The line under a display's name: "32-inch · HDMI · Main display". A connection that
+    /// is not known leaves no word in its place.
+    static func caption(inches: Int?, connection: ConnectionType, isMain: Bool, isMirrored: Bool) -> String {
         var parts: [String] = []
-        if isBuiltIn {
-            parts.append("Built-in")
-        } else if let inches {
-            parts.append("\(inches)-inch")
-        } else {
-            parts.append("External")
-        }
+        if let inches { parts.append("\(inches)-inch") }
+        if connection.isKnown { parts.append(connection.label) }
+        if parts.isEmpty { parts.append("External") }
         if isMain { parts.append("Main display") }
         if isMirrored { parts.append("Mirrored") }
         return parts.joined(separator: " · ")
+    }
+
+    /// The word next to a value on a card, with what it means. A value the display read
+    /// back needs no word there.
+    static func mark(_ knowledge: ValueKnowledge?) -> (text: String, help: String)? {
+        switch knowledge {
+        case .sent: (ValueKnowledge.sent.label, "Display 16X sent this value. The display has not confirmed it.")
+        case .unknown: (ValueKnowledge.unknown.label, "This is the value Display 16X remembers. The display has not confirmed it since.")
+        case .readBack, nil: nil
+        }
+    }
+
+    /// The title of the row that says where a value on a display's page comes from.
+    static func knowledgeTitle(_ knowledge: ValueKnowledge?) -> String {
+        switch knowledge {
+        case .sent: "Display 16X sent"
+        case .unknown: "Remembered, not confirmed since"
+        case .readBack, nil: "The display says"
+        }
     }
 
     /// Width divided by height as the display stands on the desk.

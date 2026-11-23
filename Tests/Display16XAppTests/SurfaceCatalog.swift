@@ -131,6 +131,15 @@ enum SurfaceCatalog {
         await dimming.send(.set, .brightness, on: dimming.tag(SampleDesk.lenovoID), value: .absolute(0.1), options: CommandOptions(verification: .readBack))
         try shootPanel(session, dimming, "panel-software-dimming", group: "panel", title: "Software dimming: a value that was only sent", note: "The first monitor is below its own range, so the picture is dimmed by the app.")
 
+        // Just after a wake: what was read back before the sleep is not known until the
+        // monitors have answered again.
+        let woken = try await livedIn()
+        woken.context.sequencer.systemWillSleep()
+        woken.context.sequencer.systemDidWake()
+        await woken.settle()
+        try shootPanel(session, woken, "panel-not-known", group: "panel", title: "Just after wake: values that are not known yet", note: "The values are the ones remembered. The monitors have not confirmed them since the sleep.")
+        try shootPanel(session, woken, "detail-not-known", group: "detail", title: "A display's page: a brightness that is not known yet", start: .display(woken.tag(SampleDesk.lgID)), maxHeight: 1400)
+
         let three = SampleDesk()
         three.plugBoth()
         three.provider.controllers[SampleDesk.builtInID] = [.appleNative: nativeBrightness()]

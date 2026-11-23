@@ -136,7 +136,7 @@ struct NoticeView: View {
                     .font(Skin.type.title)
                     .foregroundStyle(notice.kind == .restored ? Skin.color.hudAccent : Skin.color.hudAttention)
                     .accessibilityHidden(true)
-                Text(verbatim: PanelText.sentence(notice.message))
+                Text(verbatim: notice.message)
                     .font(Skin.type.body)
                     .foregroundStyle(Skin.color.hudText)
                     .fixedSize(horizontal: false, vertical: true)

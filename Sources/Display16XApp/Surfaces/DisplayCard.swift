@@ -18,7 +18,7 @@ struct DisplayCard: View {
             if card.volume.isAvailable {
                 ValueBar(
                     title: "Volume of \(card.name)", symbol: card.isMuted ? Skin.symbol.volumeMuted : Skin.symbol.volume,
-                    value: card.volume.value, knowledge: card.volumeKnowledge,
+                    value: card.volume.value, mark: PanelText.mark(card.volumeKnowledge)?.text, markHelp: PanelText.mark(card.volumeKnowledge)?.help ?? "",
                     symbolAction: { model.toggleMute(tag: card.tag) }, symbolLabel: card.isMuted ? "Unmute \(card.name)" : "Mute \(card.name)"
                 ) { value, final in
                     model.setVolume(value, tag: card.tag, final: final)
@@ -69,7 +69,8 @@ struct BrightnessRow: View {
 
     var body: some View {
         if card.brightness.isAvailable {
-            ValueBar(title: "Brightness of \(card.name)", symbol: Skin.symbol.brightness, value: card.brightness.value, knowledge: card.brightnessKnowledge) { value, final in
+            let mark = PanelText.mark(card.brightnessKnowledge)
+            ValueBar(title: "Brightness of \(card.name)", symbol: Skin.symbol.brightness, value: card.brightness.value, mark: mark?.text, markHelp: mark?.help ?? "") { value, final in
                 model.setBrightness(value, tag: card.tag, final: final)
             }
         } else if card.isChecking {

@@ -14,11 +14,25 @@ import Testing
         #expect(PanelText.inches(PhysicalSize(widthMillimeters: 0, heightMillimeters: 0)) == nil)
     }
 
-    @Test("The line under a display's name")
+    @Test("The line under a display's name: size, connection, and its part on the desk")
     func caption() {
-        #expect(PanelText.caption(isBuiltIn: false, inches: 32, isMain: true, isMirrored: false) == "32-inch · Main display")
-        #expect(PanelText.caption(isBuiltIn: false, inches: nil, isMain: false, isMirrored: false) == "External")
-        #expect(PanelText.caption(isBuiltIn: true, inches: 14, isMain: false, isMirrored: true) == "Built-in · Mirrored")
+        #expect(PanelText.caption(inches: 32, connection: .hdmi, isMain: true, isMirrored: false) == "32-inch · HDMI · Main display")
+        #expect(PanelText.caption(inches: nil, connection: .usbC, isMain: false, isMirrored: false) == "USB-C")
+        #expect(PanelText.caption(inches: 14, connection: .builtIn, isMain: false, isMirrored: true) == "14-inch · Built-in · Mirrored")
+        // A connection that is not known leaves no word in its place.
+        #expect(PanelText.caption(inches: 27, connection: .unknown, isMain: true, isMirrored: false) == "27-inch · Main display")
+        #expect(PanelText.caption(inches: nil, connection: .unknown, isMain: false, isMirrored: false) == "External")
+    }
+
+    @Test("How a value is known, in the core's words, and silence for one that was read back")
+    func knowledgeWords() {
+        #expect(PanelText.mark(.readBack) == nil)
+        #expect(PanelText.mark(nil) == nil)
+        #expect(PanelText.mark(.sent)?.text == "sent")
+        #expect(PanelText.mark(.unknown)?.text == "not known")
+        #expect(PanelText.knowledgeTitle(.readBack) == "The display says")
+        #expect(PanelText.knowledgeTitle(.sent) == "Display 16X sent")
+        #expect(PanelText.knowledgeTitle(.unknown) == "Remembered, not confirmed since")
     }
 
     @Test("A display's shape comes from where it stands, then from its mode")
@@ -134,19 +148,19 @@ import Testing
     }
 }
 
-/// What the panel knows about a value: read back from the display, or only sent.
+/// How a value is known comes from the core, and the panel follows it as it changes.
 @MainActor
-@Suite struct ConfirmedOrSent {
-    @Test("A value the monitor read back is confirmed")
-    func confirmed() async {
+@Suite struct HowAValueIsKnown {
+    @Test("A value the monitor read back is shown as read back, also after a change from the panel")
+    func readBack() async {
         let desk = await SurfaceCatalog.desk()
         let model = PanelModel(context: desk.context)
         defer { model.close() }
-        #expect(model.cards[1].brightnessKnowledge == .confirmed)
+        #expect(model.cards[1].brightnessKnowledge == .readBack)
         model.setBrightness(0.4, tag: desk.tag(SampleDesk.lgID), final: true)
         await desk.until { abs(model.cards[1].brightness.value - 0.4) < 0.01 }
-        #expect(abs(model.cards[1].brightness.value - 0.4) < 0.01)
-        #expect(model.cards[1].brightnessKnowledge == .confirmed)
+        await desk.until { model.cards[1].brightnessKnowledge == .readBack }
+        #expect(model.cards[1].brightnessKnowledge == .readBack)
     }
 
     @Test("A brightness below the monitor's own range is dimmed by the app and only sent")
@@ -158,7 +172,21 @@ import Testing
         defer { model.close() }
         #expect(model.cards[0].brightnessKnowledge == .sent)
         #expect(model.cards[0].softwareNote.contains("dims the picture itself"))
-        #expect(model.cards[1].brightnessKnowledge == .confirmed)
+        #expect(model.cards[1].brightnessKnowledge == .readBack)
+    }
+
+    @Test("When the Mac goes to sleep, what was read back is not known, and the open panel says so")
+    func sleep() async {
+        let desk = await SurfaceCatalog.desk()
+        let model = PanelModel(context: desk.context)
+        defer { model.close() }
+        #expect(model.cards[0].brightnessKnowledge == .readBack)
+        // No value changes. Only the fact does, and the panel has to follow it.
+        desk.context.sequencer.systemWillSleep()
+        await desk.settle()
+        #expect(model.cards[0].brightnessKnowledge == .unknown)
+        #expect(model.cards[1].volumeKnowledge == .unknown)
+        #expect(abs(model.cards[0].brightness.value - 0.53) < 0.001)
     }
 
     @Test("A control the display does not have has nothing to be known")
@@ -170,6 +198,18 @@ import Testing
         defer { model.close() }
         #expect(model.cards[0].brightnessKnowledge == nil)
         #expect(model.cards[0].volumeKnowledge == nil)
+    }
+
+    @Test("The card says how the display is connected, and nothing when macOS does not say")
+    func connection() async {
+        let desk = SampleDesk()
+        desk.plugBoth()
+        desk.plug(SampleDesk.spare(), controller: .monitor(brightness: 40, contrast: 50), modes: SampleDesk.fourKModes, current: SampleDesk.mode(1920, 1080, flags: [.safe, .systemDefault]), frame: DisplayFrame(x: 3200, y: 0, width: 1920, height: 1080))
+        await desk.start()
+        let model = PanelModel(context: desk.context)
+        defer { model.close() }
+        #expect(model.cards.map(\.connection) == [.hdmi, .usbC, .unknown])
+        #expect(model.cards.map(\.caption) == ["32-inch · HDMI · Main display", "USB-C", "External"])
     }
 }
 

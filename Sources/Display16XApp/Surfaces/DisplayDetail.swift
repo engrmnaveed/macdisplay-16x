@@ -69,7 +69,10 @@ struct PictureSection: View {
                 SkinRule()
                 HStack(spacing: Skin.space.l) {
                     Text("Contrast").font(Skin.type.body).foregroundStyle(Skin.color.text)
-                    ValueBar(title: "Contrast of \(card.name)", symbol: Skin.symbol.contrast, value: card.contrast.value, knowledge: card.contrastKnowledge) { value, final in
+                    ValueBar(
+                        title: "Contrast of \(card.name)", symbol: Skin.symbol.contrast, value: card.contrast.value,
+                        mark: PanelText.mark(card.contrastKnowledge)?.text, markHelp: PanelText.mark(card.contrastKnowledge)?.help ?? ""
+                    ) { value, final in
                         model.setContrast(value, tag: card.tag, final: final)
                     }
                 }
@@ -104,20 +107,26 @@ struct BrightnessSection: View {
     }
 }
 
-/// "The display says 53%" with a check, or "Display 16X sent 20%" with the sent mark.
+/// Where the value comes from: "The display says 53%" with a check, "Display 16X sent
+/// 10%", or "Remembered, not confirmed since 53%". The word is the core's.
 struct KnownValueRow: View {
     let knowledge: ValueKnowledge?
     let value: Double
 
     var body: some View {
-        LineRow(title: knowledge == .sent ? "Display 16X sent" : "The display says") {
+        LineRow(title: PanelText.knowledgeTitle(knowledge)) {
             HStack(spacing: Skin.space.xs) {
-                if knowledge == .sent {
-                    SentTag()
+                if let mark = PanelText.mark(knowledge) {
+                    MarkTag(text: mark.text, help: mark.help)
                 } else {
-                    Image(systemName: Skin.symbol.confirmed).font(Skin.type.symbol).foregroundStyle(Skin.color.accent).accessibilityLabel("Read back")
+                    Image(systemName: Skin.symbol.confirmed)
+                        .font(Skin.type.symbol)
+                        .foregroundStyle(Skin.color.accent)
+                        .accessibilityLabel(ValueKnowledge.readBack.label)
                 }
-                Text(verbatim: PanelText.percent(value)).font(Skin.type.value).foregroundStyle(Skin.color.text)
+                Text(verbatim: PanelText.percent(value))
+                    .font(Skin.type.value)
+                    .foregroundStyle(knowledge == .unknown ? Skin.color.textSecondary : Skin.color.text)
             }
         }
     }
@@ -293,6 +302,18 @@ struct AboutDisplaySection: View {
     var body: some View {
         SkinHeading(text: "About this display")
         SkinBlock {
+            if card.connection.isKnown {
+                LineRow(title: card.isBuiltIn ? "Connection" : "The Mac's port") {
+                    Text(verbatim: card.connection.label).font(Skin.type.body).foregroundStyle(Skin.color.textSecondary)
+                }
+                SkinRule()
+            }
+            if let inches = card.inches {
+                LineRow(title: "Size") {
+                    Text(verbatim: "\(inches)-inch").font(Skin.type.body).foregroundStyle(Skin.color.textSecondary)
+                }
+                SkinRule()
+            }
             Text(verbatim: card.identity)
                 .font(Skin.type.mono)
                 .foregroundStyle(Skin.color.textSecondary)

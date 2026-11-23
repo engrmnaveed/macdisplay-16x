@@ -143,26 +143,24 @@ struct ScreenGlyph: View {
 
 // MARK: Values
 
-/// What is known about a value on screen.
-enum ValueKnowledge: Equatable {
-    /// The display read it back.
-    case confirmed
-    /// The app sent it and could not read it back.
-    case sent
-}
+/// The small word next to a value that says how it is known, when that needs saying:
+/// "sent", "not known".
+struct MarkTag: View {
+    let text: String
+    var help = ""
 
-/// The small word next to a value that was only sent.
-struct SentTag: View {
     var body: some View {
-        Text("sent")
+        Text(verbatim: text)
             .font(Skin.type.tag)
             .textCase(.uppercase)
             .foregroundStyle(Skin.color.textSecondary)
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, Skin.space.xs)
             .padding(.vertical, Skin.space.hair)
             .overlay(RoundedRectangle(cornerRadius: Skin.space.xs, style: .continuous).edge(Skin.color.hairline, width: Skin.size.hairline))
-            .help("Display 16X sent this value. The display cannot be asked what it shows.")
-            .accessibilityLabel("Sent, not read back")
+            .help(help)
+            .accessibilityLabel(help.isEmpty ? text : help)
     }
 }
 
@@ -196,7 +194,9 @@ struct ValueBar: View {
     let symbol: String
     let value: Double
     var isEnabled = true
-    var knowledge: ValueKnowledge?
+    /// A word that says how the value is known, when that needs saying, with its explanation.
+    var mark: String?
+    var markHelp = ""
     /// Makes the symbol a button, for example to mute.
     var symbolAction: (() -> Void)?
     var symbolLabel = ""
@@ -211,7 +211,7 @@ struct ValueBar: View {
     var body: some View {
         HStack(spacing: Skin.space.m) {
             track
-            if knowledge == .sent { SentTag() }
+            if let mark { MarkTag(text: mark, help: markHelp) }
             Text(verbatim: "\(Int((shown * 100).rounded()))%")
                 .font(Skin.type.value)
                 .foregroundStyle(isEnabled ? Skin.color.text : Skin.color.textTertiary)

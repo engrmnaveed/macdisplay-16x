@@ -14,8 +14,8 @@ import Testing
         defer { model.close() }
 
         #expect(model.cards.map(\.name) == ["LEN P32p-20", "LG SDQHD"])
-        #expect(model.cards[0].caption == "32-inch · Main display")
-        #expect(model.cards[1].caption == "External")
+        #expect(model.cards[0].caption == "32-inch · HDMI · Main display")
+        #expect(model.cards[1].caption == "USB-C")
         #expect(model.cards[0].isMain)
         #expect(abs(model.cards[1].aspect - 2304.0 / 2048.0) < 0.001)
         #expect(model.cards[0].brightness.isAvailable)

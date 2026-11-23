@@ -48,10 +48,11 @@ struct SkinSheet: View {
                         ScreenGlyph(aspect: 9.0 / 8.0, isMain: false)
                         Wordmark()
                         Spacer()
-                        SentTag()
+                        MarkTag(text: "sent")
+                        MarkTag(text: "not known")
                     }
                     ValueBar(title: "Bar", symbol: Skin.symbol.brightness, value: 0.53) { _, _ in }
-                    ValueBar(title: "Bar, sent", symbol: Skin.symbol.volume, value: 0.2, knowledge: .sent) { _, _ in }
+                    ValueBar(title: "Bar, sent", symbol: Skin.symbol.volume, value: 0.2, mark: "sent") { _, _ in }
                     ValueBar(title: "Bar, off", symbol: Skin.symbol.contrast, value: 0.7, isEnabled: false) { _, _ in }
                     LetterStops(title: "Stops", stops: stops) { _ in }
                     SkinRule()
