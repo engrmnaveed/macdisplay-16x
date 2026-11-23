@@ -669,6 +669,21 @@ The only animations are the countdown ring and line, one linear animation each, 
 
 Debug and release builds gave the same within a few milliseconds. This is a stand-in for the budget "the panel opens in under 100 ms warm": it leaves out the popover itself and the monitors' own answers, and it is the M5 Pro and not the MacBook Air M1 the budget is written for.
 
+### On screen, 19:50 to 19:55 (the owner at the desk)
+
+A build packaged from this branch ran in place of the copy in daily use, with a settings folder of its own, on the Lenovo P32p-20 and the LG SDQHD. At start it read both monitors and wrote nothing ("still has its brightness, contrast, volume" for both). The owner opened the panel five times.
+
+| Budget | Target | Measured here |
+| --- | --- | --- |
+| Panel open, the first time | None set | 133 ms |
+| Panel open, warm | Under 100 ms | 85, 88, 76 and 76 ms |
+| Memory, panel closed, after four opens | At most 50 MiB | 40 MB physical footprint, peak 44 MB |
+| Idle CPU and wakeups over 10 minutes | 0.1% of a core, no recurring wakeups | Not measured. The run ended after four minutes, see below |
+
+The open time is from the click to the popover being shown and key. It is inside the budget on the M5 Pro. The budget is written for a MacBook Air M1, where it is likely to be over: the panel's own content builds in about 20 ms off screen, so most of the time is elsewhere, and the verbose log now splits it into models, views, bringing the app forward and showing the popover to find out where.
+
+**The run ended at 19:55 when an uninstaller removed the copy in daily use.** App Cleaner removed the 0.1.0 bundle from the main checkout's `dist/` folder and the app's standard settings folder, and it quit the build under test, which has the same bundle identifier. The ten-minute idle measurement had run for one minute. The build under test in this worktree's own `dist/` and its settings folder were not touched.
+
 ### Still to be measured with the app running
 
 A development build in place of the copy in daily use: the panel's open time on screen, memory with the panel closed (at most 50 MiB), and wakeups when idle. And by eye: the popover's arrow against the skin's canvas, real blur, the feel of the bars, full keyboard access through the panel, VoiceOver, and Increase Contrast, Reduce Motion and Reduce Transparency switched on in System Settings.
