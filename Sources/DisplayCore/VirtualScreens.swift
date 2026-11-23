@@ -167,10 +167,13 @@ public struct VirtualScreenDefinition: Codable, Sendable, Equatable, Identifiabl
         return .virtualScreenAssociation(virtualScreen: tag, physical: association.display)
     }
 
-    public var summary: String {
+    public var summary: String { "\(name): \(detail)" }
+
+    /// What the screen offers, without its name.
+    public var detail: String {
         let largest = VirtualModes.sizes(self).first.map(\.label) ?? "no size"
         let rates = refreshRates.map { $0 == $0.rounded() ? "\(Int($0)) Hz" : "\($0) Hz" }.joined(separator: ", ")
-        return "\(name): \(aspect)\(portrait ? " portrait" : ""), up to \(largest)\(hiDPI ? " HiDPI" : ""), \(rates)"
+        return "\(aspect)\(portrait ? " portrait" : ""), up to \(largest)\(hiDPI ? " HiDPI" : ""), \(rates)"
     }
 }
 

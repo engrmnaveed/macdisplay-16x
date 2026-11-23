@@ -6,6 +6,16 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.3 surfaces: where they plug into the interface pass's surfaces, and what they say
+
+**For the interface session, through the planning thread.** The v0.3 surfaces are new files built from the skin's values and pieces only (`SkinBoundaryTests` passes): "More sizes" on a display's page, the preview of what will be written as a window of its own, and an Advanced tab in Settings. To reach them, four existing files got one optional entry point each, defaulting to nothing, so the panel and the settings window are drawn exactly as before when it is absent: `PanelView` and `DisplayDetail` take an optional advanced model, `SettingsView` has an `advanced` tab, and the render harness's sample desk carries sample stand-ins for the administrator step and virtual screens. The interface session may want to place or word these differently. Every picture is in the render harness, groups "scaling", "preview" and "settings".
+
+- **The preview is the only way to a write.** It names every display the file reaches, every step, what finishes it and the file byte for byte, and its button says "Write as Administrator". The command line prints the same preview and changes nothing without `--confirm`.
+- **A size is shown in the frame the display is turned to**, as the size strip shows it. Where the panel's own frame is meant, the text says so.
+- **What macOS made of a file is shown size by size**: "Offered", or "Written, and left out by macOS. It does not say why."
+- **Each switch says its cost next to it.** Mirror-based HiDPI cannot be switched on while virtual screens are off.
+- **Not seen on screen.** The app with these surfaces has not run on the desk yet. The pictures are from the harness.
+
 ## 23 November 2026 · v0.3 core: what it adds to the core, and the rules it adopted
 
 **Where v0.3 touches what earlier milestones built.** No existing behavior changed, and every earlier test passes unchanged. Two additions:

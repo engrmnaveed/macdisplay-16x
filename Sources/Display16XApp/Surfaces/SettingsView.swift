@@ -9,6 +9,7 @@ struct SettingsView: View {
         case scenes = "Scenes"
         case shortcuts = "Shortcuts"
         case scripting = "Scripting"
+        case advanced = "Advanced"
         case about = "About"
 
         var id: String { rawValue }
@@ -17,11 +18,14 @@ struct SettingsView: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var layoutModel: LayoutPanelModel
     let openLink: (URL) -> Void
+    /// v0.3: the Advanced tab's state. Nil shows the tab without its controls.
+    let advanced: AdvancedPanelModel?
     private let tab: State<Tab>
 
-    init(model: PanelModel, layoutModel: LayoutPanelModel, start: Tab = .general, openLink: @escaping (URL) -> Void) {
+    init(model: PanelModel, layoutModel: LayoutPanelModel, start: Tab = .general, advanced: AdvancedPanelModel? = nil, openLink: @escaping (URL) -> Void) {
         self.model = model
         self.layoutModel = layoutModel
+        self.advanced = advanced
         self.openLink = openLink
         tab = State(initialValue: start)
     }
@@ -53,6 +57,8 @@ struct SettingsView: View {
         case .scenes: SceneSettings(layoutModel: layoutModel)
         case .shortcuts: ShortcutSettings(layoutModel: layoutModel)
         case .scripting: ScriptingSettings(layoutModel: layoutModel)
+        case .advanced:
+            if let advanced { AdvancedSettingsPane(advanced: advanced) }
         case .about: AboutPane(openLink: openLink)
         }
     }

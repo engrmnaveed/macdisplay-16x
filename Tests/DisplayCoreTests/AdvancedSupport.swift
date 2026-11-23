@@ -122,7 +122,7 @@ final class AdvancedRig {
         overrides.backupFolder = URL(fileURLWithPath: "/tmp/display16x-test-backup")
         overrides.byHostFolder = "/Users/test/Library/Preferences/ByHost"
         virtualScreens = VirtualScreenService(registry: rig.registry, settings: rig.settings, bus: rig.bus, gate: rig.gate, scheduler: rig.scheduler, system: virtualSystem, layout: layoutRig.layout)
-        virtualScreens.panelOf = { [overrides] tag in overrides.panel(for: tag) }
+        virtualScreens.panelOf = { [overrides] tag in overrides.panel(for: tag)?.turned(by: overrides.rotation(of: tag)) }
         virtualScreens.runPlan = { [overrides] plan in await overrides.run(plan) }
         commands = AdvancedCommands(registry: rig.registry, settings: rig.settings, overrides: overrides, virtualScreens: virtualScreens, layout: layoutRig.layout)
         rig.engine.extensions = [layoutRig.commands, commands]

@@ -178,7 +178,9 @@ import Testing
         _ = await advanced.run(.set, .virtualCreate, on: .tag(advanced.lgTag.rawValue), value: .choice("Twin;match"))
         _ = await advanced.run(.set, .virtualEdit, value: .choice("Twin;with-display=on"))
         let twin = advanced.virtualScreens.definition(named: "Twin")!
-        #expect(twin.aspect == ScreenAspect(width: 8, height: 9))
+        #expect(twin.aspect == ScreenAspect(width: 9, height: 8), "the LG's shape as it is seen, turned 270°")
+        #expect(!twin.portrait)
+        #expect(VirtualModes.sizes(twin).first == PointSize(width: 2880, height: 2560))
         #expect(twin.association?.display == advanced.lgTag)
         #expect(!advanced.virtualScreens.isConnected(twin.id))
         let lg = advanced.lgTag

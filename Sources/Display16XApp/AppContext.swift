@@ -168,7 +168,7 @@ final class AppContext {
         overrides = OverrideService(registry: registry, settings: settings, modes: modes, connection: connection, ledger: systemFileLedger, writer: adapters.systemFiles, scheduler: scheduler)
         overrides.backupFolder = paths.systemFilesBackup
         virtualScreens = VirtualScreenService(registry: registry, settings: settings, bus: bus, gate: gate, scheduler: scheduler, system: adapters.virtualScreens, layout: layout)
-        virtualScreens.panelOf = { [overrides] tag in overrides.panel(for: tag) }
+        virtualScreens.panelOf = { [overrides] tag in overrides.panel(for: tag)?.turned(by: overrides.rotation(of: tag)) }
         virtualScreens.runPlan = { [overrides] plan in await overrides.run(plan) }
         virtualInventory.ownedDisplays = { [virtualScreens] in virtualScreens.ownedDisplays }
         advancedCommands = AdvancedCommands(registry: registry, settings: settings, overrides: overrides, virtualScreens: virtualScreens, layout: layout)

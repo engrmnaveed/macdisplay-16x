@@ -17,14 +17,17 @@ struct PanelView: View {
     var maxHeight: CGFloat = Skin.size.panelMaxHeight
     let openSettings: () -> Void
     let quit: () -> Void
+    /// v0.3: more sizes on a display's page. Nil leaves the panel as it was.
+    let advanced: AdvancedPanelModel?
     private let route: State<PanelRoute>
 
     init(
         model: PanelModel, layoutModel: LayoutPanelModel, maxHeight: CGFloat = Skin.size.panelMaxHeight, start: PanelRoute = .home,
-        openSettings: @escaping () -> Void, quit: @escaping () -> Void
+        advanced: AdvancedPanelModel? = nil, openSettings: @escaping () -> Void, quit: @escaping () -> Void
     ) {
         self.model = model
         self.layoutModel = layoutModel
+        self.advanced = advanced
         self.maxHeight = maxHeight
         self.openSettings = openSettings
         self.quit = quit
@@ -55,7 +58,7 @@ struct PanelView: View {
         switch route.wrappedValue {
         case .display(let tag):
             if let card = model.cards.first(where: { $0.tag == tag }) {
-                DisplayDetail(card: card, item: layoutModel.items.first { $0.tag == tag }, model: model, layoutModel: layoutModel, back: { go(.home) })
+                DisplayDetail(card: card, item: layoutModel.items.first { $0.tag == tag }, model: model, layoutModel: layoutModel, back: { go(.home) }, advanced: advanced)
             } else {
                 home
             }

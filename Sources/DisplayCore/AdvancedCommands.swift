@@ -232,7 +232,7 @@ public final class AdvancedCommands: CommandExtension {
             return CommandResult(entries: [DisplayResult(tag: tag, name: name, outcome: .failed, detail: refusal.reason)])
         case .success(let notes):
             let model = overrides.model(of: tag)
-            let waiting = model.map { overrides.current($0).summary.joined(separator: ". ") } ?? ""
+            let waiting = model.map { overrides.current($0).summary(turnedBy: overrides.rotation(of: tag)).joined(separator: ". ") } ?? ""
             let detail = (notes + ["waiting to be written. See display16x override preview, then display16x override apply --confirm"]).joined(separator: ". ")
             return CommandResult(entries: [DisplayResult(tag: tag, name: name, outcome: .accepted, actual: .text(waiting.isEmpty ? "no override" : waiting), detail: detail)])
         }
@@ -245,8 +245,9 @@ public final class AdvancedCommands: CommandExtension {
         }
         var facts = ["model \(model)"]
         if let panel = overrides.panel(for: tag) { facts.append("panel \(panel) pixels") }
-        if let installed = overrides.installed(model), !installed.isEmpty { facts.append("installed: " + installed.summary.joined(separator: "; ")) }
-        if let staged = overrides.staged(model) { facts.append("waiting: " + (staged.isEmpty ? "remove the override" : staged.summary.joined(separator: "; "))) }
+        let rotation = overrides.rotation(of: tag)
+        if let installed = overrides.installed(model), !installed.isEmpty { facts.append("installed: " + installed.summary(turnedBy: rotation).joined(separator: "; ")) }
+        if let staged = overrides.staged(model) { facts.append("waiting: " + (staged.isEmpty ? "remove the override" : staged.summary(turnedBy: rotation).joined(separator: "; "))) }
         let outcomes = overrides.verification(for: tag)
         if !outcomes.isEmpty { facts.append(outcomes.map(\.line).joined(separator: ", ")) }
         let others = overrides.affected(model).filter { $0.tag != tag }
@@ -264,7 +265,7 @@ public final class AdvancedCommands: CommandExtension {
             if !file.inLedger { line += " (found by its marker, not in this account's list)" }
             if file.changedSince { line += " (changed since Display 16X wrote it)" }
             lines.append(line)
-            for fact in file.request?.summary ?? [] { lines.append("  \(fact)") }
+            for fact in file.request?.summary(turnedBy: overrides.shownRotation(file.model)) ?? [] { lines.append("  \(fact)") }
             for display in overrides.affected(file.model) { lines.append("  reaches \(display.tag) \(display.name)\(display.isConnected ? "" : ", not connected")") }
         }
         let moved = overrides.ledger.document.files.filter { $0.purpose == .systemDisplaySettings }

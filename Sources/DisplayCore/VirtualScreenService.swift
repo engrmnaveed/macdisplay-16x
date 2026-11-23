@@ -12,7 +12,8 @@ public final class VirtualScreenService {
     private let scheduler: any Scheduler
     private let system: (any VirtualScreenSystem)?
     private let layout: LayoutService?
-    /// The panel of a display, for a screen that copies a display's shape.
+    /// A display's panel as it is seen now, turned with the display, for a screen that
+    /// copies its shape.
     public var panelOf: (@MainActor (DisplayTag) -> PanelGrid?)?
     /// Runs a plan outside the app's folders: the removal of a profile macOS made.
     public var runPlan: (@MainActor (SystemFilePlan) async -> Result<Void, SystemFileError>)?
@@ -103,7 +104,8 @@ public final class VirtualScreenService {
             words.remove(at: index)
             guard let tag else { return .failure(Refusal("match copies a display's shape: name the display with --tag or the like")) }
             guard let panel = panelOf?(tag) else { return .failure(Refusal("the shape of display \(tag) is not known. It has to be connected")) }
-            definition.aspect = ScreenAspect(width: panel.width, height: panel.height)
+            // The aspect is kept landscape, and a taller display makes a portrait screen.
+            definition.aspect = ScreenAspect(width: max(panel.width, panel.height), height: min(panel.width, panel.height))
             let landscape = max(panel.width, panel.height)
             definition.portrait = panel.height > panel.width
             definition.modes = .generated(largest: landscape, smallest: min(1280, landscape), step: max(landscape / 16 / definition.aspect.width * definition.aspect.width, definition.aspect.width), cap: 12)

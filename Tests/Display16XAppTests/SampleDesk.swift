@@ -18,6 +18,9 @@ final class SampleDesk {
     let connectionSystem = SampleConnectionSystem()
     let lid = SampleLid()
     let probe = SamplePermissionProbe()
+    // v0.3
+    let systemFiles = SampleSystemFiles()
+    let virtualScreens = SampleVirtualScreens()
     let context: AppContext
 
     /// - Parameter firstRun: No settings file exists yet, as on the very first launch.
@@ -39,12 +42,15 @@ final class SampleDesk {
             connectionSystem: connectionSystem,
             lid: lid,
             permissionProbe: probe,
+            systemFiles: systemFiles,
+            virtualScreens: virtualScreens,
             macModel: "Mac17,9",
             listeners: { _ in [] }
         )
         context = AppContext(safeMode: safeMode, adapters: adapters)
         if let configure { context.settings.update(configure) }
         connectionSystem.inventory = inventory
+        virtualScreens.desk = self
         // Like the window server, a change makes the system reconfigure.
         let sequencer = context.sequencer
         modeSystem.onApply = { sequencer.systemReconfigured() }

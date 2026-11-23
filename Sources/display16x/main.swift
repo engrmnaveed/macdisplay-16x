@@ -51,9 +51,40 @@ display16x \(AppPaths.version) — command line for Display 16X
   display16x shortcut list | remove KEYS | add KEYS <set|step|toggle|perform> <feature> [<value>] [<display>]
   display16x settings export [FILE] | import FILE --confirm | reset --confirm
 
+  display16x override [show] <display>    The display's model: its panel, what macOS offers,
+                                          what is installed and what waits to be written
+  display16x override add|remove WIDTHxHEIGHT [hidpi|low] <display>
+  display16x override flexible [FROM-TO/STEP] | native SIZE | default SIZE | name NAME
+                     | role monitor|television | clear  <display>
+                                          Change what waits to be written for the model
+  display16x override preview             Everything apply would write, every byte
+  display16x override apply [--confirm]   Write as administrator, then reconnect to finish
+  display16x override discard [VENDOR-PRODUCT]   Forget what waits to be written
+  display16x override activate <display>  Reconnect so macOS reads the file, then check
+  display16x override list                Every override Display 16X wrote. Works without
+                                          the app, from the files themselves
+  display16x override delete <display>|VENDOR-PRODUCT|all [--confirm]
+                                          Remove overrides. "all" works without the app
+  display16x override undo <display>|VENDOR-PRODUCT [--confirm]
+  display16x override reset [system] [--confirm]   Remove every override, and with system
+                                          move the system's saved display settings aside
+  display16x override put-back [--confirm]  Put the system's display settings back
+
+  display16x virtual list
+  display16x virtual create NAME [OPTIONS…] [<display> to match or link]
+  display16x virtual edit NAME OPTIONS… [<display> to link]
+  display16x virtual connect|disconnect|reconnect NAME|all
+  display16x virtual discard NAME|all [--confirm]
+      OPTIONS: 16:9  2560x1440  hidpi|lodpi  @60,120  portrait  step=160  smallest=1280
+      cap=12  modes=2560x1440,1920x1080  diagonal=27  match  connect  link  unlink
+      with-display=on|off  mirror=on|off  follow-rotation=on|off  restore-layout=on|off
+
   <display>   --tag N | --name "NAME" | --uuid UUID | --main | --pointer | --focused | --all
   <other>     --of-tag N | --of-name "NAME" | --of-uuid UUID | --of-main | --of-pointer
               The other display, for placement and mirroring
+
+  Anything written outside the app's folder, such as an override, prints its preview and
+  changes nothing until --confirm is added. macOS then asks for an administrator password.
   <value>     0 to 1, or a percentage such as 60%, min or max. A leading + or - makes it
               an offset. on or off for switches. WIDTHxHEIGHT, default, native or previous
               for resolution, Hz for refreshRate, degrees for rotation, an input name for
@@ -156,7 +187,7 @@ func parseValue(_ text: String, for feature: FeatureDescriptor) -> CommandValue 
 // MARK: Sending
 
 func send(_ command: Command, arguments: Arguments) -> Never {
-    if let problem = FeatureRegistry.full.validate(command) { fail(problem, .usage) }
+    if let problem = FeatureRegistry.complete.validate(command) { fail(problem, .usage) }
     let client = UnixSocketClient(path: AppPaths().socketPath)
     let result: CommandResult
     do {
@@ -182,7 +213,7 @@ func send(_ command: Command, arguments: Arguments) -> Never {
 
 func feature(named name: String?) -> FeatureDescriptor {
     guard let name else { fail("name a feature. Run \"display16x features\" for the list", .usage) }
-    let registry = FeatureRegistry.full
+    let registry = FeatureRegistry.complete
     guard let match = registry.ordered.first(where: { $0.id.rawValue.lowercased() == name.lowercased() }) else {
         fail("unknown feature \"\(name)\". Run \"display16x features\" for the list", .usage)
     }
@@ -217,13 +248,13 @@ switch verb {
 case "help":
     if let name = arguments.positional.dropFirst().first {
         let target = feature(named: name)
-        print(FeatureRegistry.full.help(for: target.id) ?? usage)
+        print(FeatureRegistry.complete.completeHelp(for: target.id) ?? usage)
     } else {
         print(usage)
     }
 
 case "features":
-    print("Features\n" + FeatureRegistry.full.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
+    print("Features\n" + FeatureRegistry.complete.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
 
 case "probe":
     var probeOptions = ProbeOptions()
@@ -360,7 +391,7 @@ case "shortcut":
         var bound = command(operation, target.id, value: value)
         bound.origin = .keyboard
         bound.options.confirmed = arguments.flags.contains("--confirm")
-        if let problem = FeatureRegistry.full.validate(bound) { fail(problem, .usage) }
+        if let problem = FeatureRegistry.complete.validate(bound) { fail(problem, .usage) }
         let binding = ShortcutBinding(combo: combo, command: bound)
         guard let data = try? JSONEncoder().encode(binding) else { fail("the shortcut could not be encoded", .failed) }
         send(Command(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)), origin: .command), arguments: arguments)
@@ -401,6 +432,12 @@ case "settings":
     default:
         fail("settings takes export, import or reset", .usage)
     }
+
+case "override":
+    await overrideVerb()
+
+case "virtual":
+    virtualVerb()
 
 default:
     fail("unknown command \"\(verb)\". Run \"display16x help\"", .usage)

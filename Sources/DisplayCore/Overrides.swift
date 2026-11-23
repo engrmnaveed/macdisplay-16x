@@ -242,12 +242,20 @@ public struct OverrideRequest: Codable, Sendable, Equatable {
         sizes.isEmpty && nativePixels == nil && defaultSize == nil && systemName == nil && role == nil
     }
 
-    /// One line per thing the file sets, for lists and the preview.
-    public var summary: [String] {
+    /// One line per thing the file sets, for lists and the preview, in the panel's own frame.
+    public var summary: [String] { summary(turnedBy: nil) }
+
+    /// The same, in the frame a display turned by `rotation` shows. Nil keeps the panel's
+    /// own frame and says so when it matters.
+    public func summary(turnedBy rotation: Int?) -> [String] {
+        let turn = rotation ?? 0
         var lines: [String] = []
-        if !sizes.isEmpty { lines.append("Sizes: " + sizes.sorted().map(\.label).joined(separator: ", ")) }
-        if let nativePixels { lines.append("Panel size: \(nativePixels) pixels") }
-        if let defaultSize { lines.append("Size macOS picks first: \(defaultSize.label)") }
+        if !sizes.isEmpty {
+            let heading = rotation == nil ? "Sizes, in the panel's own frame: " : "Sizes: "
+            lines.append(heading + sizes.sorted().map { $0.turned(by: turn).label }.joined(separator: ", "))
+        }
+        if let nativePixels { lines.append("Panel size: \(nativePixels.turned(by: turn)) pixels") }
+        if let defaultSize { lines.append("Size macOS picks first: \(defaultSize.turned(by: turn).label)") }
         if let systemName { lines.append("Name macOS shows: \(systemName)") }
         if let role { lines.append("Treated as a \(role == .monitor ? "monitor" : "television")") }
         return lines

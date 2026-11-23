@@ -184,14 +184,21 @@ public final class OverrideService {
         OverrideFile.folders(model).filter { !(writer?.exists($0) ?? false) }
     }
 
+    /// The rotation of a connected display of the model, so sizes read as they are seen.
+    public func shownRotation(_ model: ModelKey) -> Int? {
+        affected(model).first(where: \.isConnected).map { rotation(of: $0.tag) }
+    }
+
     private func notes(for request: OverrideRequest) -> [String] {
         var notes: [String] = []
         if let tag = affected(request.model).first(where: \.isConnected)?.tag, let panel = panel(for: tag) {
-            let offered = offered(for: tag)
             let rotation = rotation(of: tag)
+            // Checked in the frame the display shows, so every size and the panel in a note
+            // read the way the user sees them. A check gives the same answer in either frame.
+            let seenOffered = Set(offered(for: tag).map { $0.turned(by: rotation) })
             for size in request.sizes {
-                if case .note(let note) = OverrideValidation.check(size, panel: panel, offered: offered) {
-                    notes.append(note.replacingOccurrences(of: size.label, with: size.turned(by: rotation).label))
+                if case .note(let note) = OverrideValidation.check(size.turned(by: rotation), panel: panel.turned(by: rotation), offered: seenOffered) {
+                    notes.append(note)
                 }
             }
             let low = request.sizes.filter { !$0.isHiDPI }
@@ -219,7 +226,7 @@ public final class OverrideService {
                 let base = writer?.contents(of: OverrideFile.systemPath(request.model))
                 plans.append(OverridePlanner.install(
                     request, base: base, existing: existing, missingFolders: missingFolders(request.model),
-                    affected: affected(request.model), notes: notes(for: request) + request.summary.map { "Asked for: \($0)" }, mainIsAffected: mainIsAffected(request.model)
+                    affected: affected(request.model), notes: notes(for: request) + request.summary(turnedBy: shownRotation(request.model)).map { "Asked for: \($0)" }, mainIsAffected: mainIsAffected(request.model)
                 ))
             }
         }
