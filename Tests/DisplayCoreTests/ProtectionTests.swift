@@ -8,7 +8,7 @@ struct ProtectionTests {
     private let wide = Fixture.mode(2560, 1440)
     private let standard = Fixture.mode(1920, 1080, flags: [.safe, .systemDefault])
 
-    @Test("A protected mode changed elsewhere is put back, with origin restore and a notice")
+    @Test("A protected mode changed elsewhere is put back, with origin automation and a notice")
     func protectMode() async {
         let rig = LayoutRig()
         await rig.startWithBoth()
@@ -21,7 +21,8 @@ struct ProtectionTests {
         // The displays were plugged in at start, so the check waits until five seconds after.
         await rig.advance(6)
         #expect(rig.rig.modeSystem.current[Fixture.lenovoID]?.sameMode(as: standard) == true)
-        #expect(rig.rig.events.contains { if case .modeChanged(let change) = $0 { return change.origin == .restore }; return false })
+        #expect(rig.rig.events.contains { if case .modeChanged(let change) = $0 { return change.origin == .automation }; return false })
+        #expect(!rig.rig.events.contains { if case .modeChanged(let change) = $0 { return change.origin == .restore }; return false })
         #expect(rig.notices.first?.kind == .restored)
     }
 

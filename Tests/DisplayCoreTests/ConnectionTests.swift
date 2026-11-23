@@ -309,6 +309,23 @@ struct ConnectionAutomationTests {
         #expect(rig.connection.disconnectedTags.isEmpty)
     }
 
+    @Test("Its writes carry the origin automation, and putting back the app's own change stays a restore")
+    func origins() async {
+        let sink = CapturingLogSink()
+        LogCenter.shared.add(sink: sink)
+        let rig = await rigWithBuiltIn()
+        let builtIn = rig.rig.tag(Fixture.builtInID)
+        await plugLenovo(rig)
+        #expect(!sink.messages(containing: "\(builtIn) Built-in Retina Display disconnected by the app (automation)").isEmpty)
+        // The app quits with the panel off, and the next start brings it back as a restore.
+        rig.connection.reconnectAtQuit()
+        #expect(rig.connection.disconnectedTags.isEmpty)
+        _ = await rig.run(.set, .connected, on: .tag(builtIn.rawValue), value: .flag(false))
+        rig.rig.settings.update { $0.layout.autoDisconnectBuiltIn = false }
+        await rig.settling { await rig.connection.reconnectAtStartup() }
+        #expect(!sink.messages(containing: "\(builtIn) Built-in Retina Display reconnected by the app (restore)").isEmpty)
+    }
+
     @Test("Off by default, and an excepted display is not a trigger")
     func defaultsAndExceptions() async {
         let off = await rigWithBuiltIn(enabled: false)

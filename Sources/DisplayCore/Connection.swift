@@ -455,6 +455,9 @@ public final class ConnectionService {
     /// a picture nobody can act, and it only undoes the app's own change, like the
     /// reconnect at quit. It is the one automatic change that does not wait for the gate,
     /// except while the Mac sleeps: then it runs when the wake settles.
+    ///
+    /// It carries the origin "restore", not "automation": it puts back the app's own
+    /// change, like the reconnect at quit and at start, and follows no rule the user set.
     public func reconnectIfNoneLeft() async {
         guard policy.physicalInUse().isEmpty, !disconnectedTags.isEmpty else { return }
         if gate.closures.contains(.asleep) {

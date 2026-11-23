@@ -7,7 +7,7 @@ import Foundation
 /// - With the lid closed the built-in panel is already off, and nothing is done.
 /// - When the user brings the built-in panel back by hand, automation pauses until the set
 ///   of attached external displays changes, so it does not take the panel away again at once.
-/// - Every change it makes is automatic, passes the gate and carries the origin "restore".
+/// - Every change it makes is automatic, passes the gate and carries the origin "automation".
 @MainActor
 public final class ConnectionAutomation {
     private let registry: DisplayRegistry
@@ -76,7 +76,7 @@ public final class ConnectionAutomation {
     public func evaluate(reason: String) async {
         guard isEnabled, !isEvaluating, let builtIn else { return }
         guard connection.policy.lid?.isLidClosed != true else { return }
-        if case .blocked = gate.check(.restore) { return }
+        if case .blocked = gate.check(.automation) { return }
         isEvaluating = true
         defer { isEvaluating = false }
 
@@ -84,13 +84,13 @@ public final class ConnectionAutomation {
         let disconnectedByApp = connection.disconnectedTags.contains(builtIn)
         if !triggers.isEmpty, builtInConnected, !isPausedAfterManualOverride {
             Log.core.info("An external display is attached (\(reason)). Turning the built-in panel off.")
-            let result = await connection.disconnect(builtIn, origin: .restore, confirm: false)
+            let result = await connection.disconnect(builtIn, origin: .automation, confirm: false)
             if result.outcome == .failed {
                 Log.core.notice("The built-in panel stays on: \(result.detail ?? "unknown").")
             }
         } else if triggers.isEmpty, disconnectedByApp {
             Log.core.info("No external display is attached (\(reason)). Turning the built-in panel back on.")
-            _ = await connection.reconnect(builtIn, origin: .restore)
+            _ = await connection.reconnect(builtIn, origin: .automation)
         }
     }
 }

@@ -358,6 +358,8 @@ struct LayoutCommandTests {
         await rig.startWithBoth()
         let result = await rig.run(.set, .main, on: .tag(rig.lgTag.rawValue), value: .flag(true), origin: .restore)
         #expect(result.error?.contains("safe mode") == true)
+        let automatic = await rig.run(.set, .main, on: .tag(rig.lgTag.rawValue), value: .flag(true), origin: .automation)
+        #expect(automatic.error?.contains("safe mode") == true)
         #expect(rig.layoutSystem.applied.isEmpty)
     }
 

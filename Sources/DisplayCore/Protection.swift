@@ -243,14 +243,14 @@ public final class ConfigurationProtection: RestoreStage {
     /// have settled, through the same quiet wait as a change made elsewhere.
     public func run(for tag: DisplayTag, trigger: RestoreTrigger) async {
         if trigger == .reconnect, sequencer.isInWakeTransition { return }
-        if case .blocked = gate.check(.restore) { return }
+        if case .blocked = gate.check(.automation) { return }
         scheduleCheck(occasion: trigger.occasion)
     }
 
     // MARK: Enforcement
 
     public func enforceAll(occasion: String) async {
-        if case .blocked = gate.check(.restore) { return }
+        if case .blocked = gate.check(.automation) { return }
         for tag in registry.live.keys.sorted() {
             await enforce(tag, occasion: occasion)
         }
@@ -276,7 +276,7 @@ public final class ConfigurationProtection: RestoreStage {
         if target.protectRotation == true, let wanted = target.targetRotation, let current = modes.rotation(for: tag), current != wanted {
             let key = "rotation-\(tag.rawValue)"
             if limiter.allow(key, now: scheduler.now) {
-                let report = await modes.rotate(to: wanted, for: tag, origin: .restore)
+                let report = await modes.rotate(to: wanted, for: tag, origin: .automation)
                 if report.failure == nil {
                     notify(ProtectionNotice(kind: .restored, tag: tag, message: "\(occasion), put \(name(tag)) back at \(wanted)°."))
                 }
@@ -295,7 +295,7 @@ public final class ConfigurationProtection: RestoreStage {
                 return
             }
             if limiter.allow(key, now: scheduler.now) {
-                let report = await modes.change(ModeRequest(exactly: wanted), for: tag, matching: .exact, origin: .restore)
+                let report = await modes.change(ModeRequest(exactly: wanted), for: tag, matching: .exact, origin: .automation)
                 if report.failure == nil {
                     notify(ProtectionNotice(kind: .restored, tag: tag, message: "\(occasion), put \(name(tag)) back to \(wanted.summary)."))
                 }
@@ -308,7 +308,7 @@ public final class ConfigurationProtection: RestoreStage {
 
     private func enforceLayout(occasion: String) async {
         guard protectsLayout, let saved = settings.document.layout.savedLayout, layout.pending == nil, !layout.isApplying else { return }
-        if case .blocked = gate.check(.restore) { return }
+        if case .blocked = gate.check(.automation) { return }
         let current = layout.snapshot()
         let target = saved.restricted(to: Set(current.tags))
         guard !target.isEmpty, !current.sameArrangement(as: target) else { return }
@@ -319,7 +319,7 @@ public final class ConfigurationProtection: RestoreStage {
             }
             return
         }
-        let report = await layout.change(origin: .restore) { LayoutPlanner.restore($0, to: saved) }
+        let report = await layout.change(origin: .automation) { LayoutPlanner.restore($0, to: saved) }
         if report.failure == nil {
             notify(ProtectionNotice(kind: .restored, tag: nil, message: "\(occasion), put the saved arrangement back."))
         } else {
