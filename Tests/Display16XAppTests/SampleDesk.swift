@@ -21,6 +21,8 @@ final class SampleDesk {
     // v0.3
     let systemFiles = SampleSystemFiles()
     let virtualScreens = SampleVirtualScreens()
+    // v0.4
+    let colorSystem = SampleColorSystem()
     let context: AppContext
 
     /// - Parameter firstRun: No settings file exists yet, as on the very first launch.
@@ -44,6 +46,7 @@ final class SampleDesk {
             permissionProbe: probe,
             systemFiles: systemFiles,
             virtualScreens: virtualScreens,
+            colorSystem: colorSystem,
             macModel: "Mac17,9",
             listeners: { _ in [] }
         )
@@ -57,6 +60,7 @@ final class SampleDesk {
         rotation.onApply = { sequencer.systemReconfigured() }
         layoutSystem.onApply = { sequencer.systemReconfigured() }
         connectionSystem.onApply = { sequencer.systemReconfigured() }
+        colorSystem.onReconfigure = { sequencer.systemReconfigured() }
     }
 
     // MARK: The sample monitors

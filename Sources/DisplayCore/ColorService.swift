@@ -63,7 +63,8 @@ public final class ColorService {
     /// Displays the app is switching right now, whose reconfiguration is its own.
     private var switching: Set<DisplayTag> = []
     private var subscription: EventBus.Subscription?
-    private var observers: [@MainActor () -> Void] = []
+    private var observers: [Int: @MainActor () -> Void] = [:]
+    private var nextObserver = 0
     /// How long to wait for the system to finish reconfiguring after an HDR switch. The LG
     /// took 0.75 seconds.
     public var settleTimeout: TimeInterval = 6
@@ -84,12 +85,21 @@ public final class ColorService {
         }
     }
 
-    public func onChange(_ observer: @escaping @MainActor () -> Void) {
-        observers.append(observer)
+    /// Calls `observer` after every change the service makes or notices. Returns the number
+    /// to stop it with, so a surface built when the panel opens can let go when it closes.
+    @discardableResult
+    public func onChange(_ observer: @escaping @MainActor () -> Void) -> Int {
+        nextObserver += 1
+        observers[nextObserver] = observer
+        return nextObserver
+    }
+
+    public func removeObserver(_ id: Int) {
+        observers[id] = nil
     }
 
     private func changed() {
-        for observer in observers { observer() }
+        for observer in observers.values { observer() }
     }
 
     // MARK: Reading

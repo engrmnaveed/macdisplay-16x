@@ -81,6 +81,24 @@ display16x \(AppPaths.version) — command line for Display 16X
       cap=12  modes=2560x1440,1920x1080  diagonal=27  match  connect  link  unlink
       with-display=on|off  mirror=on|off  follow-rotation=on|off  restore-layout=on|off
 
+  display16x hdr [show] <display>         Whether HDR is on
+  display16x hdr on|off|toggle <display> [--try]   Switch HDR, as System Settings does
+  display16x hdr headroom <display>       How far above SDR white the display can show
+  display16x hdr protect on|off <display>   Put HDR back after wake and outside changes
+  display16x hdr hardware-brightness [on|off] <display>   Brightness drives the backlight in HDR
+  display16x hdr night-shift [on|off]     Night Shift and True Tone off while HDR is on
+  display16x hdr controls [on|off]        The switch for everything HDR. Off by default
+
+  display16x color [profile] [NAME|factory] <display> [--try]   The profile in use, or choose one
+  display16x color hdr-profile [NAME|factory|none] <display>   The profile to use in HDR
+  display16x color fallback [NAME, NAME…|none] <display>   Profiles to try when one is missing
+  display16x color protect on|off <display>   Put the SDR or HDR profile back
+  display16x color profiles               Every display profile installed
+  display16x color preset [NAME] <display> [--try]   Reference presets of Apple displays
+  display16x color modes|dithering|rates <display>   The link: color modes, dithering, and
+                                          rates the mode list leaves out. Read only
+  display16x color controls [on|off]      The switch for profiles and presets. Off by default
+
   <display>   --tag N | --name "NAME" | --uuid UUID | --main | --pointer | --focused | --all
   <other>     --of-tag N | --of-name "NAME" | --of-uuid UUID | --of-main | --of-pointer
               The other display, for placement and mirroring
@@ -93,9 +111,10 @@ display16x \(AppPaths.version) — command line for Display 16X
               input, X,Y for position, left:end and the like for placement.
   KEYS        Modifiers and a key joined by +, for example ctrl+opt+1 or cmd+shift+f13
 
-  --try                              For resolution, refreshRate and rotation: ask Keep or
-                                     Revert on screen, and go back on its own after a few
-                                     seconds. Answer with "display16x keep" or "revert"
+  --try                              For resolution, refreshRate, rotation, HDR, a profile and
+                                     a preset: ask Keep or Revert on screen, and go back on its
+                                     own after a few seconds. Answer with "display16x keep" or
+                                     "revert" and the display
   --controller ddc|native|software   Address one controller instead of the control's owner
   --timeout SECONDS                  How long to wait for the app (default 10)
   --json                             Print the raw result
@@ -441,6 +460,12 @@ case "override":
 
 case "virtual":
     virtualVerb()
+
+case "hdr":
+    hdrVerb()
+
+case "color", "colour":
+    colorVerb()
 
 default:
     fail("unknown command \"\(verb)\". Run \"display16x help\"", .usage)

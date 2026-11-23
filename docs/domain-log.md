@@ -6,6 +6,16 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · v0.4 surfaces: where they plug into the interface pass's surfaces, and what they say
+
+**For the interface session, through the planning thread.** The v0.4 surfaces are new files built from the skin's values and pieces only (`SkinBoundaryTests` passes), and add nothing to the skin. To reach them, four existing files got one optional entry point each, defaulting to nothing, so the panel and the settings window are drawn exactly as before when it is absent: `PanelView` and `DisplayDetail` take an optional color model, and `SettingsView` takes one for its Advanced tab. The render harness's sample desk carries a sample color system. Every picture is in the render harness, groups "color", "settings" and "floating".
+
+- **"HDR and color" sits on a display's page after "More sizes"**: HDR with its cost, the profile with its HDR twin and its fallback, reference presets where the display has them, and the link, marked read only.
+- **The three v0.4 switches sit at the bottom of the Advanced tab**, after v0.3's virtual screens and written files, each with its cost. The interface session may want them higher.
+- **Keep or Revert for HDR, a profile or a preset** is a window of its own on the display that changed, built like the one for a size, with the same buttons.
+- **Each part that is off says where to turn it on**, and a display without HDR says why in a "say why" row.
+- **Not seen on screen.** The app with these surfaces has not run on the desk. The pictures are from the harness.
+
 ## 24 November 2026 · v0.4 core: what it adds to the core, the rules it adopted, and where the architecture did not fit
 
 **Where v0.4 touches what earlier milestones built.** No existing behavior changed, and every earlier test passes unchanged. Three optional keys, the settings version stays 1, so an older build reads both files and ignores them:
