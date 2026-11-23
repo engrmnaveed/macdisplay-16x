@@ -6,6 +6,21 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · Interface pass, stage 1: what every surface shows when it is drawn from sample data
+
+Every surface of the app was drawn off screen from made-up monitors, in light and dark, through the app's own panel models. No display was touched and the copy in daily use was left alone. What the pictures and the accessibility trees show about the product:
+
+- **The panel has no upper limit to its height.** With two monitors and both Details open it is about 1,100 points tall, and with three displays and everything open about 2,170. A display 1,080 points high cannot show it, and nothing scrolls. Rule for the redesign: the panel has a bounded height whatever is connected and whatever is open.
+- **A protection notice longer than two lines does not fit its window.** The window is measured for two lines whatever the text, and the three "stopped" notices are three lines long. Fixed with the notice's redesign.
+- **Protection notices begin with a small letter**, for example "after a change made elsewhere, put the saved arrangement back." The sentence is put together in the core from an occasion that starts in lower case. For the v0.2 session.
+- **Nothing on screen tells a confirmed value from a sent one.** The PRD asks for it. The panel is told a value and never whether the monitor read it back. **Needed from the core:** for each control, whether the value in use was read back from the monitor or only sent.
+- **The panel is not told how a display is connected.** The PRD's card is "name, connection". Today it says "External". **Needed from the core:** HDMI, DisplayPort, USB-C, Thunderbolt or built-in, where macOS reports it.
+- **The floating Keep windows never take the keyboard.** They are shown without becoming the key window, so Return and Escape reach them only after a click. That is what v0.1 and v0.2 built, and it keeps a mode change from stealing the keyboard from the app in use. **Decision needed:** whether Keep and Revert should answer to the keyboard at once, because "every control reachable by keyboard" is part of this milestone's quality bar.
+- **VoiceOver gets no name for three kinds of menu**: each display's Actions, each preset's More, and the input menu. The displays on the arrangement canvas are read as plain text and can only be moved with the pointer. Both are for stage 5 of this milestone.
+- **Scenes are three steps away.** A preset is applied by opening the panel, opening "Arrangement and presets" and pressing Apply. The PRD wants one click.
+
+**The last v0.2 commit changed spacing and nothing else.** The arrangement panels were drawn at the commit that broke up their views for the older compiler and at the one before it. Rows of the display list are 4 points closer together, and the items of the protection group and of the integration group 2 points each, so the panel is 12 to 16 points shorter. Every element, every text and the accessibility tree are the same, and the Keep windows and the protection offer are identical.
+
 ## 23 November 2026 · v0.2 Layout closed by the owner with three things left for a later version
 
 The owner ended the v0.2 build session after the hardware checks. Left open, to be picked up and verified by a later version's improvements:
