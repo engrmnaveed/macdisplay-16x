@@ -121,6 +121,8 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 
 **Status on 23 November 2026.** Merged into `main` as pull request 3. CI now runs the version check, the archive with an unpack-and-verify step, the cask style check on all three signing levels, and the comparison of the private interfaces with and without the hardened runtime, and all of it passed on the GitHub runner. The tag-triggered workflow has never run, because that needs a published tag. Before the first tag the owner has four steps, listed in [release.md](release.md): create the project certificate and back it up, add its three secrets to the `release-signing` environment, add the tap's deploy key to the `release` environment, and then tag `v0.1.0`. Both environments exist since 23 November, limited to `v*` tags, with the owner as required reviewer on `release` and no secrets yet. The other one-time settings are in place too: `main` accepts changes only through a pull request with the CI check passing, `v*` tags can be created, moved or deleted only by a repository admin, published releases are immutable, and private vulnerability reporting is on. With the first two releases the owner checks that the Accessibility permission survives an update.
 
+**0.2.0 was tagged on 23 November 2026**, at the merge of [pull request 9](https://github.com/engrmnaveed/macdisplay-16x/pull/9), by the owner with `scripts/tag-release 0.2.0 --push`. It is the first run of the release workflow. From here a release is two steps: `scripts/prepare-release X.Y.Z` through a pull request, then `scripts/tag-release X.Y.Z --push`.
+
 **Signing, until the project certificate exists.** The workflow signs with what the `release-signing` environment holds. It holds nothing yet, so 0.2.0 is signed ad hoc: the first launch has to be allowed by hand, and every update costs the Accessibility grant. The owner's certificate, its three secrets and the tap's deploy key change that from the release after they are added.
 
 ### Interface pass
@@ -137,7 +139,7 @@ Ready when the owner has approved each surface on their own Mac and the budgets 
 
 **Order.** On 23 November 2026 the owner moved this milestone ahead: it starts as soon as v0.2 is on `main`, before release 0.1.0 and before v0.3. It needs the owner's choices on rendered options and no time at the monitors. Release 0.1.0 waits on the owner's certificate, and v0.3 opens with hardware spikes. The surfaces now include the v0.2 panels: the arrangement canvas, mirroring, connection and presets, the Keep window for a layout change, the protection offer and the protection notices. Images and the app icon are made with the image generator the owner has set up, and each one is a candidate for the owner to approve.
 
-**Done on 23 November 2026**, as [pull request 7](https://github.com/engrmnaveed/macdisplay-16x/pull/7), with 389 unit tests passing.
+**Done on 23 November 2026**, with 389 unit tests passing. It reached `main` as [pull request 7](https://github.com/engrmnaveed/macdisplay-16x/pull/7), carried in by pull request 9, and ships in 0.2.0.
 
 - **Direction:** the owner chose B, "Studio": the family's navy and aqua, displays drawn to scale, thick bars and a stepped text-size strip.
 - **Surfaces:** approved by the owner from renders. The panel is one column with three pages: the displays with scenes on top, one display's page, and Arrange with the desk drawn to scale. Its height is bounded and it scrolls. There is a settings window, and a menu bar icon drawn in code with three states. A card's caption reads size, connection and role, and a value that was only sent or is not known carries a small tag.
@@ -212,6 +214,13 @@ Set by the owner on 23 November 2026: the next milestones are built in new sessi
 
 Flexible HiDPI scaling and custom resolutions through generated overrides, with a preview of what will be written, administrator authorization, and a one-click removal. Virtual screens for headless and remote use. Mirror-based HiDPI for panels that cannot get it natively, labelled with its GPU cost.
 
+**Built on 23 November 2026** on the branch `claude/v0-3-scaling-bb2160`, not pushed, with 440 unit tests passing. All 33 inventory rows are built at unit-test level, in new files, with small additive edits to nine existing ones and no change needed from the core session.
+
+- **Proven on hardware, with the owner at the desk:** macOS 27 reads an override file from `/Library/Displays` when the display connects, and the app's own disconnect and reconnect is enough to apply it. Removing the file and reconnecting restores the exact mode list. A virtual screen can be created and released in a running process, is gone within three seconds, and never outlives the process.
+- **What macOS does with an override:** entries are backing-store sizes. An 8-byte entry gives the low-density size and its half as HiDPI, a 12-byte entry gives its half as HiDPI, and a 16-byte entry is ignored. The LG's full grid as HiDPI was left out twice, so the app checks the mode list after activation and says what did not appear.
+- **Unit-tested only:** the app's own writing of an override behind the administrator prompt, virtual screens made by the app, and mirror-based HiDPI. Ten checks for a later round are listed in the feasibility notes.
+- **Left by the spikes on the owner's Mac:** one color profile macOS keeps for the probe's virtual screen, under `/Library/ColorSync/Profiles/Displays`.
+
 ### v0.4 HDR and color
 
 HDR switching, XDR brightness on capable hardware, color profile and color mode selection.
@@ -271,6 +280,10 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 19 | The word for a USB-C port that carries the picture directly | "USB-C". macOS knows the Mac's own port and never the far end of the cable, and every external display is a DisplayPort link to the Mac, HDMI included. On the test desk the Lenovo reads HDMI and the LG reads USB-C | Keep "USB-C". The label names the Mac's port, which is true whatever cable or adapter follows | Interface pass |
 | 20 | When "read back" ends | At sleep, at once: what was read back becomes not known, and what was only sent stays sent. The read the app makes anyway after the wake decides again | Keep it. A monitor can change while the Mac sleeps, and the app says only what it knows | Interface pass |
 | 21 | One word for a saved setup | "Scene" in the interface, as the PRD says, and `preset` in the command line and the settings file | Leave both until the public release, then choose one word, with the other kept as an alias in the command line | Public release |
+| 22 | How the app gets administrator rights for an override file | The system's own password prompt, through a script the user sees in the preview | Keep it. A privileged helper needs a Developer ID to be worth trusting, so it waits for that | Public release |
+| 23 | Whether a mirror the user linked starts again at launch | Yes, through the automation gate, and not in safe mode. The user switched it on, and it stays on until they switch it off | Keep it. Without it a setup that depends on the mirror breaks at every login. It still never starts unless the user turned it on | v0.3 release |
+| 24 | The vendor number virtual screens report | A made-up one, 0x1616, so settings can tell the app's own screens from real monitors | Keep it, and change it if a real monitor is ever reported with it | Public release |
+| 25 | A review of the v0.3 surfaces by the interface session | Built from the design system's pieces, and the boundary test passes. Not reviewed by the session that designed the system | Let daily use show what needs changing, and review them in the verification round | Verification round |
 
 ### Core changes waiting for the core session
 
