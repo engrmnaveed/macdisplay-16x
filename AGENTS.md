@@ -20,6 +20,7 @@
 - A change to a part that another session built goes back to that session, through the planning session. Do not rewrite the v0.1 core's existing behavior from a later milestone. Build on the hooks it reserved, and when existing behavior has to change, log it in the domain log and say so in your report.
 - Finished branches are closed. `v0.1-core` takes no more commits. Work lands on the current line of development and ships with the milestone in progress, never as an addition to an older version.
 - Everything reaches `main` through a pull request that passes CI. Commit locally at the end of each coherent piece. Pushing a branch, opening a pull request, merging into `main`, tagging and publishing each wait for the owner's word.
+- Commit messages carry no co-author or tool attribution line. How the project is built is said once, in the README, under "How it is built". Set by the owner on 24 November 2026. Earlier commits stay as they are: history is never rewritten for this.
 
 ## Rules
 
