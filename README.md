@@ -25,6 +25,20 @@ The app appears as a display icon in the menu bar and has no Dock icon. Click th
 - **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild: remove the old Display 16X entry from the Accessibility list and add the new one. To keep the grant across rebuilds, create a code signing certificate in Keychain Access (Certificate Assistant, Create a Certificate, type Code Signing) and pass its name: `DISPLAY16X_SIGN_IDENTITY="name" scripts/package-macos.sh`.
 - **Panel snapshot:** `--snapshot-panel FILE` renders the panel to a PNG without showing it and quits, and `--snapshot-details` opens the detail views in it. It is a development aid for checking the layout.
 
+## Checks
+
+Every pull request runs the same five steps on an Apple silicon runner, and they can be run locally:
+
+```sh
+scripts/check-identifiers.sh   # no real display UUIDs in tracked files
+swift build
+swift test
+scripts/package-macos.sh
+scripts/smoke-test.sh          # the bundle and the command line tool, read-only
+```
+
+Captured hardware output that becomes a test fixture carries made-up serial numbers, UUIDs and manufacture dates, never the real ones.
+
 ## Command line
 
 `scripts/package-macos.sh` also produces `dist/display16x`.
