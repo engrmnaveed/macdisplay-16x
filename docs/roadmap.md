@@ -117,11 +117,11 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 - **Signing.** The workflow signs with what the `release-signing` environment holds: a Developer ID with notarization, a project certificate, or neither, which means ad hoc. The `release` environment holds the tap's deploy key and the required reviewer, so the one approval comes after the app is signed and the signed archive can be tried first. Display 16X needs a stable identity more than Space 16X does, because the Accessibility grant belongs to the signature and an ad hoc build loses it at every update. Releases are signed with one project certificate ([decision 12](#5-open-decisions)). Notarization needs the hardened runtime. The command line tool's hardware report is identical with and without it, and CI compares the two on every pull request. The menu bar app itself has not been started under it yet.
 - **Guides.** `docs/release.md` is the runbook, with the one-time GitHub settings. `docs/install.md` covers Homebrew, the direct download, the first launch, the Accessibility grant and removal.
 
-The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
+**Every version gets a release.** Set by the owner on 23 November 2026: the latest version is released now, and each later version is released when its milestone is on `main`. The first release is 0.2.0, which holds v0.2 Layout and the interface pass. 0.1.0 was never tagged. v0.3 ships as 0.3.0, v0.4 as 0.4.0, and so on. A release is: the version file and the changelog section in one pull request, then the tag, then the workflow.
 
 **Status on 23 November 2026.** Merged into `main` as pull request 3. CI now runs the version check, the archive with an unpack-and-verify step, the cask style check on all three signing levels, and the comparison of the private interfaces with and without the hardened runtime, and all of it passed on the GitHub runner. The tag-triggered workflow has never run, because that needs a published tag. Before the first tag the owner has four steps, listed in [release.md](release.md): create the project certificate and back it up, add its three secrets to the `release-signing` environment, add the tap's deploy key to the `release` environment, and then tag `v0.1.0`. Both environments exist since 23 November, limited to `v*` tags, with the owner as required reviewer on `release` and no secrets yet. The other one-time settings are in place too: `main` accepts changes only through a pull request with the CI check passing, `v*` tags can be created, moved or deleted only by a repository admin, published releases are immutable, and private vulnerability reporting is on. With the first two releases the owner checks that the Accessibility permission survives an update.
 
-**Where the first tag goes.** `v0.1.0` is tagged on the last commit of `main` before v0.2 merges, because later commits hold v0.2 under "Unreleased". The release workflow runs from the tagged commit, so this works after v0.2 has merged. The other choice is to skip 0.1.0 and make 0.2.0 the first release. The owner decides when the certificate is ready.
+**Signing, until the project certificate exists.** The workflow signs with what the `release-signing` environment holds. It holds nothing yet, so 0.2.0 is signed ad hoc: the first launch has to be allowed by hand, and every update costs the Accessibility grant. The owner's certificate, its three secrets and the tap's deploy key change that from the release after they are added.
 
 ### Interface pass
 
@@ -137,21 +137,16 @@ Ready when the owner has approved each surface on their own Mac and the budgets 
 
 **Order.** On 23 November 2026 the owner moved this milestone ahead: it starts as soon as v0.2 is on `main`, before release 0.1.0 and before v0.3. It needs the owner's choices on rendered options and no time at the monitors. Release 0.1.0 waits on the owner's certificate, and v0.3 opens with hardware spikes. The surfaces now include the v0.2 panels: the arrangement canvas, mirroring, connection and presets, the Keep window for a layout change, the protection offer and the protection notices. Images and the app icon are made with the image generator the owner has set up, and each one is a candidate for the owner to approve.
 
-**Status on 23 November 2026.** On the branch `claude/peaceful-nobel-53c773`, not pushed, with 388 unit tests passing. The redesigned app has not been started yet: everything so far was checked on renders and in tests.
+**Done on 23 November 2026**, as [pull request 7](https://github.com/engrmnaveed/macdisplay-16x/pull/7), with 389 unit tests passing.
 
-- **Stage 1 is done.** A render harness draws every surface and state from sample data, in light and dark, inside a test target that never ships. The app is not started for it and no display is touched.
-- **The owner chose direction B, "Studio"**: the family's navy and aqua, displays drawn to scale, thick bars and a stepped text-size strip.
-- **Stages 2 and 3 are built, and the owner approved the surfaces from the renders.** The panel is one column with three pages: the displays with scenes on top, one display's page, and Arrange with the desk drawn to scale. Its height is bounded and it scrolls. There is a settings window, and a menu bar icon drawn in code with three states. The card's caption reads size, connection and role, and a value that was only sent or is not known carries a small tag. Those two additions came after the approval and have not been put to the owner.
-- **Stage 4 waits for the icon.** The packaging script takes an icon file made with macOS's own tools. The image generator showed as signed out, so no generated candidate exists. Three code-drawn candidates were shown as extras.
-- **Stage 5 is done as far as it goes off screen.** Every control on all 47 surfaces and states has a name and a spoken value for VoiceOver. Contrast was measured in four looks and one color changed. The panel's content builds in 18 to 30 ms on the M5 Pro.
+- **Direction:** the owner chose B, "Studio": the family's navy and aqua, displays drawn to scale, thick bars and a stepped text-size strip.
+- **Surfaces:** approved by the owner from renders. The panel is one column with three pages: the displays with scenes on top, one display's page, and Arrange with the desk drawn to scale. Its height is bounded and it scrolls. There is a settings window, and a menu bar icon drawn in code with three states. A card's caption reads size, connection and role, and a value that was only sent or is not known carries a small tag.
+- **Icon:** the owner chose the code-drawn display on a foot. The image generator was signed out both times, so no generated candidate was made.
+- **Checked off screen:** every control on all surfaces and states has a name and a spoken value for VoiceOver, and contrast was measured in four looks.
+- **Measured on screen, M5 Pro:** the panel opens in 76 to 88 ms warm and 133 ms the first time. Memory with the panel closed is 53 MB after use, so the owner raised that budget to 55 MiB.
+- **The owner's running copy is this build**, with fresh settings.
 
-**The owner's running copy is this build since 23 November 2026.** The owner removed the 0.1.0 copy and its settings, and the latest commit of the branch was installed in its place and started with fresh settings. It found both monitors and wrote nothing at start. On screen the panel opens in 76 to 88 ms warm and 133 ms the first time, with 40 MB in use while the panel is closed. The ten-minute idle measurement is still to come. The build still calls itself 0.1.0, because the version file changes only at a release, so the build number tells the copies apart.
-
-Left, and all of it needs the owner:
-
-- **The icon:** a sign-in to the image generator, or a pick among the three code-drawn candidates.
-- **The checks only daily use can give:** real blur, full keyboard access, VoiceOver's reading order, and the three accessibility settings switched on. The Accessibility grant has to be given to the new build once. macOS gives out its increased-contrast appearance only while Increase Contrast is on in System Settings, so that look has to be seen once on screen.
-- **Decision 18.** Until it is answered the Keep window stays as built.
+Left for daily use and a later round: real blur, full keyboard access, VoiceOver's reading order, the three accessibility settings switched on, and decision 18.
 
 **The look must stay cheap to change.** The owner asked for an interface that is "easy and cost-effective (from agentic tokens POV) to re-skin". So the look has three layers: one file of values (colors, distances, fonts, symbols), a few files of pieces (bar, chip, card, banner), and surfaces that only compose them. A test fails when a surface holds a color, a font, a radius, a distance or a symbol of its own. A re-skin is checked on one sheet that shows every value and piece. Later milestones build their panels the same way.
 
@@ -207,7 +202,7 @@ Left out of v0.2, both moved to Later in the inventory:
 
 Set by the owner on 23 November 2026: the next milestones are built in new sessions on the Opus model, one milestone at a time, and two at once only where they touch different files.
 
-1. **The interface pass lands first.** Later panels are built on its design system, so nothing starts before it is on `main`.
+1. **The interface pass lands first**, and 0.2.0 is released with it. Later panels are built on its design system, so nothing starts before it is on `main`.
 2. **v0.3 Advanced scaling**, as below. Its first stage is spikes. The read-only ones run unattended. The ones that write an override file or create a virtual screen need the owner for a short check, and are carried forward when the owner is away.
 3. **Release groundwork, alongside v0.3.** It touches documents and `.github` only, so it can run at the same time: the tested-hardware list, the contribution guide and issue templates, the note on running next to other display utilities, and a pass over the README and the install guide for the new interface.
 4. **v0.4 HDR and color**, after v0.3, because both change the core and the app.
