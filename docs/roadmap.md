@@ -120,6 +120,8 @@ The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
 
 **Status on 23 November 2026.** Merged into `main` as pull request 3. CI now runs the version check, the archive with an unpack-and-verify step, the cask style check on all three signing levels, and the comparison of the private interfaces with and without the hardened runtime, and all of it passed on the GitHub runner. The tag-triggered workflow has never run, because that needs a published tag. Before the first tag the owner has four steps, listed in [release.md](release.md): create the project certificate and back it up, add its three secrets to the `release-signing` environment, add the tap's deploy key to the `release` environment, and then tag `v0.1.0`. Both environments exist since 23 November, limited to `v*` tags, with the owner as required reviewer on `release` and no secrets yet. The other one-time settings are in place too: `main` accepts changes only through a pull request with the CI check passing, `v*` tags can be created, moved or deleted only by a repository admin, published releases are immutable, and private vulnerability reporting is on. With the first two releases the owner checks that the Accessibility permission survives an update.
 
+**Where the first tag goes.** `v0.1.0` is tagged on the last commit of `main` before v0.2 merges, because later commits hold v0.2 under "Unreleased". The release workflow runs from the tagged commit, so this works after v0.2 has merged. The other choice is to skip 0.1.0 and make 0.2.0 the first release. The owner decides when the certificate is ready.
+
 ### Interface pass
 
 The v0.1 interface was built to exercise the core, and it looks like it. This milestone gives the app a designed interface before the public release. The design is our own, to the [interface direction](../PRD.md#interface-direction) in the PRD.
@@ -148,7 +150,23 @@ Every change to arrangement, mirroring, the main display or a connection is reve
 
 Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
 
-**Status on 23 November 2026.** All five stages are built on the branch `claude/v0-2-layout-14c08e`, with 309 unit tests passing, not pushed. Nothing in v0.2 has written to hardware. Fifteen checks wait for the owner at the desk, listed in order in the branch's feasibility notes: the layout writes one by one, each put back, then the same through the CLI and the panel, a saved layout across a wake, a preset from a shortcut, the budgets, and the lid.
+**Built, and closed by the owner on 23 November 2026 with check 11 left for a later version.** All five stages are on the branch `claude/v0-2-layout-14c08e`, with 324 unit tests passing, not pushed. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
+
+Three more things were done after the checks, at unit-test level. The first is the core session's change. The other two came out of its review of how v0.2 uses the core:
+
+- **The automation origin is in.** Layout protection and the automatic turn-off of the built-in panel write as automation. Undoing an unconfirmed change, reconnecting at quit or at the next start, and reconnecting when no display is left stay restores, because they put back the app's own change.
+- **One unreadable stored command costs one preset or shortcut.** The lists are read entry by entry, and what was dropped is logged with its name.
+- **The gate is checked before each protection write**, and again between a rotation write and the mode write that follows it.
+
+The branch waits for the owner's word to go to `main` through a pull request.
+
+Carried forward to a later version, by the owner's word:
+
+- **Check 11.** A saved layout across a display sleep of ten minutes or more, with protection on. The displays did sleep for an hour with protection off, and the app wrote nothing.
+- **The offer of layout protection after Keep**, seen on screen.
+- **The built-in panel coming back** when the last external display goes away, on hardware. It is unit-tested.
+- **Decision 16**, on turning the built-in panel off automatically. The switch is off by default until then.
+- **The lid-sleep reading.** `AppleClamshellCausesSleep` in the power management root read 1 before the app first turned the built-in panel off, and has read 0 since. macOS may change this value by itself with power and attached displays, so the reading alone proves nothing. It is read again after a logout with the app not running, and around one more turn-off, before any build that turns the panel off by itself is released. A Mac that no longer sleeps when its lid closes would be a fault we cannot ship.
 
 Left out of v0.2, both moved to Later in the inventory:
 
@@ -178,6 +196,7 @@ HDR switching, XDR brightness on capable hardware, color profile and color mode 
 | Override-based scaling may behave differently on current macOS | Probe it before building interface for it. Keep mirror-based scaling as the fallback. |
 | Hardware coverage | Publish a tested-hardware list and accept probe output in issues. |
 | Scope | BetterDisplay is years of full-time work. Ship the core well before starting the next group. |
+| A display the app turned off stays off while the app is not running | The app reconnects what it disconnected when it quits, and at its next start after a crash. It reconnects at once when no display is left in use. A disconnect lasts for the login session only. The automatic turn-off of the built-in panel is the case this does not cover fully, see decision 16. |
 | An app that is not notarized is blocked at first launch, and Homebrew has tightened its rules | Publish through our own tap and install by the cask's full name, which trusts that one cask. Homebrew can no longer skip quarantine, so document the first launch. It keeps the approval across upgrades only for the same signer, so sign with one stable identity. It unpacks with `unzip`, so the archive carries no extended attributes and CI verifies the signature after unpacking. Move to a Developer ID when the membership is there. |
 
 ## 5. Open decisions
@@ -210,6 +229,8 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac, separate from the project certificate, whose key stays with the owner and the release secrets | Next development round |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
 | 15 | Shortcuts actions | Left out, because the Command Line Tools cannot produce their metadata | Leave them out for now. Revisit at the public release: building releases with Xcode on CI would bring them back and would end "builds with the Command Line Tools alone" for releases only | Public release |
+| 16 | Turning the built-in panel off automatically | Built, and off by default. The panel comes back when the app quits and when the last external display goes away, and only once the lid is open, because turned on behind a closed lid it becomes the main display. If the app is not running at that moment, the panel stays dark until the user logs out | Hold the switch back from the v0.2 release and keep the code. Closing the lid already gives the same result at a desk. Bring the switch back when there is a way back that works without the app running, and the lid-sleep reading is explained. The owner's view, given at the desk: the built-in display should not be left dark | Before the switch is shown |
+| 17 | Brightness written by a rule | An automatic brightness change gets the restore floor and also stops just above black, unless the user allowed black at zero. A restore gets the floor alone. No rule writes brightness yet, so nothing changes today | Confirm it. A restore puts back a value the user already chose. A rule's value arrives with nobody watching, and a black picture is the worst case for this app | The first rule that writes a value |
 
 ### Core changes waiting for the core session
 
@@ -217,4 +238,4 @@ Changes to what v0.1 built are made by the session that built it, on the line of
 
 | Change | Why | Lands on | Status |
 | --- | --- | --- | --- |
-| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Approved by planning. To be sent together with whatever the v0.2 hardware checks turn up |
+| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Built by the core session on 23 November 2026, on the branch `core/automation-origin` cut from the v0.2 branch, with 321 unit tests passing, not pushed. Merged into the v0.2 branch the same day, where the rule-driven writes now use it. Nothing from outside can claim the origin: the socket and links always run as commands |
