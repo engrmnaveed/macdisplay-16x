@@ -81,6 +81,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         makeStatusItem()
         context.start()
         updateKeyCapture()
+        context.shortcuts.onResult = { binding, result in
+            guard !result.succeeded else { return }
+            let reason = result.error ?? result.entries.first { $0.outcome == .failed }?.detail ?? "unknown"
+            Log.app.notice("Shortcut \(binding.combo) (\(binding.displayTitle)) failed: \(reason)")
+        }
         let hotKeys = HotKeyCenter(shortcuts: context.shortcuts)
         hotKeys.start()
         self.hotKeys = hotKeys

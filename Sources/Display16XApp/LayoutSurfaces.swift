@@ -30,15 +30,19 @@ final class HotKeyCenter {
         guard handler == nil else { return }
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let refcon = Unmanaged.passUnretained(self).toOpaque()
-        InstallEventHandler(GetApplicationEventTarget(), { _, event, refcon in
+        let installed = InstallEventHandler(GetEventDispatcherTarget(), { _, event, refcon in
             guard let event, let refcon else { return OSStatus(eventNotHandledErr) }
             var identifier = EventHotKeyID()
             let status = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &identifier)
-            guard status == noErr else { return status }
+            guard status == noErr else {
+                Log.app.notice("A shortcut event arrived that could not be read (\(status)).")
+                return status
+            }
             let center = Unmanaged<HotKeyCenter>.fromOpaque(refcon).takeUnretainedValue()
             MainActor.assumeIsolated { center.pressed(identifier.id) }
             return noErr
         }, 1, &type, refcon, &handler)
+        if installed != noErr { Log.app.error("Shortcuts cannot be received (\(installed)).") }
         update()
     }
 
@@ -58,10 +62,11 @@ final class HotKeyCenter {
         for (index, binding) in bindings.enumerated() {
             let id = UInt32(index + 1)
             var reference: EventHotKeyRef?
-            let status = RegisterEventHotKey(UInt32(binding.combo.keyCode), HotKeyCenter.carbonModifiers(binding.combo.modifiers), EventHotKeyID(signature: HotKeyCenter.signature, id: id), GetApplicationEventTarget(), 0, &reference)
+            let status = RegisterEventHotKey(UInt32(binding.combo.keyCode), HotKeyCenter.carbonModifiers(binding.combo.modifiers), EventHotKeyID(signature: HotKeyCenter.signature, id: id), GetEventDispatcherTarget(), 0, &reference)
             if status == noErr, let reference {
                 references[id] = reference
                 combos[id] = binding.combo
+                Log.app.info("Shortcut \(binding.combo) registered: \(binding.displayTitle).")
             } else {
                 taken.append(binding.combo)
                 Log.app.notice("Shortcut \(binding.combo) could not be registered (\(status)). Another app may hold it.")
@@ -76,7 +81,11 @@ final class HotKeyCenter {
     }
 
     private func pressed(_ id: UInt32) {
-        guard let combo = combos[id] else { return }
+        guard let combo = combos[id] else {
+            Log.app.notice("A shortcut was pressed that is no longer registered (\(id)).")
+            return
+        }
+        Log.app.info("Shortcut \(combo) pressed.")
         shortcuts.pressed(combo)
     }
 
