@@ -20,6 +20,7 @@ open "dist/Display 16X.app"
 The app appears as a display icon in the menu bar and has no Dock icon. Click the icon for one card per display.
 
 - **Safe mode:** hold Shift while the app starts, or pass `--safe`. Nothing is restored or reapplied automatically in safe mode.
+- **After sleep:** the app does not push its values at a monitor that wakes up. It reads the monitor and follows it, so a change made with the monitor's buttons or another tool stays. If a monitor forgets its brightness or volume while asleep, switch on "Put my values back after sleep" in that display's details.
 - **Verbose log:** pass `--verbose` to log debug detail and echo the log to standard error.
 - **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild: remove the old Display 16X entry from the Accessibility list and add the new one. To keep the grant across rebuilds, create a code signing certificate in Keychain Access (Certificate Assistant, Create a Certificate, type Code Signing) and pass its name: `DISPLAY16X_SIGN_IDENTITY="name" scripts/package-macos.sh`.
 - **Panel snapshot:** `--snapshot-panel FILE` renders the panel to a PNG without showing it and quits, and `--snapshot-details` opens the detail views in it. It is a development aid for checking the layout.
@@ -50,8 +51,9 @@ dist/display16x features                   # every feature and its operations
 | Native brightness for built-in and Apple displays | Built. No such display was available to test |
 | Software dimming through color tables | Looks right while awake on both monitors: smooth, clearly darker than the monitor's own minimum, and back to normal. **Known problem:** it was lost when the screen is unlocked after a display sleep. A fix that writes the table again at unlock is built and not yet watched on hardware. Off by default |
 | Brightness and volume keys, on-screen indicator | Verified on both monitors after granting Accessibility. If the grant does not take, remove the old Display 16X entry in System Settings and add it again |
-| Restore after wake | Ran once on hardware after a 1.4 second display sleep: values written and read back. Not yet seen repairing a value a monitor lost |
-| Restore after reconnect, safe mode | Built and unit-tested. Hardware check pending |
+| After wake and when a display returns | The app reads the monitor and shows what it has. Nothing is written. Built and unit-tested, hardware check pending. In three measured wakes, one after five and a half hours, neither test monitor had lost a value |
+| "Put my values back after sleep", per display, off by default | For a monitor that forgets its values. Reads first and writes only a value you chose and the monitor no longer has. Built and unit-tested. Never seen repairing a lost value, because neither test monitor loses one |
+| Safe mode | Built and unit-tested. Hardware check pending |
 | Rotation | Built behind the timed revert. Never run on hardware |
 | Launch at login | Built. Not verified |
 | CLI and hardware probe | Working |

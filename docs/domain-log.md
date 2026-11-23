@@ -6,6 +6,22 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The after-wake default and the restore floor are built as decided, with three things to confirm
+
+Built to the decisions recorded this morning (core architecture, sections 5 and 7). Unit-tested. The first run on hardware is the next wake of the displays.
+
+- After wake and when a display returns, each control with a tracked value is read once and the app takes the monitor's word. Nothing is written. A display that returns is not asked twice, because the check of what it supports already reads every control.
+- "Put my values back after sleep" is a switch per display, off by default. It reads first and writes only a value the user chose and the monitor no longer has.
+- The restore floor lifts software dimming only. Hardware brightness set by hand comes back exactly.
+
+Three places where the decision left room, and what was built:
+
+1. **A short blank counts as the user returning. Decision needed.** The floor applies at wake, and a display sleep can last one second (measured, see below in this log). Someone who dims below the floor on purpose for night work will find the picture lifted to the floor after every idle blank. Built as decided. If that is not wanted, the floor could apply only after an unlock, the return of the session, the start of the app, or a sleep longer than some minutes.
+2. **A display that comes back is treated like a return, for software dimming.** When a monitor leaves and returns, its software dimming is written again from the stored level, lifted to the floor if it was below. The decision lists start, wake, unlock and session return. A reconnect is not in the list, but the LG leaves and returns on its own at every wake from a long sleep, after the wake itself has been handled, so without this it would be the one display that comes back too dark.
+3. **At the start of the app the stored value is still trusted. Decision needed.** The decision covers wake and reconnect. At start the app keeps what it stored and writes nothing, as before, although its check of each display reads the monitor's values anyway. A monitor changed while the app was not running is therefore shown with the old value until the panel is opened, which reads it. Reading and adopting at start as well would be the same rule everywhere and costs no extra queries.
+
+One consequence worth knowing: after the app takes a monitor's value, that control is no longer "chosen", so switching "Put my values back after sleep" on later restores nothing for it until the user sets a value through the app again.
+
 ## 23 November 2026 · After a long display sleep the LG leaves the system, and both monitors still have their values
 
 Mac17,9, macOS 27.2.1, Lenovo P32p-20 on HDMI, LG SDQHD on DisplayPort. The displays slept for five and a half hours with nobody at the Mac. BetterDisplay and the earlier prototype were running. Timings are in the feasibility notes.
@@ -80,6 +96,8 @@ What it means for the product:
 One thing for a later feature: when one display changes size, macOS reports that display as moved, with nobody having touched the arrangement. Anything that watches for arrangement changes made elsewhere must not count those.
 
 **Decision needed:** nothing new. This is evidence for the open decision on the default after wake.
+
+Update, 23 November, 08:30: decided and built. After wake the app now reads the monitor and writes nothing. See the entry at the top of this log.
 
 ## 23 November 2026 · An older Accessibility entry under the same name blocks the grant
 
