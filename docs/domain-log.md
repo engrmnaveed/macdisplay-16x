@@ -32,6 +32,8 @@ From v0.2 on the settings file holds commands, in presets and shortcuts, and eac
 
 **The gate is checked before each automatic write, not once per pass.** Restored values do this already, because each one goes through the command engine. Layout protection checks once and then changes the mode of each display in turn, waiting for the system to settle each time, so a write can go out after the Mac has begun to sleep. Reported to the planning thread for the v0.2 session.
 
+
+Update, 23 November, on the v0.2 line: the rule-driven writes now use it. Layout protection (mode, rotation and the saved arrangement) and turning the built-in panel off and back on write as `automation`. Undoing an unconfirmed layout change after a crash, reconnecting at start and at quit, a built-in panel's reconnect that waited for the lid, and reconnecting when no display is left in use stay `restore`: each puts back the app's own change and follows no rule the user set. The gate is checked before each protection write, and presets and shortcuts are read entry by entry, so one stored command a build cannot read costs only its own entry.
 ## 23 November 2026 · The owner checks: what macOS does when a layout changes, and two bugs they found
 
 Mac17,9, macOS 27.2.1, the Lenovo P32p-20 on HDMI and the LG SDQHD on DisplayPort, with the owner at the desk. Every result is in the feasibility notes. What matters for the product:

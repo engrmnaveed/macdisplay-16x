@@ -350,7 +350,7 @@ struct LayoutRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 0) {
                 Text(item.name)
-                Text(item.mirrorOf.map { "mirrors \($0)" } ?? "\(item.frame.width) × \(item.frame.height) at \(item.frame.x),\(item.frame.y)\(item.isMain ? ", main" : "")")
+                Text(verbatim: item.mirrorOf.map { "mirrors \($0)" } ?? "\(item.frame.width) × \(item.frame.height) at \(item.frame.x),\(item.frame.y)\(item.isMain ? ", main" : "")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
