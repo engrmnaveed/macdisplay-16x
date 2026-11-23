@@ -1,0 +1,1084 @@
+import Foundation
+import Testing
+@testable import DisplayCore
+
+@Suite("Events and the automation gate")
+@MainActor
+struct EventTests {
+    @Test("Reconfiguration callbacks are debounced into one began and one settled")
+    func reconfigurationDebounce() {
+        let rig = Rig()
+        for _ in 0..<5 {
+            rig.sequencer.systemReconfigured()
+            rig.scheduler.advance(by: 0.3)
+        }
+        #expect(rig.events.filter { $0 == .reconfigurationBegan }.count == 1)
+        #expect(!rig.events.contains(.reconfigurationSettled))
+        #expect(rig.sequencer.isReconfiguring)
+        rig.scheduler.advance(by: 1.0)
+        #expect(rig.events.filter { $0 == .reconfigurationSettled }.count == 1)
+        #expect(!rig.sequencer.isReconfiguring)
+
+        rig.sequencer.systemReconfigured()
+        #expect(rig.events.filter { $0 == .reconfigurationBegan }.count == 2)
+    }
+
+    @Test("Wake is two-phase, and the delays are settings")
+    func wakeSettles() {
+        let rig = Rig { $0.global.wakeSettleDelay = 5 }
+        rig.sequencer.systemWillSleep()
+        #expect(rig.sequencer.isInWakeTransition)
+        rig.sequencer.systemDidWake()
+        #expect(rig.events.suffix(2) == [.gateChanged, .didWake] || rig.events.contains(.didWake))
+        rig.scheduler.advance(by: 4.9)
+        #expect(!rig.events.contains(.wakeSettled))
+        #expect(rig.sequencer.isInWakeTransition)
+        rig.scheduler.advance(by: 0.2)
+        #expect(rig.events.contains(.wakeSettled))
+        #expect(!rig.sequencer.isInWakeTransition)
+
+        // Going back to sleep before the delay ends cancels the settle.
+        rig.sequencer.systemDidWake()
+        rig.sequencer.systemWillSleep()
+        rig.scheduler.advance(by: 60)
+        #expect(rig.events.filter { $0 == .wakeSettled }.count == 1)
+    }
+
+    @Test("The gate is closed while starting, asleep and in another user's session")
+    func gateStates() async {
+        let rig = Rig()
+        #expect(!rig.gate.isOpen)
+        #expect(rig.gate.check(.restore) == .blocked("automatic changes are paused: the app is still starting"))
+        #expect(rig.gate.check(.interface) == .allowed)
+        #expect(rig.gate.check(.keyboard) == .allowed)
+
+        await rig.start()
+        #expect(rig.gate.isOpen)
+        #expect(rig.gate.check(.restore) == .allowed)
+
+        rig.bus.publish(.willSleep)
+        #expect(rig.gate.closedReason == "the Mac is asleep")
+        rig.bus.publish(.didWake)
+        #expect(rig.gate.isOpen)
+
+        rig.bus.publish(.sessionInactive)
+        #expect(rig.gate.check(.sync) == .blocked("automatic changes are paused: another user's session is active"))
+        rig.bus.publish(.sessionActive)
+        #expect(rig.gate.isOpen)
+        #expect(rig.events.filter { $0 == .gateChanged }.count == 5)
+    }
+
+    @Test("Safe mode keeps the gate closed for the whole run")
+    func safeMode() async {
+        let rig = Rig(safeMode: true)
+        await rig.start()
+        rig.bus.publish(.didWake)
+        rig.bus.publish(.sessionActive)
+        #expect(!rig.gate.isOpen)
+        #expect(rig.gate.isSafeMode)
+        #expect(rig.gate.closedReason == "safe mode is on")
+    }
+
+    @Test("Every origin is either manual or automatic")
+    func origins() {
+        #expect(ChangeOrigin.allCases.filter(\.isAutomatic) == [.sync, .restore, .startup])
+    }
+}
+
+@Suite("Reconciler")
+@MainActor
+struct ReconcilerTests {
+    let tag = DisplayTag(1)
+
+    private func wake(_ rig: Rig) async {
+        rig.sequencer.systemWillSleep()
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: rig.settings.document.wakeSettleDelay + 0.01)
+        await rig.idle()
+    }
+
+    @Test("After wake the monitor is asked once, and what it reports is taken as the current value")
+    func readAndAdoptAfterWake() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.2))
+        // While the displays sleep, someone changes the monitor with its own buttons.
+        ddc.values[.hardwareBrightness] = 100
+        ddc.values[.volume] = 80
+        ddc.clearWrites()
+        ddc.clearReads()
+
+        rig.sequencer.systemWillSleep()
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 2.9)
+        await settle()
+        #expect(ddc.reads.isEmpty, "the monitor is not asked before the wake has settled")
+        rig.scheduler.advance(by: 0.2)
+        #expect(await eventually { rig.controls.trackedValue(.volume, for: tag) == 0.8 })
+        await rig.idle()
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 1)
+        #expect(ddc.writes.isEmpty, "nothing is written")
+        #expect(ddc.reads.sorted { $0.rawValue < $1.rawValue } == [.contrast, .hardwareBrightness, .mute, .volume], "each control with a tracked value is read once")
+        #expect(!rig.controls.isChosen(.brightness, for: tag), "the monitor holds another value now, so the old one is no longer the choice")
+        #expect(rig.events.contains(.valueChanged(ValueChange(tag: tag, control: .hardwareBrightness, value: 1, origin: .outsideChange))))
+        #expect(rig.settings.pendingRestores(for: tag).isEmpty)
+    }
+
+    @Test("A monitor that kept its values is left alone after wake, whatever the setting")
+    func nothingToDoAfterWake() async {
+        for restore in [false, true] {
+            let rig = Rig { $0.global.displays.restoreAfterWake = restore }
+            let ddc = rig.plug(Fixture.lenovo())!
+            await rig.start()
+            _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+            _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.2))
+            ddc.clearWrites()
+            let events = rig.events.count
+            await wake(rig)
+            #expect(ddc.writes.isEmpty, "a short blank does not make the app rewrite anything")
+            #expect(rig.controls.isChosen(.brightness, for: tag))
+            #expect(rig.events.dropFirst(events).allSatisfy { if case .valueChanged = $0 { false } else { true } })
+        }
+    }
+
+    @Test("A control that does not answer after wake keeps its tracked value")
+    func unansweredAfterWake() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        ddc.values[.hardwareBrightness] = 100
+        ddc.failReads = true
+        ddc.clearWrites()
+        await wake(rig)
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.5)
+        #expect(rig.controls.isChosen(.brightness, for: tag))
+        #expect(ddc.writes.isEmpty)
+
+        // The panel opens and reads the monitor, which answers now.
+        ddc.failReads = false
+        _ = await rig.run(.get, .brightness, on: .tag(1), options: CommandOptions(refresh: true))
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 1)
+    }
+
+    @Test("With restore after wake on, a chosen value the monitor lost is written back once the wake has settled")
+    func restoreAfterWake() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.2))
+        _ = await rig.run(.set, .contrast, on: .tag(1), value: .absolute(0.6))
+        // The monitor comes back from standby with two values lost and one kept.
+        ddc.values[.hardwareBrightness] = 100
+        ddc.values[.volume] = 80
+        ddc.clearWrites()
+
+        rig.sequencer.systemWillSleep()
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 2.9)
+        await settle()
+        #expect(ddc.writes.isEmpty, "nothing is sent before wake has settled")
+        rig.scheduler.advance(by: 0.2)
+        #expect(await eventually { ddc.values[.hardwareBrightness] == 50 && ddc.values[.volume] == 20 })
+        await rig.idle()
+        #expect(ddc.writes(to: .contrast).isEmpty, "a value the monitor still has is not written again")
+        #expect(rig.events.contains(.valueChanged(ValueChange(tag: tag, control: .brightness, value: 0.5, origin: .restore))) == false, "an unchanged tracked value is not announced again")
+        #expect(rig.controls.isChosen(.brightness, for: tag))
+        #expect(rig.settings.pendingRestores(for: tag).isEmpty)
+    }
+
+    @Test("Restore after wake is a setting per display")
+    func restoreAfterWakePerDisplay() async {
+        let rig = Rig()
+        let lenovo = rig.plug(Fixture.lenovo())!
+        let lg = rig.plug(Fixture.lg())!
+        await rig.start()
+        #expect(rig.settings.effective(DisplayTag(1)).restoreAfterWake == false, "off unless switched on")
+        rig.settings.updateRecord(DisplayTag(2)) { $0.display.restoreAfterWake = true }
+        _ = await rig.run(.set, .brightness, on: .all, value: .absolute(0.5))
+        lenovo.values[.hardwareBrightness] = 100
+        lg.values[.hardwareBrightness] = 100
+        await wake(rig)
+        #expect(await eventually { lg.values[.hardwareBrightness] == 50 })
+        #expect(lenovo.values[.hardwareBrightness] == 100)
+        #expect(rig.controls.trackedValue(.brightness, for: DisplayTag(1)) == 1)
+    }
+
+    @Test("The log says what the app took from the monitor and what it put back, and on which display")
+    func restoreIsLogged() async {
+        let sink = CapturingLogSink()
+        LogCenter.shared.add(sink: sink)
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.37))
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.21))
+        ddc.values[.hardwareBrightness] = 100
+        ddc.values[.volume] = 80
+        // Contrast was never set through the app, so the monitor's word is taken for it.
+        ddc.values[.contrast] = 43
+
+        await wake(rig)
+        #expect(await eventually { ddc.values[.hardwareBrightness] == 37 && ddc.values[.volume] == 21 })
+        await rig.idle()
+
+        let lines = sink.messages(containing: "brightness 37%")
+        #expect(lines.count == 1, "one line for the whole pass")
+        #expect(lines.first?.hasPrefix("After wake, put back on #1 LEN P32p-20: ") == true)
+        #expect(lines.first?.contains("volume 21%") == true)
+        #expect(sink.messages(containing: "contrast 43%") == ["After wake, #1 LEN P32p-20 reports contrast 43%. Taken as the current values."])
+    }
+
+    @Test("A display that returns is not asked again: the values from its check are taken")
+    func adoptOnReconnect() async {
+        let rig = Rig()
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.35))
+        rig.unplug(Fixture.lenovoID)
+        await rig.reconfigure()
+
+        let returned = rig.plug(Fixture.lenovo(id: SystemDisplayID(40)), ddc: .ddc(brightness: 100))!
+        await rig.reconfigure()
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 1)
+        #expect(returned.writes.isEmpty)
+        #expect(returned.reads.isEmpty, "the check of the display already read every control")
+    }
+
+    @Test("With restore after wake on, a chosen value is written back when a display reconnects")
+    func restoreOnReconnect() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.35))
+        rig.unplug(Fixture.lenovoID)
+        await rig.reconfigure()
+
+        let returned = rig.plug(Fixture.lenovo(id: SystemDisplayID(40)), ddc: .ddc(brightness: 100))!
+        await rig.reconfigure()
+        #expect(await eventually { returned.values[.hardwareBrightness] == 35 })
+        #expect(returned.writes(to: .input).isEmpty, "one-shot actions are never restored")
+    }
+
+    @Test("A display that returns while the Mac is waking is looked at once, after the wake has settled")
+    func reconnectDuringWake() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.35))
+        rig.sequencer.systemWillSleep()
+        rig.sequencer.systemDidWake()
+        // The monitor drops off and comes back within the first second of the wake.
+        rig.unplug(Fixture.lenovoID)
+        await rig.reconfigure()
+        ddc.values[.hardwareBrightness] = 100
+        _ = rig.plug(Fixture.lenovo(), ddc: ddc)
+        ddc.clearReads()
+        await rig.reconfigure()
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.35, "not yet")
+        rig.scheduler.advance(by: 3.1)
+        #expect(await eventually { rig.controls.trackedValue(.brightness, for: tag) == 1 })
+        await rig.idle()
+        #expect(ddc.writes(to: .hardwareBrightness) == [35], "only the change made by hand before the sleep")
+    }
+
+    @Test("A value set while the display was away is applied when it returns, whatever the setting")
+    func pendingCommandOnReturn() async {
+        let rig = Rig()
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        rig.unplug(Fixture.lenovoID)
+        await rig.reconfigure()
+        let queued = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.4))
+        #expect(queued.entries.first?.outcome == .accepted)
+
+        let returned = rig.plug(Fixture.lenovo(), ddc: .ddc(brightness: 100))!
+        await rig.reconfigure()
+        #expect(await eventually { returned.values[.hardwareBrightness] == 40 })
+        await rig.idle()
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.4, "the monitor's old value is not taken over the command")
+        #expect(rig.settings.pendingRestores(for: tag).isEmpty)
+    }
+
+    @Test("A monitor that is not ready is retried a bounded number of times from a persisted queue")
+    func retriesFromPersistedQueue() async throws {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        ddc.values[.hardwareBrightness] = 100
+        ddc.ignoreWrites = true
+
+        await wake(rig)
+        #expect(rig.settings.pendingRestores(for: tag).first { $0.feature == "brightness" }?.value == 0.5)
+        rig.settings.flush()
+        let saved = try DocumentCoding.decoder().decode(SettingsDocument.self, from: try #require(rig.persistence.stored))
+        #expect(saved.pendingRestores.contains { $0.feature == "brightness" && $0.value == 0.5 }, "the queue is persisted")
+
+        // First retry: still not ready.
+        rig.scheduler.advance(by: 2.1)
+        await rig.idle()
+        #expect(ddc.values[.hardwareBrightness] == 100)
+        // Second retry: the monitor has woken up.
+        ddc.ignoreWrites = false
+        rig.scheduler.advance(by: 5.1)
+        #expect(await eventually { ddc.values[.hardwareBrightness] == 50 })
+        await rig.idle()
+        #expect(rig.settings.pendingRestores(for: tag).isEmpty)
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.5)
+    }
+
+    @Test("Retries stop after the last delay, and the value waits for the next wake")
+    func retriesAreBounded() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        ddc.values[.hardwareBrightness] = 100
+        ddc.ignoreWrites = true
+        await wake(rig)
+        for delay in [2.1, 5.1, 10.1] {
+            rig.scheduler.advance(by: delay)
+            await rig.idle()
+        }
+        ddc.clearWrites()
+        rig.scheduler.advance(by: 600)
+        await rig.idle()
+        #expect(ddc.writes.isEmpty, "no further attempts on a timer")
+        #expect(rig.settings.pendingRestores(for: tag).contains { $0.feature == "brightness" })
+
+        ddc.ignoreWrites = false
+        await wake(rig)
+        #expect(ddc.values[.hardwareBrightness] == 50)
+        #expect(rig.settings.pendingRestores(for: tag).isEmpty)
+    }
+
+    @Test("In safe mode nothing is restored")
+    func safeModeRestoresNothing() async {
+        let persistence = MemoryPersistence()
+        let first = Rig(persistence: persistence)
+        first.plug(Fixture.lenovo())
+        await first.start()
+        _ = await first.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        first.coordinator.shutdown()
+
+        let rig = Rig(safeMode: true, persistence: persistence) { $0.global.colorTablesEnabled = true }
+        let ddc = rig.plug(Fixture.lenovo(), ddc: .ddc(brightness: 100))!
+        await rig.start()
+        rig.sequencer.systemWillSleep()
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 30)
+        await rig.idle()
+        #expect(ddc.writes.isEmpty)
+        #expect(rig.colorBackend.writeCount == 0)
+        // The user can still change things by hand.
+        #expect(await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.7), origin: .interface).succeeded)
+    }
+
+    @Test("Hardware brightness set by hand is restored exactly as it was set")
+    func hardwareRestoredExactly() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.03), origin: .interface)
+        #expect(ddc.values[.hardwareBrightness] == 3)
+        ddc.values[.hardwareBrightness] = 100
+        await wake(rig)
+        #expect(ddc.values[.hardwareBrightness] == 3, "the floor is for software dimming only")
+    }
+
+    @Test("Software dimming below the restore floor is lifted when the user comes back after half an hour, not after a short blank")
+    func softwareRestoreFloor() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        // Well into a session.
+        rig.scheduler.advance(by: 120)
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        #expect(rig.controls.trackedValue(.softwareBrightness, for: tag) == 0.25)
+        #expect(rig.controls.softwareRestoreFloor(for: tag).isClose(to: 0.75))
+        let dark = rig.colorBackend.written[Fixture.lenovoID]
+
+        // A reconfiguration in the middle of a session writes the table as it was.
+        rig.colorBackend.systemReset()
+        await rig.reconfigure()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dark)
+
+        // The idle timer blanks the displays and a mouse move brings them back.
+        rig.colorBackend.systemReset()
+        rig.sequencer.systemWillSleep()
+        rig.scheduler.advance(by: 2)
+        await wake(rig)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dark, "dimmed on purpose, and nobody went away")
+
+        // The screen is locked for a minute.
+        rig.bus.publish(.screenLocked)
+        rig.scheduler.advance(by: 60)
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.screenUnlocked)
+        await rig.idle()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dark)
+        #expect(rig.controls.trackedValue(.softwareBrightness, for: tag) == 0.25)
+
+        // Locked for half an hour: someone is coming back to the screen.
+        rig.bus.publish(.screenLocked)
+        rig.scheduler.advance(by: 1800)
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.screenUnlocked)
+        #expect(await eventually { rig.controls.trackedValue(.softwareBrightness, for: tag)?.isClose(to: 0.75) == true })
+        await rig.idle()
+        #expect(rig.controls.trackedValue(.brightness, for: tag)?.isClose(to: 0.15) == true)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] != dark)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] != nil)
+        #expect(ddc.values[.hardwareBrightness] == 0, "the hardware part stays where it was")
+        #expect(rig.controls.isChosen(.brightness, for: tag), "lifting is not the user choosing another value")
+        #expect(rig.scheduler.pendingCount > 0, "the lifted table is written again at the bounded moments like any other")
+    }
+
+    @Test("Displays that were off for half an hour count as a return, and the threshold is a setting")
+    func longDisplaySleepIsAReturn() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        rig.scheduler.advance(by: 120)
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        rig.sequencer.systemWillSleep()
+        rig.scheduler.advance(by: 1800)
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 3.01)
+        #expect(await eventually { rig.controls.trackedValue(.softwareBrightness, for: tag)?.isClose(to: 0.75) == true })
+        await rig.idle()
+
+        // Locked first, then asleep, then awake at the login window, then unlocked: one
+        // absence, counted from the lock.
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        rig.scheduler.advance(by: 120)
+        rig.bus.publish(.screenLocked)
+        rig.scheduler.advance(by: 1700)
+        rig.sequencer.systemWillSleep()
+        rig.scheduler.advance(by: 200)
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 3.01)
+        #expect(await eventually { rig.controls.trackedValue(.softwareBrightness, for: tag)?.isClose(to: 0.75) == true }, "lifted at the login window already")
+        rig.bus.publish(.screenUnlocked)
+        await rig.idle()
+
+        let quick = Rig {
+            $0.global.colorTablesEnabled = true
+            $0.global.awayThreshold = 30
+        }
+        quick.plug(Fixture.lenovo())
+        await quick.start()
+        quick.scheduler.advance(by: 120)
+        _ = await quick.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        quick.bus.publish(.screenLocked)
+        quick.scheduler.advance(by: 31)
+        quick.bus.publish(.screenUnlocked)
+        #expect(await eventually { quick.controls.trackedValue(.softwareBrightness, for: tag)?.isClose(to: 0.75) == true })
+    }
+
+    @Test("The start of the app counts as a return, and so does a display that comes back right after one")
+    func floorAtStartAndOnReturn() async {
+        let persistence = MemoryPersistence()
+        let first = Rig(persistence: persistence) { $0.global.colorTablesEnabled = true }
+        first.plug(Fixture.lenovo())
+        await first.start()
+        first.scheduler.advance(by: 120)
+        _ = await first.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        first.coordinator.shutdown()
+
+        let rig = Rig(persistence: persistence)
+        let ddc = rig.plug(Fixture.lenovo(), ddc: .ddc(brightness: 0))!
+        await rig.start()
+        #expect(await eventually { rig.controls.trackedValue(.softwareBrightness, for: tag)?.isClose(to: 0.75) == true })
+        await rig.idle()
+
+        // Later, in the middle of a session, the monitor drops off and comes back. Its
+        // dimming is written again as it was set.
+        rig.scheduler.advance(by: 120)
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        let dark = rig.colorBackend.written[Fixture.lenovoID]
+        rig.unplug(Fixture.lenovoID)
+        await rig.reconfigure()
+        _ = rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.reconfigure()
+        #expect(await eventually { rig.colorBackend.written[Fixture.lenovoID] == dark })
+        #expect(rig.controls.trackedValue(.softwareBrightness, for: tag) == 0.25)
+
+        // The same drop a few seconds after a wake from a long sleep is part of the return.
+        rig.sequencer.systemWillSleep()
+        rig.scheduler.advance(by: 1800)
+        rig.sequencer.systemDidWake()
+        rig.unplug(Fixture.lenovoID)
+        await rig.reconfigure()
+        rig.scheduler.advance(by: 3.01)
+        await rig.idle()
+        _ = rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.reconfigure()
+        #expect(await eventually { rig.controls.trackedValue(.softwareBrightness, for: tag)?.isClose(to: 0.75) == true })
+    }
+
+    @Test("Software dimming is written again on a display that left and came back")
+    func softwareDimmingAfterReconnect() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        let dimmed = rig.colorBackend.written[Fixture.lenovoID]
+        #expect(dimmed != nil)
+
+        rig.unplug(Fixture.lenovoID)
+        await rig.reconfigure()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
+        ddc.clearWrites()
+        _ = rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.reconfigure()
+        #expect(await eventually { rig.colorBackend.written[Fixture.lenovoID] == dimmed })
+        #expect(ddc.writes.isEmpty, "the monitor itself is only read")
+    }
+
+    @Test("The restore policy can leave brightness alone or restore nothing")
+    func restorePolicy() async {
+        for policy in [RestorePolicy.allButBrightness, .nothing] {
+            let rig = Rig {
+                $0.global.displays.restoreAfterWake = true
+                $0.global.displays.restorePolicy = policy
+            }
+            let ddc = rig.plug(Fixture.lenovo())!
+            await rig.start()
+            _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+            _ = await rig.run(.set, .contrast, on: .tag(1), value: .absolute(0.4))
+            ddc.values = [.hardwareBrightness: 100, .contrast: 90, .volume: 30, .mute: 2, .input: 15]
+            await wake(rig)
+            #expect(ddc.values[.hardwareBrightness] == 100)
+            #expect(ddc.values[.contrast] == (policy == .nothing ? 90 : 40))
+            #expect(rig.controls.trackedValue(.brightness, for: tag) == 1, "what is not put back is taken from the monitor")
+        }
+    }
+
+    @Test("Color tables are written again after the system resets them, and at startup from stored values")
+    func softwareDimmingReapplied() async {
+        let persistence = MemoryPersistence()
+        let rig = Rig(persistence: persistence) { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        // In the software range, and above the restore floor so a restore leaves it alone.
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        let dimmed = rig.colorBackend.written[Fixture.lenovoID]
+        #expect(dimmed != nil)
+
+        rig.colorBackend.systemReset()
+        await rig.reconfigure()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+
+        rig.colorBackend.systemReset()
+        await wake(rig)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+
+        rig.coordinator.shutdown()
+        #expect(rig.colorBackend.clearedAll == 1, "tables are cleared on quit")
+
+        // Software dimming lives in the process, so a restart writes it back.
+        let second = Rig(persistence: persistence)
+        let ddc = second.plug(Fixture.lenovo(), ddc: .ddc(brightness: 0))!
+        await second.start()
+        #expect(await eventually { second.colorBackend.written[Fixture.lenovoID] == dimmed })
+        #expect(ddc.writes(to: .hardwareBrightness).isEmpty, "the hardware value is trusted at startup")
+    }
+
+    @Test("Turning software dimming off returns the table and keeps brightness on the hardware")
+    func softwareDimmingTurnedOff() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.1))
+        rig.settings.update { $0.global.colorTablesEnabled = false }
+        rig.coordinator.reattachAll()
+        await rig.idle()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
+        #expect(rig.controls.composition(for: tag).hasSoftware == false)
+        #expect(rig.controls.trackedValue(.softwareBrightness, for: tag) == nil)
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0, "the hardware part stays where it was, at the monitor's own lowest level")
+        #expect(ddc.values[.hardwareBrightness] == 0)
+    }
+
+    @Test("A color table the system replaces at unlock is written again")
+    func softwareDimmingSurvivesUnlock() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        let dimmed = rig.colorBackend.written[Fixture.lenovoID]
+        #expect(dimmed != nil)
+
+        // Unlocking hands the displays back with the system's own tables.
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.screenUnlocked)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+
+        // The same when another user's session ends and this one returns.
+        rig.bus.publish(.sessionInactive)
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.sessionActive)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+    }
+
+    @Test("The table is written again at a few bounded moments after wake, and then the app is idle again")
+    func lateColorTableReset() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        let dimmed = rig.colorBackend.written[Fixture.lenovoID]
+        await wake(rig)
+        let writesAfterWake = rig.colorBackend.writeCount
+
+        // The app cannot see whether the system took the table away, so it writes at each
+        // of the bounded moments either way.
+        rig.scheduler.advance(by: 1.01)
+        #expect(rig.colorBackend.writeCount == writesAfterWake + 1)
+
+        // The system puts its own table back two seconds after the wake settled, silently.
+        rig.colorBackend.systemReset()
+        rig.scheduler.advance(by: 2.0)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+
+        // After the last moment nothing is left scheduled. A reset after that waits for the
+        // next event or for the panel to open.
+        rig.scheduler.advance(by: 10)
+        await rig.idle()
+        #expect(rig.colorBackend.writeCount == writesAfterWake + 3, "three moments, no more")
+        #expect(rig.scheduler.pendingCount == 0, "nothing repeats")
+        rig.colorBackend.systemReset()
+        rig.scheduler.advance(by: 60)
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
+        rig.coordinator.refreshColorTables()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == dimmed)
+        #expect(rig.scheduler.pendingCount == 0)
+    }
+
+    @Test("No check is scheduled while no color table of ours is in use")
+    func noColorChecksWhenNeutral() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.6))
+        await rig.reconfigure()
+        rig.bus.publish(.screenUnlocked)
+        await rig.idle()
+        #expect(rig.scheduler.pendingCount == 0)
+        #expect(rig.colorBackend.writeCount == 0)
+    }
+
+    @Test("In safe mode a replaced color table is left alone")
+    func safeModeLeavesColorTables() async {
+        let rig = Rig(safeMode: true) { $0.global.colorTablesEnabled = true }
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.18))
+        #expect(rig.colorBackend.written[Fixture.lenovoID] != nil, "a change made by hand still works")
+        let pending = rig.scheduler.pendingCount
+        rig.colorBackend.systemReset()
+        rig.bus.publish(.screenUnlocked)
+        rig.coordinator.refreshColorTables()
+        #expect(rig.colorBackend.written[Fixture.lenovoID] == nil)
+        #expect(rig.scheduler.pendingCount == pending, "and no check is scheduled")
+    }
+
+    @Test("The software part of a brightness change goes out before the command to the monitor")
+    func softwarePartFirst() async {
+        let rig = Rig { $0.global.colorTablesEnabled = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        let order = OrderLog()
+        ddc.onWrite = { control in if control == .hardwareBrightness { order.add("monitor") } }
+        rig.colorBackend.onWrite = { order.add("table") }
+
+        // From the middle of the hardware range to the bottom of the scale in one move.
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.05), origin: .interface)
+        #expect(order.all == ["table", "monitor"])
+    }
+
+    @Test("Values reported during a wake transition are not trusted")
+    func darkWakeGuard() async {
+        let rig = Rig()
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        rig.sequencer.systemWillSleep()
+        rig.controls.track(.hardwareBrightness, value: 0, for: tag, origin: .outsideChange)
+        #expect(rig.controls.trackedValue(.hardwareBrightness, for: tag) == 0.75)
+        rig.sequencer.systemDidWake()
+        rig.controls.track(.hardwareBrightness, value: 0, for: tag, origin: .outsideChange)
+        #expect(rig.controls.trackedValue(.hardwareBrightness, for: tag) == 0.75)
+        rig.scheduler.advance(by: 3.1)
+        await rig.idle()
+        rig.controls.track(.hardwareBrightness, value: 0.2, for: tag, origin: .outsideChange)
+        #expect(rig.controls.trackedValue(.hardwareBrightness, for: tag) == 0.2)
+    }
+
+    @Test("Only value restore is implemented, and the stage order is fixed")
+    func stageOrder() async {
+        #expect(RestoreStageID.allCases == [.linkRecovery, .configurationRestore, .valueRestore, .protection, .groupLayout])
+
+        @MainActor final class Recorder: RestoreStage {
+            let id: RestoreStageID
+            var runs: [RestoreTrigger] = []
+            init(_ id: RestoreStageID) { self.id = id }
+            func run(for tag: DisplayTag, trigger: RestoreTrigger) async { runs.append(trigger) }
+        }
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        let before = Recorder(.linkRecovery)
+        rig.reconciler.register(before)
+        await rig.start()
+        #expect(before.runs == [.startup])
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        ddc.values[.hardwareBrightness] = 100
+        ddc.clearWrites()
+        await rig.reconciler.restoreAll(trigger: .wake)
+        #expect(before.runs == [.startup, .wake])
+        #expect(!ddc.writes.isEmpty)
+    }
+
+    @Test("Controllers are dropped when a display goes away and rebuilt when its system ID changes")
+    func controllerLifecycle() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        #expect(rig.events.contains(.displayAdded(tag)))
+        #expect(rig.events.contains(.controllersReady(tag)))
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.detected?[.hardwareBrightness] != nil, "capabilities are cached for a warm start")
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.detectionOutcome == .working)
+
+        // The same monitor under a new system display ID.
+        rig.unplug(Fixture.lenovoID)
+        let rebound = rig.plug(Fixture.lenovo(id: SystemDisplayID(50)))!
+        await rig.reconfigure()
+        #expect(await eventually { ddc.isInvalidated })
+        #expect(rig.registry.live[tag]?.systemID == SystemDisplayID(50))
+        #expect(!rig.events.contains(.displayRemoved(tag)))
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.25))
+        #expect(rebound.values[.hardwareBrightness] == 25)
+
+        rig.unplug(SystemDisplayID(50))
+        await rig.reconfigure()
+        #expect(await eventually { rebound.isInvalidated })
+        #expect(rig.events.contains(.displayRemoved(tag)))
+    }
+}
+
+@Suite("Monitors in standby")
+@MainActor
+struct StandbyTests {
+    let tag = DisplayTag(1)
+
+    @Test("A monitor that is silent in standby keeps its known controls and is probed again after wake")
+    func knownMonitorSilentInStandby() async {
+        let persistence = MemoryPersistence()
+        let first = Rig(persistence: persistence)
+        first.plug(Fixture.lenovo())
+        await first.start()
+        _ = await first.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        first.coordinator.shutdown()
+
+        // The app starts while the monitor sleeps and answers nothing.
+        let rig = Rig(persistence: persistence)
+        let ddc = rig.plug(Fixture.lenovo(), ddc: .ddc(brightness: 100))!
+        ddc.outcome = .unsupported
+        ddc.failReads = true
+        let asleepCapabilities = ddc.capabilities
+        ddc.capabilities = [:]
+        rig.sequencer.systemWillSleep()
+        await rig.start()
+        #expect(rig.registry.live[tag]?.needsRedetection == true)
+        #expect(rig.engine.availability(of: .brightness, for: tag) == .available(.ddc), "what was learned before is kept")
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.detectionOutcome == .working)
+        #expect(ddc.writes.isEmpty)
+
+        // The monitor wakes and answers again.
+        ddc.outcome = .working
+        ddc.failReads = false
+        ddc.capabilities = asleepCapabilities
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 3.1)
+        await rig.idle()
+        #expect(rig.registry.live[tag]?.needsRedetection == false)
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 1, "the monitor's own value is taken once it answers")
+        #expect(ddc.writes.isEmpty)
+    }
+
+    @Test("A monitor first seen in standby becomes available after wake")
+    func newMonitorSilentInStandby() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        let awakeCapabilities = ddc.capabilities
+        ddc.outcome = .unsupported
+        ddc.capabilities = [:]
+        ddc.failReads = true
+        rig.sequencer.systemWillSleep()
+        await rig.start()
+        #expect(rig.engine.availability(of: .brightness, for: tag) == .unavailable("The monitor did not answer DDC on this connection."))
+
+        ddc.outcome = .working
+        ddc.capabilities = awakeCapabilities
+        ddc.failReads = false
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 3.1)
+        await rig.idle()
+        #expect(rig.engine.availability(of: .brightness, for: tag) == .available(.ddc))
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.75)
+    }
+
+    @Test("A control that goes unanswered in one check is kept, and one the monitor says it lacks is removed")
+    func unansweredControlIsKept() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .contrast, on: .tag(1), value: .absolute(0.6))
+        #expect(ddc.values[.contrast] == 60)
+
+        // The monitor leaves and returns. On the busy channel two questions get no reply.
+        rig.unplug(Fixture.lenovo().systemID)
+        await rig.reconfigure()
+        ddc.unanswered = [.contrast, .mute]
+        ddc.values[.contrast] = 90
+        ddc.clearWrites()
+        _ = rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.reconfigure()
+        #expect(rig.engine.availability(of: .contrast, for: tag) == .available(.ddc), "what was learned before is kept")
+        #expect(rig.registry.live[tag]?.capabilities[.ddc]?[.mute] != nil)
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.detected?[.contrast] != nil, "and stays stored")
+        #expect(await eventually { ddc.writes(to: .contrast) == [60] }, "a chosen value on a kept control is still put back")
+
+        // A later check gets an answer for every code, and the monitor has no mute.
+        ddc.unanswered = []
+        ddc.capabilities[.mute] = nil
+        rig.coordinator.redetect(tag)
+        await rig.idle()
+        #expect(rig.engine.availability(of: .contrast, for: tag) == .available(.ddc))
+        // Mute itself stays on offer, through the volume. The monitor's own control is gone.
+        #expect(rig.registry.live[tag]?.capabilities[.ddc]?[.mute] == nil, "only the monitor's own no removes a control")
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.detected?[.mute] == nil)
+    }
+
+    @Test("A control never seen before is not invented by a missing reply")
+    func unansweredControlNeverLearned() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        ddc.unanswered = [.contrast]
+        await rig.start()
+        #expect(!rig.engine.availability(of: .contrast, for: tag).isAvailable)
+        #expect(rig.engine.availability(of: .brightness, for: tag) == .available(.ddc))
+    }
+
+    @Test("Opening the panel probes a silent monitor again, but not more than once a minute")
+    func redetectOnDemand() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        let capabilities = ddc.capabilities
+        ddc.outcome = .unsupported
+        ddc.capabilities = [:]
+        await rig.start()
+        ddc.outcome = .working
+        ddc.capabilities = capabilities
+
+        rig.coordinator.redetectStale()
+        await rig.idle()
+        #expect(!rig.engine.availability(of: .brightness, for: tag).isAvailable, "too soon after the last probe")
+        rig.scheduler.advance(by: 61)
+        rig.coordinator.redetectStale()
+        await rig.idle()
+        #expect(rig.engine.availability(of: .brightness, for: tag).isAvailable)
+    }
+}
+
+@Suite("What gets restored")
+@MainActor
+struct RestoreChoiceTests {
+    let tag = DisplayTag(1)
+
+    private func wake(_ rig: Rig) async {
+        rig.sequencer.systemWillSleep()
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: rig.settings.document.wakeSettleDelay + 0.01)
+        await rig.idle()
+    }
+
+    @Test("Values that were only read from the monitor are never written back, even with restore after wake on")
+    func readValuesAreNotRestored() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.75)
+        #expect(!rig.controls.isChosen(.brightness, for: tag))
+        // Someone turns the monitor down with its own buttons, or with another tool.
+        ddc.values[.hardwareBrightness] = 40
+        ddc.values[.volume] = 5
+        await wake(rig)
+        #expect(ddc.writes.isEmpty)
+        #expect(ddc.values[.hardwareBrightness] == 40)
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.4, "the app follows the monitor")
+    }
+
+    @Test("Only the controls the user set through the app are restored")
+    func onlyChosenControlsAreRestored() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5), origin: .interface)
+        #expect(rig.controls.isChosen(.brightness, for: tag))
+        ddc.values = [.hardwareBrightness: 100, .contrast: 20, .volume: 90, .mute: 2, .input: 15]
+        ddc.clearWrites()
+        await wake(rig)
+        #expect(ddc.values[.hardwareBrightness] == 50)
+        #expect(ddc.values[.contrast] == 20, "contrast was never set through the app")
+        #expect(ddc.values[.volume] == 90)
+    }
+
+    @Test("A change seen on the monitor ends the restore of that control")
+    func outsideChangeEndsChoice() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        ddc.values[.hardwareBrightness] = 30
+        // The panel opens and reads the monitor.
+        _ = await rig.run(.get, .brightness, on: .tag(1), options: CommandOptions(refresh: true))
+        #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.3)
+        #expect(!rig.controls.isChosen(.brightness, for: tag))
+        ddc.clearWrites()
+        await wake(rig)
+        #expect(ddc.writes.isEmpty)
+        #expect(ddc.values[.hardwareBrightness] == 30)
+    }
+
+    @Test("A restore that failed and was retried is still the user's choice afterwards")
+    func choiceSurvivesAFailedRestore() async {
+        let rig = Rig { $0.global.displays.restoreAfterWake = true }
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        ddc.values[.hardwareBrightness] = 100
+        ddc.ignoreWrites = true
+        await wake(rig)
+        ddc.ignoreWrites = false
+        rig.scheduler.advance(by: 2.1)
+        #expect(await eventually { ddc.values[.hardwareBrightness] == 50 })
+        await rig.idle()
+        #expect(rig.controls.isChosen(.brightness, for: tag))
+        ddc.values[.hardwareBrightness] = 100
+        await wake(rig)
+        #expect(ddc.values[.hardwareBrightness] == 50)
+    }
+
+    @Test("At start the monitor is read as after wake, unless the controller's startup policy says otherwise")
+    func startFollowsTheSameRule() async {
+        /// Sets 50% through the app, quits, and starts again with the monitor at another level.
+        func restart(restore: Bool = false, policy: StartupPolicy? = nil, monitorAt level: Double) async -> (rig: Rig, ddc: FakeController) {
+            let persistence = MemoryPersistence()
+            let first = Rig(persistence: persistence) { $0.global.displays.restoreAfterWake = restore }
+            first.plug(Fixture.lenovo())
+            await first.start()
+            _ = await first.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+            if let policy {
+                first.settings.updateRecord(DisplayTag(1)) { $0.controllers[.ddc, default: ControllerSettings()].startupPolicy = policy }
+            }
+            first.coordinator.shutdown()
+            let rig = Rig(persistence: persistence)
+            let ddc = rig.plug(Fixture.lenovo(), ddc: .ddc(brightness: level))!
+            await rig.start()
+            return (rig, ddc)
+        }
+
+        let kept = await restart(monitorAt: 50)
+        #expect(kept.rig.controls.trackedValue(.brightness, for: tag) == 0.5)
+        #expect(kept.rig.controls.isChosen(.brightness, for: tag), "a monitor that kept the value leaves the choice standing")
+        #expect(kept.ddc.writes.isEmpty)
+
+        let changed = await restart(monitorAt: 90)
+        #expect(changed.rig.controls.trackedValue(.brightness, for: tag) == 0.9, "the monitor's word is taken")
+        #expect(!changed.rig.controls.isChosen(.brightness, for: tag))
+        #expect(changed.ddc.writes.isEmpty)
+
+        let restored = await restart(restore: true, monitorAt: 90)
+        #expect(await eventually { restored.ddc.values[.hardwareBrightness] == 50 }, "a monitor that forgets gets the chosen value back at start too")
+
+        let trusted = await restart(policy: .trustStored, monitorAt: 90)
+        #expect(trusted.rig.controls.trackedValue(.brightness, for: tag) == 0.5)
+        #expect(trusted.ddc.writes.isEmpty)
+
+        let written = await restart(policy: .writeStored, monitorAt: 90)
+        #expect(await eventually { written.ddc.values[.hardwareBrightness] == 50 })
+    }
+
+    @Test("Forgetting stored values also forgets which ones were chosen")
+    func clearValuesClearsChoices() async {
+        let rig = Rig()
+        rig.plug(Fixture.lenovo())
+        await rig.start()
+        _ = await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.2))
+        rig.registry.clearValues(tag)
+        #expect(rig.settings.recordSettings(tag).chosen.isEmpty)
+    }
+}
+
+@Suite("Monitors that are not ready when they connect")
+@MainActor
+struct ReadinessTests {
+    let tag = DisplayTag(1)
+
+    @Test("A monitor that is silent right after it connects is asked again a few seconds later")
+    func askedAgainAfterConnect() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        let capabilities = ddc.capabilities
+        ddc.outcome = .unsupported
+        ddc.capabilities = [:]
+        await rig.start()
+        #expect(!rig.engine.availability(of: .brightness, for: tag).isAvailable)
+
+        // It finishes waking up, and nobody opens the panel.
+        ddc.outcome = .working
+        ddc.capabilities = capabilities
+        rig.scheduler.advance(by: 3.1)
+        await rig.idle()
+        #expect(rig.engine.availability(of: .brightness, for: tag) == .available(.ddc))
+        #expect(rig.registry.live[tag]?.needsRedetection == false)
+    }
+
+    @Test("Asking again is bounded, so a monitor without DDC is left alone after two more tries")
+    func boundedRedetection() async {
+        let rig = Rig()
+        let silent = FakeController(kind: .ddc, capabilities: [:], values: [:], outcome: .unsupported)
+        rig.plug(Fixture.lenovo(), ddc: silent)
+        await rig.start()
+        var probes = 0
+        rig.bus.subscribe { event in
+            if event == .controllersReady(DisplayTag(1)) { probes += 1 }
+        }
+        for _ in 0..<6 {
+            rig.scheduler.advance(by: 60)
+            await rig.idle()
+        }
+        #expect(probes == 2, "one after 3 seconds, one after 10, then nothing")
+    }
+
+    @Test("Nothing is asked again while the displays are asleep")
+    func notWhileAsleep() async {
+        let rig = Rig()
+        let silent = FakeController(kind: .ddc, capabilities: [:], values: [:], outcome: .unsupported)
+        rig.plug(Fixture.lenovo(), ddc: silent)
+        rig.sequencer.systemWillSleep()
+        await rig.start()
+        var probes = 0
+        rig.bus.subscribe { event in
+            if event == .controllersReady(DisplayTag(1)) { probes += 1 }
+        }
+        rig.scheduler.advance(by: 600)
+        await rig.idle()
+        #expect(probes == 0)
+    }
+}

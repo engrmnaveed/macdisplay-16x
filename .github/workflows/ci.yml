@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build, test and package
+    # An Apple silicon runner. The project targets Apple silicon only.
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          uname -m
+          sw_vers
+          swift --version
+
+      - name: No real device identifiers
+        run: scripts/check-identifiers.sh
+
+      - name: Build
+        run: swift build
+
+      - name: Unit tests
+        run: swift test
+
+      - name: Package the app and the command line tool
+        run: scripts/package-macos.sh
+
+      - name: Smoke test of the package
+        timeout-minutes: 3
+        run: scripts/smoke-test.sh
+
+      # What a Mac with no monitor of its own reports. Read-only, and useful when a
+      # macOS release changes an interface the app resolves at run time.
+      - name: Hardware report on the runner
+        timeout-minutes: 3
+        run: dist/display16x probe
