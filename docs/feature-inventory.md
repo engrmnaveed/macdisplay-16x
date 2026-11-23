@@ -271,7 +271,7 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | Re-disconnect after wake | Disconnects displays macOS brought back on wake | Later | reconciler |
 | Aggressive disconnect | Retries for displays that do not stay off | Later | reconciler |
 | Lid awareness | Skips built-in rules with the lid closed | v0.2 | event bus (lid); connection policy |
-| Redetect displays | Asks the system to scan for displays again | v0.2 | DisplaySystem adapters |
+| Redetect displays | Asks the system to scan for displays again | Later | DisplaySystem adapters |
 | Reset display link | Re-establishes an external connection | Later | reserved services: link reset |
 | Link reset on wake or unlock | Runs the reset automatically after those events | Later | wake pipeline: link recovery stage (reserved) |
 | Adapter reset | Resets a common DisplayPort-to-HDMI converter chip | Later | reserved services: link reset |
@@ -455,7 +455,7 @@ A core hook of `gap` marks a capability the architecture does not cover. The fir
 | Running-app requirement | Talks to the app over a socket with a timeout | v0.2 | CLI and IPC |
 | Integration switch | Turns external command access on or off | v0.2 | settings scopes |
 | URL scheme | Runs commands from links with a token and callbacks | v0.2 | command engine |
-| Shortcuts actions | Brightness, mode, input, main, connection and mirror actions | v0.2 | command engine |
+| Shortcuts actions | Brightness, mode, input, main, connection and mirror actions | Later | command engine |
 | Presets | Saved setups applied with one click or shortcut | v0.2 | command engine: presets (reserved) |
 | HTTP server | Accepts commands over local network HTTP with a token | Later | command engine: further surfaces (reserved) |
 | Lifecycle broadcasts | Announces app launch and orderly quit | Later | event bus |

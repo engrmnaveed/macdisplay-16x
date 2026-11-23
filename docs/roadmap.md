@@ -29,10 +29,10 @@ Licenses were read from the GitHub API on 22 November 2026. Credit any MIT sourc
 | Software dimming | Scale the display's gamma table | Public Core Graphics | Verified while awake and across a lock and unlock, where the app writes the table again. Not checked with a custom color profile | None after the table is set | v0.1, off by default |
 | Brightness and volume keys, on-screen indicator | Event tap for media keys (needs Accessibility permission) and a small indicator window | Public | Verified with Accessibility granted | Negligible | v0.1 |
 | Rotation | Display preferences class of the MonitorPanel framework | Private | Verified once through the timed revert on one monitor | None | v0.1 |
-| Arrangement, main display, mirroring | Configuration transaction | Public Core Graphics | Not yet probed | None | v0.2 |
-| Disconnect and reconnect a display | Window server enable flag | Private SkyLight | Present | None | v0.2 |
-| Configuration restore | Reapply saved state on reconfiguration and wake events | Public | Not yet probed | Event-driven | v0.2 |
-| Presets, shortcuts, CLI, Shortcuts actions | Own code, App Intents | Public | — | None | v0.2 |
+| Arrangement, main display, mirroring | Configuration transaction | Public Core Graphics | Built and unit-tested. No write has run on hardware yet | None | v0.2 |
+| Disconnect and reconnect a display | Window server enable flag | Private SkyLight | Built and unit-tested. No write has run on hardware yet | None | v0.2 |
+| Configuration restore | Reapply saved state on reconfiguration and wake events | Public | Built and unit-tested, off by default. Not yet seen across a wake | Event-driven | v0.2 |
+| Presets, shortcuts, CLI, Shortcuts actions | Own code, App Intents | Public | Presets, custom shortcuts, CLI verbs and the link scheme are built. Shortcuts actions are left out: their metadata step ships with Xcode only | None | v0.2 |
 | Flexible HiDPI scaling, custom resolutions | Display override files per vendor and model with a generated resolution list. Needs administrator authorization and a reconnect | System file format | macOS ships 39 vendor override folders. Writing our own is not yet probed on macOS 27 | None after install | v0.3 |
 | Virtual screens | Virtual display objects owned by the app | Private Core Graphics | Present | None while unused. Mirroring one to a panel adds a full-frame composite per refresh | v0.3 |
 | HDR switching | Window server HDR flag | Private SkyLight | Present. One test monitor reports HDR support | None | v0.4 |
@@ -82,7 +82,7 @@ One small probe per risky mechanism, each recording Mac model, macOS build, moni
 - [ ] Display override install, activation and removal on macOS 27
 - [ ] Virtual display create and destroy
 - [ ] Disconnect and reconnect, HDR switch
-- [ ] Built-in display brightness on a MacBook
+- [ ] Built-in display brightness on a MacBook. The test Mac is one, running with its lid closed, so this can be checked by opening the lid with the owner present
 - [ ] All of the above on a MacBook Air M1
 
 ### v0.1 Core
@@ -118,7 +118,7 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 
 The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
 
-**Status on 23 November 2026.** Built on the branch `claude/bold-galileo-63f5e0`, not pushed and not merged. From a clean checkout the version check, the unit tests, packaging, the archive, the smoke test and the rendered cask all pass, and the archive's signature still verifies after Homebrew's way of unpacking it. The tag-triggered workflow has never run, because that needs a published tag. No tag, release, secret or GitHub setting exists yet. Those are the owner's steps, listed in the branch's `docs/release.md`.
+**Status on 23 November 2026.** Merged into `main` as pull request 3. CI now runs the version check, the archive with an unpack-and-verify step, the cask style check on all three signing levels, and the comparison of the private interfaces with and without the hardened runtime, and all of it passed on the GitHub runner. The tag-triggered workflow has never run, because that needs a published tag. Before the first tag the owner has four steps, listed in [release.md](release.md): create the project certificate and back it up, add its three secrets to the `release-signing` environment, add the tap's deploy key to the `release` environment, and then tag `v0.1.0`. Both environments exist since 23 November, limited to `v*` tags, with the owner as required reviewer on `release` and no secrets yet. The other one-time settings are in place too: `main` accepts changes only through a pull request with the CI check passing, `v*` tags can be created, moved or deleted only by a repository admin, published releases are immutable, and private vulnerability reporting is on. With the first two releases the owner checks that the Accessibility permission survives an update.
 
 ### Interface pass
 
@@ -147,6 +147,13 @@ Built in this order, on the hooks the core reserved:
 Every change to arrangement, mirroring, the main display or a connection is reversible: the layout before the change is recorded in the recovery store, and an interactive change gets Keep and Revert like a mode change.
 
 Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
+
+**Status on 23 November 2026.** All five stages are built on the branch `claude/v0-2-layout-14c08e`, with 309 unit tests passing, not pushed. Nothing in v0.2 has written to hardware. Fifteen checks wait for the owner at the desk, listed in order in the branch's feasibility notes: the layout writes one by one, each put back, then the same through the CLI and the panel, a saved layout across a wake, a preset from a shortcut, the budgets, and the lid.
+
+Left out of v0.2, both moved to Later in the inventory:
+
+- **Shortcuts actions.** The step that produces what the Shortcuts app reads ships with Xcode only. The CLI and the link scheme reach every feature from a shortcut in the meantime. See decision 15.
+- **Asking macOS to look for displays again.** The private call exists, and no permitted reference documents its arguments.
 
 ### v0.3 Advanced scaling
 
@@ -190,6 +197,8 @@ Raised by build work in the [domain log](domain-log.md). The maintainer decides.
 | 7 | One rotation test on the owner's desk | Done with the owner present: 90° on one monitor, left unanswered, back on its own after 15 seconds, arrangement unchanged. |
 | 9 | A DDC run with no other display utility running | Done. Results were identical. Idle utilities cost no replies. A program that is reading at that moment does. |
 | 12 | The signing identity for releases | One project certificate, kept as a release secret. Two builds signed with it have the identical signing requirement, so the Accessibility grant and Homebrew's first-launch approval should carry across updates. Users allow the first launch by hand once. The certificate is made to last many years, backed up by the owner, and never created again, because replacing it costs every user the grant once. A Developer ID with notarization replaces it when the Apple Developer Program membership is there, and that switch costs the grant once too. |
+| 13 | Whether layout protection switches itself on | It stays off. The app offers the switch at the moment the user arranges displays through it. macOS already puts the arrangement back by itself after a cable change. |
+| 14 | Safe mode when no display is left in use | When the last display in use goes away while the app holds others disconnected, the app reconnects them at once, in safe mode too. Without a picture nobody can act, and it only undoes the app's own change. |
 
 The rules are written out in the [core architecture](core-architecture.md), sections 5 and 7.
 
@@ -200,3 +209,12 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 5 | Labels for vendor-specific input values | Shown by number, the user can rename | Keep numbers. Add a table of confirmed labels later, from hardware reports | Later |
 | 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac, separate from the project certificate, whose key stays with the owner and the release secrets | Next development round |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
+| 15 | Shortcuts actions | Left out, because the Command Line Tools cannot produce their metadata | Leave them out for now. Revisit at the public release: building releases with Xcode on CI would bring them back and would end "builds with the Command Line Tools alone" for releases only | Public release |
+
+### Core changes waiting for the core session
+
+Changes to what v0.1 built are made by the session that built it, on the line of development current at the time.
+
+| Change | Why | Lands on | Status |
+| --- | --- | --- | --- |
+| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Approved by planning. To be sent together with whatever the v0.2 hardware checks turn up |
