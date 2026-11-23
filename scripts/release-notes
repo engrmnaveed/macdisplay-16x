@@ -1,0 +1,40 @@
+#!/bin/sh
+# Prints the GitHub release notes for VERSION: its CHANGELOG.md section, then the text
+# every release carries. Without a section, it warns and prints only the standard text.
+#
+#   scripts/release-notes VERSION [SIGNING]
+#
+# SIGNING is how the app was signed: developer-id, certificate or adhoc (the default).
+# The release workflow passes the level it signed with.
+set -eu
+
+version=${1:?usage: scripts/release-notes VERSION [developer-id|certificate|adhoc]}
+signing=${2:-adhoc}
+root=$(cd "$(dirname "$0")/.." && pwd)
+
+case "$signing" in
+    developer-id)
+        signed="The app is signed with a Developer ID and notarized by Apple, so it opens normally, and the Accessibility permission for the brightness and volume keys carries over to later versions." ;;
+    certificate)
+        signed="The app is signed with the project's own certificate and is not notarized by Apple, so macOS asks you to allow the first launch once. The signature stays the same from release to release, so the Accessibility permission for the brightness and volume keys carries over to later versions, and Homebrew upgrades keep the first-launch approval." ;;
+    adhoc)
+        signed="The app is ad hoc signed and not notarized by Apple, so macOS asks you to allow the first launch, and after every update the Accessibility permission for the brightness and volume keys has to be given again." ;;
+    *)
+        echo "scripts/release-notes: SIGNING is developer-id, certificate or adhoc" >&2
+        exit 1 ;;
+esac
+
+section=$(awk -v heading="## $version" '
+  $0 == heading { found = 1; next }
+  found && /^## / { exit }
+  found { print }
+' "$root/CHANGELOG.md" | sed '/./,$!d')
+
+if [ -n "$section" ]; then
+  printf '%s\n\n---\n\n' "$section"
+else
+  echo "scripts/release-notes: CHANGELOG.md has no section for $version" >&2
+fi
+cat <<TEXT
+Display 16X for Apple silicon Macs with macOS 14 or later: display16x-$version-macos-arm64.zip holds the menu bar app with the display16x command inside it, with a SHA-256 file and a GitHub build-provenance attestation. $signed Install it with Homebrew from the engrmnaveed/tap tap, or download the ZIP. See docs/install.md for installation, verification, the first launch, the Accessibility permission and removal.
+TEXT
