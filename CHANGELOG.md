@@ -8,7 +8,8 @@ A designed interface, from the interface pass. Every surface was rebuilt on one 
 - Scenes, the saved setups that were called presets in the panel, are on top of the panel, one press each, with their shortcut next to the name.
 - Keep or Revert says what changed ("Keep 2560 × 1440?"), what it goes back to, and how long is left, in the card and in the window on the display.
 - One level down, a display has a page of its own that takes the panel's place: refresh rate, rotation, contrast, where brightness comes from, what the display does not offer and why, its place on the desk, and its options. The panel no longer grows with what is opened, and it scrolls instead of running off a small screen.
-- A value says what is known about it: read back from the display, or only sent, as with software dimming.
+- A value says how it is known: read back from the display, only sent, as with software dimming, or not known, as just after a wake before the monitor has answered. A card marks the last two, and a display's page says it in words.
+- A card says how the display is connected (HDMI, USB-C, Thunderbolt, built-in), named after the Mac's own port, next to its size in inches.
 - Arrange shows the desk to scale with the displays named, and a display can also be placed left, right, above or below another without the pointer.
 - A settings window holds what applies to the whole app: opening at login, the keys, software dimming, scenes, shortcuts, the command line and links, the settings file, and About.
 - What needs you is at the top and looks the part: a missing Accessibility permission with its steps, safe mode, a change that failed, the shortcut recorder waiting for keys. The menu bar icon shows a dot when something waits for you and is drawn dashed in safe mode.

@@ -23,6 +23,13 @@ Every surface is rebuilt on that and drawn from sample data. The owner has not a
 - **Not changed, and still open:** the floating Keep windows do not take the keyboard (decision asked for in the entry below). Whether the switch for turning the built-in display off is shown at all is roadmap decision 16; it is where it was, under Arrange.
 - **To check on screen in stage 5:** the popover's arrow keeps the system's material while the panel has the skin's canvas. VoiceOver pressing the pop-ups, which are the system's menus under a drawn label.
 
+Update, 23 November, after the core's two facts were merged, and after the owner approved the rebuilt surfaces:
+
+- **The owner approved the rebuilt surfaces** from the renders. What renders cannot show (the popover's own frame, real blur, motion, the feel of the bars) is still to be seen on screen.
+- **How a value is known comes from the core now**, and the panel no longer works it out. All three states are shown. A value that was read back is unmarked on a card and has a check on the display's page. "Sent" and "not known" are a small tag on the card, and on the page the row reads "Display 16X sent" or "Remembered, not confirmed since".
+- **The card's line is size, connection, role**: "32-inch · HDMI · Main display". A connection macOS does not report leaves no word. The display's page lists "The Mac's port" and the size.
+- **Protection notices are shown as the core writes them.** The interface's own capitalising is gone.
+
 ## 23 November 2026 · Interface pass, stage 1: what every surface shows when it is drawn from sample data
 
 Every surface of the app was drawn off screen from made-up monitors, in light and dark, through the app's own panel models. No display was touched and the copy in daily use was left alone. What the pictures and the accessibility trees show about the product:
