@@ -936,12 +936,37 @@ The hardware report gained a read-only HDR and color section, which sends nothin
 
 **A link color mode change was not prepared**: no interface with a known shape can choose one, and a guessed call on the owner's monitor is not a check worth its risk. Reference presets need an Apple display.
 
+### Where v0.4 stands at the end of 24 November
+
+All five stages are built on the branch, with 495 unit tests passing. The packaged build's version check, archive and signature check, and the comparison of private interfaces under the hardened runtime pass locally. The smoke test and the full hardware report send DDC reads and were left to CI, because the owner's copy was running.
+
+- **Proven on hardware, by probes with the owner at the desk:** HDR on and off on the LG through System Settings' switch, a profile assigned and taken off through ColorSync, Night Shift on and off.
+- **Read on hardware through the app's own code** (`display16x probe --color`): HDR state, headroom, factory and custom profiles, the link's color modes in macOS's order, the rates the mode list leaves out, dithering, Night Shift and True Tone.
+- **Unit-tested only:** everything the app does by itself with these features.
+- **Not working by design until the core changes:** brightness above SDR white, which needs the pipeline to write a value above white (see the domain log).
+
+Checks for a later round, in this order, each with the owner at the desk:
+
+1. Make this build the running copy, then `display16x status` and `display16x probe --color`, and measure the idle budget again for ten minutes with every v0.4 switch off and then with HDR controls on.
+2. HDR on the LG from its page: the Keep window on the LG, Keep. Again, and let it revert on its own. Then `display16x hdr on --tag 2 --try` and `display16x keep --tag 2`.
+3. Quit during the countdown: HDR goes back off.
+4. Night Shift on, Night Shift off in HDR switched on, HDR on: Night Shift goes off. HDR off: it comes back. HDR on again and quit: it comes back.
+5. Protect HDR on, HDR switched off in System Settings: put back with a notice.
+6. A profile from the LG's page with Keep. The panel says dimming pauses, and `display16x status` says color tables are blocked. Revert.
+7. A profile for HDR (`display16x color hdr-profile "ITU-R BT.2020" --tag 2`), then HDR on and off: the profile follows.
+8. Protect the profile, change it in System Settings, then any reconfiguration or a wake: put back.
+9. Hardware brightness in HDR off: the brightness keys on the LG in HDR leave its backlight alone and the Lenovo still changes.
+10. `spikes/virtual-hdr-write-probe.swift run --yes`, carried forward from the spikes, then `display16x virtual create Studio 2560x1440 hdr=on connect`.
+11. `spikes/gamma-table-write-probe.swift` on the LG with HDR on and a top value of 1.5: whether a table value above white brightens anything. This decides the request to the core session.
+12. A wake of ten minutes or more with HDR protected and the HDR profile set.
+13. With an Apple display, or the MacBook's lid open: reference presets, True Tone off in HDR, and what direct XDR upscaling would drive.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:
 
 ```sh
-swift run display16x probe                  # add --capabilities or --modes for more
+swift run display16x probe                  # add --capabilities or --modes for more, or --color for HDR and color only
 ```
 
 The standalone probes in [`spikes/`](../spikes):

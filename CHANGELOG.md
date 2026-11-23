@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+HDR and color: switch HDR on the displays that have it, choose color profiles with one to fall back to and one for HDR, see how each display's link carries the picture, and keep Night Shift out of the way in HDR. Every feature here is off until you turn it on, in Settings under Advanced or with `display16x set hdrControls on`, `profileControls on`, `nightShiftInHDR on` and `upscaling on`, and each says what it costs next to its switch. Until then Display 16X does what 0.3.0 did.
+
+### HDR
+
+- Switch HDR from a display's page or with `display16x hdr on --tag 2`, through the same switch System Settings uses. From the panel, and from the command line with `--try`, a small window asks Keep or Revert and switches back on its own when nobody answers. A switch still waiting when the app quits is undone, and one a crash left is undone at the next start.
+- `display16x hdr headroom --tag 2` says how far above SDR white the display can show, now and at most, and what sets the level of ordinary windows in HDR.
+- Protect HDR: the app puts it back after a wake, a reconnect and a change made elsewhere, and stops after three tries in two minutes, saying so.
+- Night Shift and True Tone can go off while a display shows HDR, and come back on afterwards. Only what was on is turned off, only what the app turned off is turned back on, and it is given back when the app quits or, after a crash, when it starts again.
+- Hardware brightness in HDR is a switch per display. Turned off, brightness leaves a monitor's backlight alone while HDR is on and says why.
+- A virtual screen can offer HDR modes next to its SDR ones, or only HDR: `display16x virtual create Studio 2560x1440 hdr=on connect`.
+
+### Color profiles and presets
+
+- Choose a display's color profile from its page or with `display16x color profile "Display P3" --tag 2`, or give it back its own with `factory`. From the panel it asks Keep or Revert. `display16x color profiles` lists every display profile installed.
+- Choose a profile for HDR as well, and it goes on when HDR switches on and comes off when it switches off, whoever switched it.
+- Name profiles to fall back to when the chosen one goes missing; the monitor's own comes last. Protect the profile and the app puts it back, through the fallback if it must.
+- While a profile of your own is assigned, software dimming pauses on every display, and the panel says so.
+- Reference presets of Apple's own displays can be chosen by name. None was on the test desk.
+
+### The link
+
+- `display16x color modes --tag 2` lists the ways the link can carry the picture, by depth, encoding, range and transfer, in macOS's own order. `display16x color rates --tag 1` lists refresh rates the link offers that macOS leaves out of the mode list, such as 24 and 25 Hz at 4K. `display16x color dithering --tag 1` says whether the GPU dithers. macOS offers no documented way to choose any of these, so the app shows them and does not change them.
+- `display16x probe --color` adds HDR and color to the hardware report, without sending anything to a monitor.
+
+### Brightness above SDR white
+
+- With HDR on, a display could go brighter than SDR white, from its page, with `display16x set upscale 50% --tag 2`, or with the brightness keys past 100%, which stop at 100% first. It has limits per display and never survives a sleep, a lock or the app. **It does not brighten anything yet:** the app's color pipeline cannot write a value above white, and the panel says so until it can.
+
+### What was checked on hardware
+
+On an Apple M5 Pro Mac with macOS 27.2.1, an LG SDQHD on USB-C and a Lenovo P32p-20 on HDMI, with small test programs and the hardware report, not yet through the app:
+
+- HDR switched on and off on the LG through System Settings' own switch. The display went dark for a moment and did not leave the system, its mode stayed, and macOS's own color table stayed in place. Its headroom went from 1 to 2.95 potential, which is its 295 nits over 100. Ordinary windows looked paler in HDR.
+- A color profile assigned to the LG took effect at once, and giving the monitor's own back removed it cleanly.
+- Night Shift was switched on and off.
+- The link's color modes, the rates the mode list leaves out, dithering and Night Shift's state read the same through the app's own code as through the test programs.
+
+Unit-tested only: everything the app does on its own with these features, protection of HDR and profiles, the profile for HDR, Night Shift off in HDR, reference presets, virtual screens with HDR, and brightness above white.
+
 ## 0.3.0
 
 Advanced scaling: sizes macOS does not offer, screens that exist only in the Mac, and HiDPI for a panel that has none of its own. Every feature in this release is off until you turn it on, in Settings under Advanced or with `display16x set overridesEnabled on`, `virtualScreens on` and `mirrorHiDPI on`, and each says what it costs next to its switch. Until then Display 16X does what 0.2.0 did. The app has not yet used any of these features on a real display: they are unit-tested, and what was proven on hardware is listed below.
