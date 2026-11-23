@@ -20,8 +20,10 @@ let package = Package(
         .library(name: "DDC", targets: ["DDC"]),
     ],
     targets: [
-        // Domain model and logic. Foundation only.
-        .target(name: "DisplayCore"),
+        // Domain model and logic. Foundation only. The version comes from
+        // scripts/release-version through the ReleaseVersion plugin.
+        .target(name: "DisplayCore", plugins: ["ReleaseVersion"]),
+        .plugin(name: "ReleaseVersion", capability: .buildTool()),
         // DDC/CI codec and per-display scheduler. Foundation only.
         .target(name: "DDC"),
         // The only target that resolves private symbols. Every entry point is optional at run time.

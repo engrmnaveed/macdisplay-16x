@@ -10,6 +10,9 @@ public struct ProbeOptions: Sendable {
     public var includeCapabilities = false
     /// List every mode instead of a summary.
     public var includeAllModes = false
+    /// Stop after the private interfaces, before any display is looked at. For checking a
+    /// build, such as one signed with the hardened runtime, without querying a monitor.
+    public var interfacesOnly = false
 
     public init() {}
 }
@@ -48,6 +51,7 @@ public enum HardwareProbe {
         let reserved = ReservedInterfaces.presence()
         let missing = reserved.filter { !$0.present }.map(\.name)
         lines.append("  Reserved for later milestones: \(reserved.count - missing.count) of \(reserved.count) present" + (missing.isEmpty ? "" : ", missing " + missing.joined(separator: ", ")))
+        if options.interfacesOnly { return lines }
 
         let inventory = SystemDisplayInventory()
         let snapshots = inventory.connectedDisplays()
