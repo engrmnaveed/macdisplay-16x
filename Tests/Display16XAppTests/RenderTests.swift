@@ -42,4 +42,28 @@ import Testing
             }
         }
     }
+
+    /// Compares two folders of pictures: `DISPLAY16X_COMPARE=before:after`. Prints where
+    /// each pair differs and writes a sheet of the pairs that do.
+    @Test func compare() throws {
+        guard let spec = ProcessInfo.processInfo.environment["DISPLAY16X_COMPARE"], !spec.isEmpty else { return }
+        let parts = spec.split(separator: ":").map { URL(fileURLWithPath: String($0), isDirectory: true) }
+        guard parts.count == 2 else {
+            Issue.record("DISPLAY16X_COMPARE needs two folders, before:after")
+            return
+        }
+        let report = try RenderComparison.compare(before: parts[0], after: parts[1])
+        print(report.text)
+        try Data(report.text.utf8).write(to: parts[1].appendingPathComponent("comparison.txt"))
+        // Before and after side by side, for the pictures that differ.
+        let pairs = parts[1].appendingPathComponent("comparison", isDirectory: true)
+        try FileManager.default.createDirectory(at: pairs, withIntermediateDirectories: true)
+        for name in report.different where name.hasSuffix("-light.png") {
+            let items = [
+                ContactSheet.Item(caption: "before", file: parts[0].appendingPathComponent(name)),
+                ContactSheet.Item(caption: "after", file: parts[1].appendingPathComponent(name)),
+            ]
+            try ContactSheet.write(items, title: name, columns: 2, zoom: 1, scale: 2, to: pairs.appendingPathComponent(name))
+        }
+    }
 }

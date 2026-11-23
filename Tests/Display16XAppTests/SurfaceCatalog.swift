@@ -185,6 +185,8 @@ enum SurfaceCatalog {
             await desk.send(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)))
         }
         await desk.send(.set, .urlScheme, value: .flag(true))
+        // The app makes a random token. A fixed one keeps two runs' pictures the same.
+        desk.context.settings.update { $0.layout.urlToken = "0123456789abcdef0123456789abcdef" }
         await desk.send(.set, .protectLayout, value: .flag(true))
         try shootPanel(session, desk, "layout-presets-shortcuts", group: "layout", title: "Presets, shortcuts, protection and links in use", expand: section)
 
