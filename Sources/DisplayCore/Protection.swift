@@ -16,6 +16,45 @@ public struct ProtectionNotice: Sendable, Equatable {
     public var message: String
 }
 
+/// The texts protection shows and logs. Each one is a sentence, whatever the occasion it
+/// starts with: the occasions of a restore start with a capital ("After wake") and the
+/// one for a change made elsewhere does not.
+public enum ProtectionText {
+    public static let outsideChange = "after a change made elsewhere"
+
+    /// Every occasion a notice can start with.
+    public static var occasions: [String] {
+        [RestoreTrigger.startup, .reconnect, .wake].map(\.occasion) + [outsideChange]
+    }
+
+    /// A capital first letter and a full stop at the end.
+    public static func sentence(_ text: String) -> String {
+        var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let first = result.first, first.isLowercase {
+            result = first.uppercased() + result.dropFirst()
+        }
+        if let last = result.last, !".?!".contains(last) { result += "." }
+        return result
+    }
+
+    /// "After wake, put #1 LEN P32p-20 back to …."
+    public static func restored(occasion: String, what: String) -> String {
+        sentence("\(occasion), put \(what)")
+    }
+
+    public static func stopped(what: String, until: String) -> String {
+        sentence("Stopped putting \(what) back, because it keeps changing. It starts again when \(until)")
+    }
+
+    /// The offer of decision 13 on the command line, where it cannot be a window. The
+    /// commands sit inside the sentence, so the full stop is not copied with them.
+    public static let commandLineOffer = "Layout protection is off. Run display16x perform saveLayout and then display16x set protectLayout on to have this arrangement put back after sleep, reconnects and changes made elsewhere."
+
+    public static func notOffered(display: String, mode: String) -> String {
+        sentence("Display \(display) no longer offers \(mode), so it was not put back")
+    }
+}
+
 /// Stops repeated restores that keep failing or keep being undone by something else.
 public struct EnforcementLimiter: Sendable {
     /// Attempts allowed within the window before protection stops for that target.
@@ -179,7 +218,7 @@ public final class ConfigurationProtection: RestoreStage {
             return nil
         }
         offerDeclined = true
-        return "Layout protection is off. To have this arrangement put back after sleep, reconnects and changes made elsewhere: display16x perform saveLayout, then display16x set protectLayout on"
+        return ProtectionText.commandLineOffer
     }
 
     /// "Not now": the offer is not made again until the app starts again.
@@ -201,7 +240,7 @@ public final class ConfigurationProtection: RestoreStage {
             if let occasion = pendingOccasion { scheduleCheck(occasion: occasion) }
         case .reconfigurationSettled:
             guard !layout.isApplying, !sequencer.isInWakeTransition else { return }
-            scheduleCheck(occasion: "after a change made elsewhere")
+            scheduleCheck(occasion: ProtectionText.outsideChange)
         default:
             break
         }
@@ -285,11 +324,11 @@ public final class ConfigurationProtection: RestoreStage {
             if limiter.allow(key, now: scheduler.now) {
                 let report = await modes.rotate(to: wanted, for: tag, origin: .automation)
                 if report.failure == nil {
-                    notify(ProtectionNotice(kind: .restored, tag: tag, message: "\(occasion), put \(name(tag)) back at \(wanted)°."))
+                    notify(ProtectionNotice(kind: .restored, tag: tag, message: ProtectionText.restored(occasion: occasion, what: "\(name(tag)) back at \(wanted)°")))
                 }
             } else if !skippedNotices.contains(key) {
                 skippedNotices.insert(key)
-                notify(ProtectionNotice(kind: .stopped, tag: tag, message: "Stopped putting the rotation of \(name(tag)) back, because it keeps changing. It starts again when you set a rotation."))
+                notify(ProtectionNotice(kind: .stopped, tag: tag, message: ProtectionText.stopped(what: "the rotation of \(name(tag))", until: "you set a rotation")))
             }
         }
         guard gateOpen else { return }
@@ -298,18 +337,18 @@ public final class ConfigurationProtection: RestoreStage {
             guard modes.modes(for: tag).contains(where: { $0.sameMode(as: wanted) }) else {
                 if !skippedNotices.contains(key) {
                     skippedNotices.insert(key)
-                    notify(ProtectionNotice(kind: .skipped, tag: tag, message: "\(name(tag)) no longer offers \(wanted.summary), so it was not put back."))
+                    notify(ProtectionNotice(kind: .skipped, tag: tag, message: ProtectionText.notOffered(display: name(tag), mode: wanted.summary)))
                 }
                 return
             }
             if limiter.allow(key, now: scheduler.now) {
                 let report = await modes.change(ModeRequest(exactly: wanted), for: tag, matching: .exact, origin: .automation)
                 if report.failure == nil {
-                    notify(ProtectionNotice(kind: .restored, tag: tag, message: "\(occasion), put \(name(tag)) back to \(wanted.summary)."))
+                    notify(ProtectionNotice(kind: .restored, tag: tag, message: ProtectionText.restored(occasion: occasion, what: "\(name(tag)) back to \(wanted.summary)")))
                 }
             } else if !skippedNotices.contains(key) {
                 skippedNotices.insert(key)
-                notify(ProtectionNotice(kind: .stopped, tag: tag, message: "Stopped putting the mode of \(name(tag)) back, because it keeps changing. It starts again when you choose a mode."))
+                notify(ProtectionNotice(kind: .stopped, tag: tag, message: ProtectionText.stopped(what: "the mode of \(name(tag))", until: "you choose a mode")))
             }
         }
     }
@@ -323,15 +362,15 @@ public final class ConfigurationProtection: RestoreStage {
         guard limiter.allow("layout", now: scheduler.now) else {
             if !skippedNotices.contains("layout") {
                 skippedNotices.insert("layout")
-                notify(ProtectionNotice(kind: .stopped, tag: nil, message: "Stopped putting the arrangement back, because it keeps changing. It starts again when you arrange the displays or save the layout."))
+                notify(ProtectionNotice(kind: .stopped, tag: nil, message: ProtectionText.stopped(what: "the arrangement", until: "you arrange the displays or save the layout")))
             }
             return
         }
         let report = await layout.change(origin: .automation) { LayoutPlanner.restore($0, to: saved) }
         if report.failure == nil {
-            notify(ProtectionNotice(kind: .restored, tag: nil, message: "\(occasion), put the saved arrangement back."))
+            notify(ProtectionNotice(kind: .restored, tag: nil, message: ProtectionText.restored(occasion: occasion, what: "the saved arrangement back")))
         } else {
-            Log.core.notice("\(occasion), the saved arrangement could not be put back: \(report.failure ?? "unknown").")
+            Log.core.notice(ProtectionText.sentence("\(occasion), the saved arrangement could not be put back: \(report.failure ?? "unknown")"))
         }
     }
 

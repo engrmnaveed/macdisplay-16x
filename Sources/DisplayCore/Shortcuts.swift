@@ -97,7 +97,7 @@ public enum ShortcutConflict: Sendable, Equatable {
         switch self {
         case .needsModifier: "Add Control, Option or Command. A key on its own, or with Shift only, would stop it from being typed."
         case .duplicate(let title): "Display 16X already uses these keys for \"\(title)\"."
-        case .system(let name): "macOS uses these keys for \(name)."
+        case .system(let name): "These keys are taken by macOS for \(name)."
         case .takenByAnotherApp: "Another app already uses these keys."
         case .invalidCommand(let reason): "The command cannot run: \(reason)."
         }
