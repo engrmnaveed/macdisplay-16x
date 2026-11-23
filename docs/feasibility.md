@@ -271,7 +271,26 @@ The app during the same wake, from its log:
 
 #### The first build that reads after wake (started 08:32)
 
-The build with the decided after-wake rule (read the monitor and take its word, write nothing) was started at 08:32 while the displays were asleep again. As before, the Lenovo answered and the LG did not, and nothing was written. `display16x get restoreAfterWake --all` answered "off" for both monitors, which is the default. **Result pending:** what this build does at the next wake, from its own log, with no probe on the DDC channel this time.
+The build with the decided after-wake rule (read the monitor and take its word, write nothing) was started at 08:32 while the displays were asleep again. As before, the Lenovo answered and the LG did not, and nothing was written. `display16x get restoreAfterWake --all` answered "off" for both monitors, which is the default.
+
+The displays then woke at 08:54:30, after a sleep of 36 minutes 37 seconds (macOS's own power log: off at 08:17:53, on at 08:54:30). No probe was on the DDC channel this time. BetterDisplay and the earlier prototype were still running. From the app's log, in seconds after the wake:
+
+| Seconds after the wake | What the app did |
+| --- | --- |
+| 0.0 | Saw the reconfiguration begin |
+| 1.3 | Reconfiguration settled. "Display #2 disconnected": the LG had left again |
+| 3.0 | Wake settled. This is where the Lenovo's brightness and contrast are read. The log has no line for it: neither a different value nor a missing answer was reported, which is what matching values produce. The reads themselves are not logged in this build |
+| 4.8 | Second reconfiguration settled. "Display #2 connected: LG SDQHD" |
+| 5.3 | The check of the LG finished in 0.46 seconds with all five controls answering: brightness, contrast, volume, mute and input |
+| Afterwards | Nothing. No write to either monitor, no retry, nothing left pending |
+
+- **Nothing was written**, at the wake or when the LG returned. The build before this one wrote brightness to the Lenovo and brightness and volume to the LG at the 08:09 wake.
+- **Both monitors still held what the app had**, read afterwards through the app: Lenovo brightness 53% and contrast 71%, LG brightness 68%, contrast 68%, volume 44%, mute off. Every value came back "confirmed". The values the owner had chosen are still marked as chosen, because nothing differed.
+- **The LG's contrast and mute are back.** The older build had lost them at 08:10.
+- **The LG leaves the system after 37 minutes of display sleep too.** It stayed through sleeps of 74 and 88 seconds, and left after 37 minutes and after five and a half hours. Where between 88 seconds and 37 minutes it starts to leave is not measured.
+- **Without the probe the check of the LG was fast and complete**: 0.46 seconds here, 3.2 seconds with two controls lost at 08:10. The other display utilities were running both times. So the losses at 08:10 came mostly from the probe asking four times a second.
+- Not seen yet: the app taking over a value that was changed on the monitor during a sleep, and "Put my values back after sleep" writing one back. Both need someone to change a monitor by its own buttons while the displays are asleep, or a monitor that forgets.
+- The app logs nothing at the normal level when a monitor still has its values. A line in the verbose log now says which controls were asked and matched. That line is in the source, not yet in the running build.
 
 Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 

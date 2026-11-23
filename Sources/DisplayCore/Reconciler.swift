@@ -194,6 +194,7 @@ public final class Reconciler {
         var plan: [(feature: FeatureID, value: Double)] = []
         var adopted: [String] = []
         var unanswered: [String] = []
+        var unchanged: [String] = []
 
         for feature in engine.features.restorable {
             guard registry.live[tag] != nil else { return plan }
@@ -204,7 +205,7 @@ public final class Reconciler {
                   settings.recordSettings(tag).values[control] != nil else { continue }
             switch await controls.compareWithDevice(control, for: tag, knownRaw: readings[control]) {
             case .same:
-                continue
+                unchanged.append(feature.id.rawValue)
             case .unanswered:
                 unanswered.append(feature.id.rawValue)
             case .differs(let reported):
@@ -220,6 +221,10 @@ public final class Reconciler {
         }
 
         let name = registry.record(for: tag)?.displayName ?? "display"
+        if !unchanged.isEmpty {
+            // The usual case, and a quiet one. The verbose log still shows the monitor was asked.
+            Log.core.debug("\(trigger.occasion), \(tag) \(name) still has its \(unchanged.joined(separator: ", ")).")
+        }
         if !adopted.isEmpty {
             Log.core.info("\(trigger.occasion), \(tag) \(name) reports \(adopted.joined(separator: ", ")). Taken as the current values.")
         }

@@ -38,6 +38,8 @@ What it means for the product:
 - These two monitors do not need a restore after wake at all. Whether any common monitor does is still unknown from this desk.
 - "Is the monitor ready" cannot be read from the system's display list. The LG was answering before it was listed and unreliable after.
 
+Update, 23 November, 08:54: the LG left and returned again at a wake after 37 minutes of display sleep. It stayed through sleeps of 74 and 88 seconds. So it leaves somewhere between a minute and a half and 37 minutes, which is ordinary use, not only overnight. This was also the first run of the read-and-adopt rule on hardware: the app wrote nothing at the wake or at the LG's return, and both monitors still held every value the app had.
+
 ## 23 November 2026 · No reply is not the same as no control
 
 Same wake as the entry above. Right after the LG returned, the app asked it which controls it has. Contrast and mute got no usable reply, and the app dropped both from the panel. They had answered at every check before. The contrast the owner had chosen was not put back either, because the control was gone.
@@ -49,6 +51,8 @@ The rule the product should follow, now built: a control that has answered befor
 Still open, small: a control lost on the very first check stays missing until the next start, a reconnect, or "Check Again" in the panel. No evidence yet that this happens without a probe running.
 
 Other utilities may have interfered with this result, as the rules ask to be noted: BetterDisplay and the prototype were running and were not inspected.
+
+Update, 23 November, 08:54: at the next wake no probe was running, the other two utilities still were, and the same check of the LG finished in under half a second with every control answering. So the probe caused most of the loss at 08:10. Running next to another display utility did not, on this one occasion, cost a single reply.
 
 ## 23 November 2026 · Software dimming is lost when the screen is unlocked, and the app cannot see it
 
