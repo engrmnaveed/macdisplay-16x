@@ -136,6 +136,17 @@ Ready when the owner has approved each surface on their own Mac and the budgets 
 
 **Order.** On 23 November 2026 the owner moved this milestone ahead: it starts as soon as v0.2 is on `main`, before release 0.1.0 and before v0.3. It needs the owner's choices on rendered options and no time at the monitors. Release 0.1.0 waits on the owner's certificate, and v0.3 opens with hardware spikes. The surfaces now include the v0.2 panels: the arrangement canvas, mirroring, connection and presets, the Keep window for a layout change, the protection offer and the protection notices. Images and the app icon are made with the image generator the owner has set up, and each one is a candidate for the owner to approve.
 
+**Status on 23 November 2026.** Stage 1 is done on the branch `claude/peaceful-nobel-53c773`, not pushed, with 334 unit tests passing. A render harness draws 34 surfaces and states from sample data, in light and dark, inside a test target that never ships. The app is not started for it and no display is touched. The owner has the review of every surface and three directions to choose from: A System, B Studio and C Desk. Nothing is rebuilt until the owner chooses.
+
+What the review found, beyond looks:
+
+- **The panel has no upper limit to its height.** With three displays and everything open it is about 2,170 points tall and nothing scrolls. The redesign gives it a bounded height.
+- **Nothing on screen tells a confirmed value from a sent one, and the card cannot say how a display is connected.** The panel is not told either fact. Both are with the core session.
+- **Scenes are three steps away**, where the PRD wants one click.
+- **Protection notices begin with a small letter**, and a three-line notice does not fit its window. The text is with the v0.2 session, the window with the redesign.
+- **The Keep windows never take the keyboard.** See decision 18.
+- **VoiceOver gets no name for three kinds of menu**, and the displays on the arrangement canvas can be moved with the pointer only. Both belong to stage 5.
+
 ### v0.2 Layout
 
 Arrangement, main display and mirroring. Disconnect and reconnect, including automatically turning off the built-in panel when an external display is attached. Configuration restore after wake and reconnect. Presets with global shortcuts. CLI, URL scheme and Shortcuts actions. The [feature inventory](feature-inventory.md) marks the 56 capabilities in scope.
@@ -152,7 +163,7 @@ Every change to arrangement, mirroring, the main display or a connection is reve
 
 Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
 
-**Built, and closed by the owner on 23 November 2026 with check 11 left for a later version.** All five stages are on the branch `claude/v0-2-layout-14c08e`, with 324 unit tests passing, not pushed. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
+**Built, and closed by the owner on 23 November 2026 with check 11 left for a later version.** All five stages are built, with 324 unit tests passing. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
 
 Three more things were done after the checks, at unit-test level. The first is the core session's change. The other two came out of its review of how v0.2 uses the core:
 
@@ -160,7 +171,7 @@ Three more things were done after the checks, at unit-test level. The first is t
 - **One unreadable stored command costs one preset or shortcut.** The lists are read entry by entry, and what was dropped is logged with its name.
 - **The gate is checked before each protection write**, and again between a rotation write and the mode write that follows it.
 
-The branch waits for the owner's word to go to `main` through a pull request.
+Merged into `main` on 23 November 2026 as [pull request 5](https://github.com/engrmnaveed/macdisplay-16x/pull/5). Its first CI build failed on a view the runner's older compiler could not type-check, and the layout panel's views were broken up for it. The branch is closed.
 
 Carried forward to a later version, by the owner's word:
 
@@ -234,6 +245,7 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 15 | Shortcuts actions | Left out, because the Command Line Tools cannot produce their metadata | Leave them out for now. Revisit at the public release: building releases with Xcode on CI would bring them back and would end "builds with the Command Line Tools alone" for releases only | Public release |
 | 16 | Turning the built-in panel off automatically | Built, and off by default. The panel comes back when the app quits and when the last external display goes away, and only once the lid is open, because turned on behind a closed lid it becomes the main display. If the app is not running at that moment, the panel stays dark until the user logs out | Hold the switch back from the v0.2 release and keep the code. Closing the lid already gives the same result at a desk. Bring the switch back when there is a way back that works without the app running, and the lid-sleep reading is explained. The owner's view, given at the desk: the built-in display should not be left dark | Before the switch is shown |
 | 17 | Brightness written by a rule | An automatic brightness change gets the restore floor and also stops just above black, unless the user allowed black at zero. A restore gets the floor alone. No rule writes brightness yet, so nothing changes today | Confirm it. A restore puts back a value the user already chose. A rule's value arrives with nobody watching, and a black picture is the worst case for this app | The first rule that writes a value |
+| 18 | Whether Keep and Revert answer to the keyboard at once | The Keep window is shown without taking the keyboard, so Return and Escape reach it only after a click. That keeps a mode change from stealing the keyboard from the app in use | Take the keyboard only when the change was made from the app's own panel. Escape reverts. Keep never sits on Return, so a key pressed blind cannot keep a picture the monitor cannot show. A change from the CLI, a link or a shortcut leaves the keyboard where it is, and the countdown reverts it | Interface pass, stage 3 |
 
 ### Core changes waiting for the core session
 
@@ -242,3 +254,5 @@ Changes to what v0.1 built are made by the session that built it, on the line of
 | Change | Why | Lands on | Status |
 | --- | --- | --- | --- |
 | A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Built by the core session on 23 November 2026, on the branch `core/automation-origin` cut from the v0.2 branch, with 321 unit tests passing, not pushed. Merged into the v0.2 branch the same day, where the rule-driven writes now use it. Nothing from outside can claim the origin: the socket and links always run as commands |
+| Confirmed or only sent, for each control | The PRD shows a value the monitor read back as confirmed and one the app only sent as sent. The engine knows this for each write, and the panel is only told a value | The interface pass branch | Sent to the core session on 23 November 2026 |
+| How a display is connected | The PRD's card is "name, connection". The panel is told nothing, so the card says "External" | The interface pass branch | Sent to the core session on 23 November 2026 |
