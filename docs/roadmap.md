@@ -145,10 +145,12 @@ Ready when the owner has approved each surface on their own Mac and the budgets 
 - **Stage 4 waits for the icon.** The packaging script takes an icon file made with macOS's own tools. The image generator showed as signed out, so no generated candidate exists. Three code-drawn candidates were shown as extras.
 - **Stage 5 is done as far as it goes off screen.** Every control on all 47 surfaces and states has a name and a spoken value for VoiceOver. Contrast was measured in four looks and one color changed. The panel's content builds in 18 to 30 ms on the M5 Pro.
 
+**The owner's running copy is this build since 23 November 2026.** The owner removed the 0.1.0 copy and its settings, and the latest commit of the branch was installed in its place and started with fresh settings. It found both monitors and wrote nothing at start. On screen the panel opens in 76 to 88 ms warm and 133 ms the first time, with 40 MB in use while the panel is closed. The ten-minute idle measurement is still to come. The build still calls itself 0.1.0, because the version file changes only at a release, so the build number tells the copies apart.
+
 Left, and all of it needs the owner:
 
 - **The icon:** a sign-in to the image generator, or a pick among the three code-drawn candidates.
-- **One run of a development build in place of the daily copy**, to measure the panel's open time, memory with the panel closed and idle wakeups, and to see what renders cannot show: real blur, full keyboard access, VoiceOver's reading order, and the three accessibility settings switched on. macOS gives out its increased-contrast appearance only while Increase Contrast is on in System Settings, so that look has to be seen once on screen.
+- **The checks only daily use can give:** real blur, full keyboard access, VoiceOver's reading order, and the three accessibility settings switched on. The Accessibility grant has to be given to the new build once. macOS gives out its increased-contrast appearance only while Increase Contrast is on in System Settings, so that look has to be seen once on screen.
 - **Decision 18.** Until it is answered the Keep window stays as built.
 
 **The look must stay cheap to change.** The owner asked for an interface that is "easy and cost-effective (from agentic tokens POV) to re-skin". So the look has three layers: one file of values (colors, distances, fonts, symbols), a few files of pieces (bar, chip, card, banner), and surfaces that only compose them. A test fails when a surface holds a color, a font, a radius, a distance or a symbol of its own. A re-skin is checked on one sheet that shows every value and piece. Later milestones build their panels the same way.
