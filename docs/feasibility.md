@@ -682,7 +682,7 @@ A build packaged from this branch ran in place of the copy in daily use, with a 
 
 The open time is from the click to the popover being shown and key. It is inside the budget on the M5 Pro. The budget is written for a MacBook Air M1, where it is likely to be over: the panel's own content builds in about 20 ms off screen, so most of the time is elsewhere, and the verbose log now splits it into models, views, bringing the app forward and showing the popover to find out where.
 
-**The run ended at 19:55 when an uninstaller removed the copy in daily use.** App Cleaner removed the 0.1.0 bundle from the main checkout's `dist/` folder and the app's standard settings folder, and it quit the build under test, which has the same bundle identifier. The ten-minute idle measurement had run for one minute. The build under test in this worktree's own `dist/` and its settings folder were not touched.
+**The run ended at 19:55 when an uninstaller removed the copy in daily use.** The owner removed the 0.1.0 bundle from the main checkout's `dist/` folder and the app's standard settings folder with an uninstaller, and it quit the build under test, which has the same bundle identifier. The ten-minute idle measurement had run for one minute. The build under test in this worktree's own `dist/` and its settings folder were not touched.
 
 ### The copy in daily use from 19:59 on: this branch at `897c40f`
 
