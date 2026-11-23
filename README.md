@@ -6,17 +6,17 @@ A free, open-source menu bar utility for the display controls macOS leaves out: 
 
 It targets Apple silicon, and it is built to do nothing when nothing is happening: no timers, no polling, and nothing that renders frames unless you turn a feature on.
 
-**Status: v0.1 Core is complete (23 November 2026).** It runs on the developer's Mac with two external monitors. It is not signed for distribution or tested on other hardware yet. See [what works](#what-works-today) and, for what has not been run on hardware, the [feasibility notes](docs/feasibility.md#where-v01-core-stands-at-the-end-of-23-november).
+**Status: 0.2.0, the first release, with v0.2 Layout and a redesigned interface (23 November 2026).** It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
 
 ## Install
 
-Releases are published as a Homebrew cask and as a ZIP on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases), from 0.1.0 on, for Apple silicon Macs with macOS 14 or later:
+Releases are published as a Homebrew cask and as a ZIP on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases), from 0.2.0 on, for Apple silicon Macs with macOS 14 or later:
 
 ```sh
 brew install --cask engrmnaveed/tap/display16x
 ```
 
-Releases are signed with the project's own certificate and are not notarized by Apple. macOS asks you to allow the first launch once, in Privacy & Security. After that, updates keep the Accessibility permission for the brightness and volume keys, and Homebrew upgrades also keep the first-launch approval.
+0.2.0 is ad hoc signed and not notarized by Apple. macOS asks you to allow the first launch in Privacy & Security, and after every update you allow it again and give the Accessibility permission for the brightness and volume keys again. Later releases are to be signed with the project's own certificate, which keeps that permission and Homebrew's first-launch approval from one release to the next.
 
 The [installation guide](docs/install.md) covers Homebrew, the direct download with its checksum and attestation, allowing the first launch, the Accessibility permission, and removal. The [release runbook](docs/release.md) is how a release is made.
 
