@@ -222,6 +222,30 @@ struct LayoutServiceTests {
         #expect(report.note?.contains("2@-2304,-200") == true)
     }
 
+    @Test("An unanswered mirroring change goes back, although the mirrored display reports its source's size")
+    func revertMirroring() async {
+        // Found in the owner check on 23 November: the revert planned the LG at its old
+        // place with the Lenovo's size and refused it as an overlap.
+        let rig = LayoutRig()
+        await rig.startWithBoth()
+        let lg = rig.lgTag
+        let lenovo = rig.lenovoTag
+        let report = await rig.settling { await rig.layout.change(origin: .interface) { LayoutPlanner.mirror($0, lg, of: lenovo) } }
+        #expect(report.awaitsConfirmation)
+        #expect(rig.layoutSystem.frame(of: Fixture.lgID) == Fixture.lenovoFrame)
+        await rig.advance(16)
+        #expect(rig.layoutSystem.mirrors.isEmpty)
+        #expect(rig.layoutSystem.frames[Fixture.lgID] == Fixture.lgFrame)
+        #expect(rig.rig.recovery.document.layoutUnconfirmed == false)
+
+        // A written arrangement that ends mirroring is not refused for the size either.
+        _ = await rig.run(.set, .mirror, on: .tag(lg.rawValue), of: .tag(lenovo.rawValue), value: .flag(true))
+        let written = await rig.run(.set, .arrangement, value: .choice("\(lenovo.rawValue)@0,0;\(lg.rawValue)@-2304,-248"))
+        #expect(written.error == nil)
+        #expect(rig.layoutSystem.frames[Fixture.lgID] == Fixture.lgFrame)
+        #expect(rig.layoutSystem.mirrors.isEmpty)
+    }
+
     @Test("Nothing to change means no transaction")
     func noChange() async {
         let rig = LayoutRig()

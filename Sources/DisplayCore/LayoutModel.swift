@@ -66,8 +66,13 @@ public struct LayoutEntry: Codable, Sendable, Equatable {
     public var tag: DisplayTag
     public var frame: DisplayFrame
     public var isMain: Bool
-    /// The display this one mirrors. A mirror target shares its source's frame.
+    /// The display this one mirrors. A mirror target shares its source's frame, size
+    /// included, so its own size is not known while it mirrors.
     public var mirrorOf: DisplayTag?
+    /// Set on a display that stops mirroring in a plan: its size is the one it had while
+    /// mirroring, and only macOS knows the size of the mode it returns to. It is left out
+    /// of the overlap check. Never set on what the system reports.
+    public var sizeIsProvisional: Bool?
 
     public init(tag: DisplayTag, frame: DisplayFrame, isMain: Bool = false, mirrorOf: DisplayTag? = nil) {
         self.tag = tag
@@ -283,8 +288,9 @@ public enum LayoutPlanner {
             guard let sourceEntry = snapshot.entry(source) else { return "\(entry.tag) mirrors \(source), which is not connected" }
             if sourceEntry.mirrorOf != nil { return "\(entry.tag) would mirror \(source), which itself mirrors another display" }
         }
-        for (index, a) in independent.enumerated() {
-            for b in independent.dropFirst(index + 1) where a.frame.overlaps(b.frame) {
+        let sized = independent.filter { $0.sizeIsProvisional != true }
+        for (index, a) in sized.enumerated() {
+            for b in sized.dropFirst(index + 1) where a.frame.overlaps(b.frame) {
                 return "\(a.tag) and \(b.tag) would overlap"
             }
         }
@@ -406,6 +412,7 @@ public enum LayoutPlanner {
         result.update(target) {
             $0.mirrorOf = nil
             $0.frame = $0.frame.moved(to: DisplayPoint(x: right, y: top))
+            $0.sizeIsProvisional = true
         }
         return checked(result)
     }
@@ -431,6 +438,7 @@ public enum LayoutPlanner {
         for (tag, source) in text.mirrors { result.update(tag) { $0.mirrorOf = source } }
         for (tag, point) in text.origins {
             result.update(tag) {
+                if $0.mirrorOf != nil { $0.sizeIsProvisional = true }
                 $0.mirrorOf = nil
                 $0.frame = $0.frame.moved(to: point)
             }
@@ -452,9 +460,13 @@ public enum LayoutPlanner {
         }
         for entry in target.entries {
             result.update(entry.tag) {
+                let wasMirroring = $0.mirrorOf != nil
                 $0.mirrorOf = entry.mirrorOf
                 if entry.mirrorOf == nil {
-                    $0.frame = $0.frame.moved(to: DisplayPoint(x: entry.frame.x + anchorShift.dx, y: entry.frame.y + anchorShift.dy))
+                    let point = DisplayPoint(x: entry.frame.x + anchorShift.dx, y: entry.frame.y + anchorShift.dy)
+                    // While mirroring, a display reports its source's size. The saved size is
+                    // the one it returns to.
+                    $0.frame = wasMirroring ? entry.frame.moved(to: point) : $0.frame.moved(to: point)
                 }
             }
         }

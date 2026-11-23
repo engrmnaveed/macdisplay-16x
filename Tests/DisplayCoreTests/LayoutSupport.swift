@@ -16,10 +16,12 @@ final class FakeLayoutSystem: LayoutSystem {
     var adjust: ((inout [SystemDisplayID: DisplayFrame]) -> Void)?
     var onApply: (@MainActor () -> Void)?
 
+    /// Measured on 23 November: a mirror target reports its source's frame, size included.
+    /// It gets its own mode and size back when it stops mirroring.
     func frame(of display: SystemDisplayID) -> DisplayFrame? {
         guard let own = frames[display] else { return nil }
         if let source = mirrors[display], let sourceFrame = frames[source] {
-            return own.moved(to: sourceFrame.origin)
+            return sourceFrame
         }
         return own
     }
