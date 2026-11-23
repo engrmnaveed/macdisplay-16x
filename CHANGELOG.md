@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+A designed interface, from the interface pass. Every surface was rebuilt on one design system, drawn and checked from sample data. What each control does is unchanged.
+
+- The panel has the app's own look: navy and aqua, each display drawn to scale next to its name, thick bars for brightness and volume with the number beside them, and a text-size strip of stops with a letter that gets smaller as the desktop gets larger. A dot marks the default size.
+- Scenes, the saved setups that were called presets in the panel, are on top of the panel, one press each, with their shortcut next to the name.
+- Keep or Revert says what changed ("Keep 2560 × 1440?"), what it goes back to, and how long is left, in the card and in the window on the display.
+- One level down, a display has a page of its own that takes the panel's place: refresh rate, rotation, contrast, where brightness comes from, what the display does not offer and why, its place on the desk, and its options. The panel no longer grows with what is opened, and it scrolls instead of running off a small screen.
+- A value says what is known about it: read back from the display, or only sent, as with software dimming.
+- Arrange shows the desk to scale with the displays named, and a display can also be placed left, right, above or below another without the pointer.
+- A settings window holds what applies to the whole app: opening at login, the keys, software dimming, scenes, shortcuts, the command line and links, the settings file, and About.
+- What needs you is at the top and looks the part: a missing Accessibility permission with its steps, safe mode, a change that failed, the shortcut recorder waiting for keys. The menu bar icon shows a dot when something waits for you and is drawn dashed in safe mode.
+- The on-screen indicator names the display the key reached and shows the number. A protection notice gets the room its text needs.
+- For development: `scripts/render-surfaces.sh` draws every surface from made-up monitors, and the look lives in two files, `Design/Theme.swift` and `Design/Primitives.swift`. The app's `--snapshot-panel` option is gone, replaced by that script.
+
 Display layout, from v0.2 Layout. Fourteen of fifteen hardware checks ran on a Lenovo P32p-20 and an LG SDQHD: arranging, the main display, placement, mirroring, disconnect and reconnect from the command line and the panel with **Keep** and **Revert**, reconnecting at quit, a preset from a shortcut, protection after a change made in System Settings, and turning the built-in panel off when the lid opens. Built and unit-tested, and not yet tried on hardware: a saved layout across a long display sleep with protection on, the built-in panel coming back when the last external display goes away, the offer to protect a kept arrangement, links, and brightness keys across a mirror set.
 
 - Arrange displays from the panel or the command line: make a display the main one, drag it on a small canvas, put it next to another (`display16x set placement left:end --tag 2 --of-tag 1`), mirror one display onto another and stop it again. Each change is one system transaction, and from the panel or with `--try` it asks **Keep** or **Revert** and goes back on its own after 15 seconds. `display16x revert` with no display named puts the last layout change back.

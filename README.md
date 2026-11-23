@@ -32,10 +32,10 @@ open "dist/Display 16X.app"
 The app appears as a display icon in the menu bar and has no Dock icon. Click the icon for one card per display.
 
 - **Safe mode:** hold Shift while the app starts, or pass `--safe`. Nothing is restored or reapplied automatically in safe mode.
-- **After sleep and at start:** the app does not push its values at a monitor. It reads the monitor and follows it, so a change made with the monitor's buttons or another tool stays. If a monitor forgets its brightness or volume while asleep, switch on "Put my values back after sleep" in that display's details, or run `display16x set restoreAfterWake on --tag N`.
+- **After sleep and at start:** the app does not push its values at a monitor. It reads the monitor and follows it, so a change made with the monitor's buttons or another tool stays. If a monitor forgets its brightness or volume while asleep, switch on "Put my values back after sleep" on that display's page in the panel, or run `display16x set restoreAfterWake on --tag N`.
 - **Verbose log:** pass `--verbose` to log debug detail and echo the log to standard error.
 - **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild: remove the old Display 16X entry from the Accessibility list and add the new one. To keep the grant across rebuilds, create a code signing certificate in Keychain Access (Certificate Assistant, Create a Certificate, type Code Signing) and pass its name: `DISPLAY16X_SIGN_IDENTITY="name" scripts/package-macos.sh`.
-- **Panel snapshot:** `--snapshot-panel FILE` renders the panel to a PNG without showing it and quits, and `--snapshot-details` opens the detail views in it. It is a development aid for checking the layout.
+- **Pictures of the interface without running it:** `scripts/render-surfaces.sh` draws every surface and state from made-up monitors into `renders/`, in light and dark, with one overview sheet per group. The app is not started and no display is touched. See [The look](#the-look).
 - **A build under test next to the copy you use:** set `DISPLAY16X_SUPPORT_DIRECTORY=~/d16x-dev` for the app and for `display16x`, and the build keeps its settings, recovery values and socket in that folder instead of the usual one. Such a build does not start while the normal copy is running, because both would drive the same monitors.
 
 ## Checks
@@ -56,6 +56,18 @@ scripts/archive-macos.sh           # the release ZIP and its SHA-256 file
 CI also checks the ZIP after `unzip`, as Homebrew unpacks it, and runs `brew style` on the cask rendered for each signing level. The version is written only in `scripts/release-version`.
 
 Captured hardware output that becomes a test fixture carries made-up serial numbers, UUIDs and manufacture dates, never the real ones.
+
+## The look
+
+The interface is drawn in three layers, so that a new look is a small change:
+
+| Layer | File | What it holds |
+| --- | --- | --- |
+| The skin | `Sources/Display16XApp/Design/Theme.swift` | Every color, distance, size, font, symbol name and duration, as values. A re-color or re-spacing ends here. |
+| The pieces | `Sources/Display16XApp/Design/Primitives.swift` | How a bar, a text-size stop, a chip, a card or a banner is drawn from those values. |
+| The surfaces | `Sources/Display16XApp/Surfaces/` | Which pieces a surface is made of, and its words. A surface has no color, font, radius, distance or symbol of its own, and a test fails when one does. |
+
+To check a change, run `scripts/render-surfaces.sh` and look at `renders/surfaces/sheets/skin-light.png` and `skin-dark.png`, which show every value and piece on one picture, then at the other sheets in that folder. `DISPLAY16X_COMPARE=before:after swift test --filter RenderHarness/compare` lists the pictures that differ between two runs.
 
 ## Command line
 

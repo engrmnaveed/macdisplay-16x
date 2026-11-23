@@ -43,7 +43,6 @@ struct Framed<Content: View>: View {
             content.padding(18).background(Backdrop())
         case .popover, .window:
             content
-                .background(Color(nsColor: .windowBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Color.primary.opacity(0.14)))
                 .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
@@ -82,12 +81,12 @@ final class RenderSession {
     /// - Parameter expand: Disclosure controls to open first, by label. An empty list opens all.
     func shoot<Content: View>(
         _ id: String, group: String, title: String, note: String = "", chrome: Chrome = .popover,
-        looks: [Look] = [.light, .dark], expand: [String]? = nil, dumpAccessibility: Bool = true,
+        looks: [Look] = [.light, .dark], expand: [String]? = nil, dumpAccessibility: Bool = true, active: Bool? = nil,
         prepare: ((Stage) -> Void)? = nil, @ViewBuilder content: () -> Content
     ) throws {
         var entry = Entry(id: id, group: group, title: title, note: note, chrome: chrome.rawValue, width: 0, height: 0, files: [:])
         for look in looks {
-            let stage = Stage(Framed(chrome: chrome, content: content()), look: look, active: chrome == .popover)
+            let stage = Stage(Framed(chrome: chrome, content: content()), look: look, active: active ?? (chrome == .popover))
             if let expand { stage.expand(expand) }
             prepare?(stage)
             stage.layout()

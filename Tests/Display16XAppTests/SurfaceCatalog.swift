@@ -10,19 +10,22 @@ import SwiftUI
 @MainActor
 enum SurfaceCatalog {
     static func renderAll(into session: RenderSession) async throws {
+        try skin(session)
         try await panel(session)
-        try await panelStates(session)
+        try await detail(session)
+        try await arrange(session)
+        try await states(session)
         try await permissions(session)
-        try await layout(session)
         try await floating(session)
+        try await settings(session)
         try menuBar(session)
     }
 
     // MARK: Desks
 
     /// Two monitors, started and checked.
-    static func desk(safeMode: Bool = false, softwareDimming: Bool = false, configure: ((SampleDesk) -> Void)? = nil) async -> SampleDesk {
-        let desk = SampleDesk(safeMode: safeMode) { document in
+    static func desk(safeMode: Bool = false, softwareDimming: Bool = false, firstRun: Bool = false, configure: ((SampleDesk) -> Void)? = nil) async -> SampleDesk {
+        let desk = SampleDesk(safeMode: safeMode, firstRun: firstRun) { document in
             if softwareDimming { document.global.colorTablesEnabled = true }
         }
         configure?(desk)
@@ -32,54 +35,198 @@ enum SurfaceCatalog {
         return desk
     }
 
-    /// Draws the whole panel for a desk.
+    /// The desk after a while of use: the first monitor's volume found to be ignored,
+    /// three scenes, shortcuts, links on.
+    static func livedIn() async throws -> SampleDesk {
+        let desk = await desk()
+        let lg = desk.tag(SampleDesk.lgID)
+        await markVolumeIgnored(desk)
+        for name in ["Desk", "Presentation", "Night"] {
+            await desk.send(.set, .savePreset, value: .choice(name))
+        }
+        let bindings: [ShortcutBinding] = [
+            ShortcutBinding(combo: KeyCombo(keyCode: 18, modifiers: [.control, .option], keyLabel: "1"), command: Command(.set, .preset, value: .choice("Desk"), origin: .keyboard), title: "Scene Desk"),
+            ShortcutBinding(combo: KeyCombo(keyCode: 19, modifiers: [.control, .option], keyLabel: "2"), command: Command(.set, .preset, value: .choice("Presentation"), origin: .keyboard), title: "Scene Presentation"),
+            ShortcutBinding(combo: KeyCombo(keyCode: 15, modifiers: [.control, .option, .command], keyLabel: "R"), command: Command(.step, .rotation, on: .tag(lg.rawValue), value: .steps(1, fine: false), origin: .keyboard), title: "Rotate LG SDQHD"),
+        ]
+        for binding in bindings {
+            let data = try JSONEncoder().encode(binding)
+            await desk.send(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)))
+        }
+        await desk.send(.set, .urlScheme, value: .flag(true))
+        // The app makes a random token. A fixed one keeps two runs' pictures the same.
+        desk.context.settings.update { $0.layout.urlToken = "0123456789abcdef0123456789abcdef" }
+        return desk
+    }
+
+    /// The first monitor reports a volume control and ignores it. Two changes by hand that
+    /// read back unchanged make the core say so, and the control leaves the card.
+    static func markVolumeIgnored(_ desk: SampleDesk) async {
+        let lenovo = desk.tag(SampleDesk.lenovoID)
+        await desk.send(.set, .volume, on: lenovo, value: .absolute(0.6), options: CommandOptions(verification: .readBack))
+        await desk.send(.set, .volume, on: lenovo, value: .absolute(0.8), options: CommandOptions(verification: .readBack))
+    }
+
+    static func nativeBrightness() -> SampleController {
+        SampleController(
+            kind: .appleNative, capabilities: [.hardwareBrightness: ControlCapability(noticesOutsideChanges: true, rawMaximum: 1, isStepped: false)], values: [.hardwareBrightness: 0.62]
+        )
+    }
+
+    /// Draws the panel for a desk, on one of its pages.
     static func shootPanel(
-        _ session: RenderSession, _ desk: SampleDesk, _ id: String, group: String = "panel", title: String, note: String = "",
-        details: Bool = false, expand: [String]? = nil, looks: [Look] = [.light, .dark]
+        _ session: RenderSession, _ desk: SampleDesk, _ id: String, group: String, title: String, note: String = "",
+        start: PanelRoute = .home, maxHeight: CGFloat = 900, looks: [Look] = [.light, .dark], prepare: ((PanelModel, LayoutPanelModel) -> Void)? = nil
     ) throws {
         let model = PanelModel(context: desk.context)
         let layoutModel = LayoutPanelModel(context: desk.context, hotKeys: nil)
-        try session.shoot(id, group: group, title: title, note: note, looks: looks, expand: expand) {
-            PanelView(model: model, layoutModel: layoutModel, quit: {}, expandDetails: details)
+        prepare?(model, layoutModel)
+        try session.shoot(id, group: group, title: title, note: note, looks: looks) {
+            PanelView(model: model, layoutModel: layoutModel, maxHeight: maxHeight, start: start, openSettings: {}, quit: {})
         }
+        layoutModel.stopRecording()
         model.close()
         layoutModel.close()
+    }
+
+    // MARK: The skin
+
+    static func skin(_ session: RenderSession) throws {
+        try session.shoot("skin", group: "skin", title: "The skin: every value and piece", note: "Theme.swift and Primitives.swift on one picture.", chrome: .bare, dumpAccessibility: false, active: true) {
+            SkinSheet()
+        }
     }
 
     // MARK: The panel and its cards
 
     static func panel(_ session: RenderSession) async throws {
-        let desk = await desk()
-        try shootPanel(session, desk, "panel-two-displays", title: "The panel, two monitors", note: "As it opens.", looks: Look.allCases)
-        try shootPanel(session, desk, "panel-details", title: "Details open on both cards", note: "Refresh rate, rotation, contrast, notes and switches.", details: true)
-
-        // Volume on the first monitor is changed twice by hand and reads back unchanged, so
-        // the core marks it "reported and ignored" and it leaves the card.
+        let desk = try await livedIn()
         let lenovo = desk.tag(SampleDesk.lenovoID)
-        await desk.send(.set, .volume, on: lenovo, value: .absolute(0.6), options: CommandOptions(verification: .readBack))
-        await desk.send(.set, .volume, on: lenovo, value: .absolute(0.8), options: CommandOptions(verification: .readBack))
-        try shootPanel(session, desk, "panel-say-why", title: "Details with controls that cannot be used", note: "Volume is reported and ignored, and the monitor lists no inputs.", details: true)
+        let lg = desk.tag(SampleDesk.lgID)
+        try shootPanel(session, desk, "panel-home", group: "panel", title: "The panel", note: "Scenes, then one card per display.", looks: Look.allCases)
 
-        // A size chosen on the strip: Keep or Revert inside the card.
+        // A size chosen on the strip: Keep or Revert at the foot of the card.
         await desk.send(.set, .resolution, on: lenovo, value: .mode(ModeRequest(exactly: SampleDesk.mode(2560, 1440))), options: CommandOptions(matching: .exact))
-        try shootPanel(session, desk, "panel-keep-revert", title: "Keep or Revert after a size change", note: "The countdown runs in the card and in a floating window.")
+        try shootPanel(session, desk, "panel-keep-revert", group: "panel", title: "Keep or Revert after a size change")
         if let pending = desk.context.modes.pending[lenovo] {
-            try session.shoot("window-keep-mode", group: "windows", title: "Keep window for a mode change", chrome: .window) {
-                ConfirmationWindowView(name: "LEN P32p-20", pending: pending, keep: {}, revert: {})
+            let current: ModeDescriptor? = desk.context.modes.currentMode(for: lenovo)
+            try session.shoot("window-keep-mode", group: "windows", title: "Keep window for a size change", chrome: .window) {
+                ConfirmationWindowView(
+                    name: "LEN P32p-20",
+                    question: PanelText.keepQuestion(current: current, previous: pending.previousMode, rotation: 0, previousRotation: pending.previousRotation),
+                    fallback: PanelText.keepFallback(previous: pending.previousMode, current: current, previousRotation: pending.previousRotation),
+                    pending: pending, keep: {}, revert: {}
+                )
             }
         }
         await desk.send(.perform, .revertMode, on: lenovo)
 
-        // Muted, and software dimming switched on.
-        let lg = desk.tag(SampleDesk.lgID)
         await desk.send(.toggle, .mute, on: lg)
-        try shootPanel(session, desk, "panel-muted", title: "A muted monitor")
+        try shootPanel(session, desk, "panel-muted", group: "panel", title: "A muted monitor")
+
+        let fresh = await self.desk()
+        try shootPanel(session, fresh, "panel-new", group: "panel", title: "Nothing saved yet", note: "No scenes, and the first monitor's volume not yet found to be ignored.")
+
+        let dimming = await self.desk(softwareDimming: true)
+        await dimming.send(.set, .brightness, on: dimming.tag(SampleDesk.lenovoID), value: .absolute(0.1), options: CommandOptions(verification: .readBack))
+        try shootPanel(session, dimming, "panel-software-dimming", group: "panel", title: "Software dimming: a value that was only sent", note: "The first monitor is below its own range, so the picture is dimmed by the app.")
+
+        let three = SampleDesk()
+        three.plugBoth()
+        three.provider.controllers[SampleDesk.builtInID] = [.appleNative: nativeBrightness()]
+        three.plugBuiltIn()
+        await three.start()
+        try shootPanel(session, three, "panel-three-displays", group: "panel", title: "Three displays")
+        try shootPanel(session, three, "panel-small-screen", group: "panel", title: "Three displays on a small screen", note: "The panel stops growing and scrolls.", maxHeight: 420)
     }
 
-    static func panelStates(_ session: RenderSession) async throws {
-        let dimming = await desk(softwareDimming: true)
-        try shootPanel(session, dimming, "panel-software-dimming", title: "Software dimming on", note: "Brightness below the hardware range is only sent, never read back.", details: true)
+    // MARK: One display, one level down
 
+    static func detail(_ session: RenderSession) async throws {
+        let desk = try await livedIn()
+        let lenovo = desk.tag(SampleDesk.lenovoID)
+        let lg = desk.tag(SampleDesk.lgID)
+        try shootPanel(session, desk, "detail-say-why", group: "detail", title: "A display's page, with what it does not offer", start: .display(lenovo), maxHeight: 1400)
+        try shootPanel(session, desk, "detail-full", group: "detail", title: "A display's page, every control present", start: .display(lg), maxHeight: 1400)
+
+        let dimming = await self.desk(softwareDimming: true)
+        await dimming.send(.set, .brightness, on: dimming.tag(SampleDesk.lenovoID), value: .absolute(0.1), options: CommandOptions(verification: .readBack))
+        try shootPanel(session, dimming, "detail-sent", group: "detail", title: "A display's page: a brightness that was only sent", start: .display(dimming.tag(SampleDesk.lenovoID)), maxHeight: 1400)
+
+        let quiet = SampleDesk()
+        quiet.plug(SampleDesk.lenovo(), controller: .silent(), modes: SampleDesk.fourKModes, current: SampleDesk.mode(3200, 1800), frame: SampleDesk.lenovoFrame)
+        await quiet.start()
+        try shootPanel(session, quiet, "detail-silent", group: "detail", title: "A display's page: a monitor that does not answer", start: .display(quiet.tag(SampleDesk.lenovoID)), maxHeight: 1400)
+
+        let laptop = SampleDesk()
+        laptop.provider.controllers[SampleDesk.builtInID] = [.appleNative: nativeBrightness()]
+        var screen = SampleDesk.builtIn()
+        screen.isMain = true
+        laptop.plug(screen, controller: nil, modes: [SampleDesk.mode(1512, 982, flags: [.safe, .systemDefault, .native])], current: SampleDesk.mode(1512, 982, flags: [.safe, .systemDefault, .native]), frame: DisplayFrame(x: 0, y: 0, width: 1512, height: 982))
+        await laptop.start()
+        try shootPanel(session, laptop, "panel-built-in", group: "states", title: "A laptop with its own panel only")
+        try shootPanel(session, laptop, "detail-built-in", group: "detail", title: "A display's page: a laptop's own panel", start: .display(laptop.tag(SampleDesk.builtInID)), maxHeight: 1400)
+    }
+
+    // MARK: Arrangement, mirroring, connection
+
+    static func arrange(_ session: RenderSession) async throws {
+        let desk = try await livedIn()
+        let lenovo = desk.tag(SampleDesk.lenovoID)
+        let lg = desk.tag(SampleDesk.lgID)
+        try shootPanel(session, desk, "arrange", group: "arrange", title: "Arrange", start: .arrange)
+
+        // A display dragged on the picture: Keep or Revert for the arrangement.
+        await desk.send(.set, .position, on: lg, value: .choice(DisplayPoint(x: -2304, y: 0).description))
+        try shootPanel(session, desk, "arrange-pending", group: "arrange", title: "Keep or Revert after moving a display", start: .arrange)
+        if let pending = desk.context.layout.pending {
+            try session.shoot("window-keep-layout", group: "windows", title: "Keep window for an arrangement change", chrome: .window) {
+                LayoutConfirmationView(pending: pending, desk: deskEntries(desk), keep: {}, revert: {})
+            }
+        }
+        await desk.send(.perform, .keepLayout)
+        try session.shoot("window-protection-offer", group: "windows", title: "The offer to protect the arrangement", note: "Shown once, after the first arrangement change is kept.", chrome: .window) {
+            ProtectionOfferView(protect: {}, notNow: {})
+        }
+
+        await desk.send(.set, .protectLayout, value: .flag(true))
+        await desk.send(.set, .mirror, on: lg, of: lenovo, value: .flag(true))
+        await desk.send(.perform, .keepLayout)
+        try shootPanel(session, desk, "arrange-mirrored", group: "arrange", title: "One monitor mirrors the other, protection on", start: .arrange)
+        await desk.send(.set, .mirror, on: lg, value: .flag(false))
+        await desk.send(.perform, .keepLayout)
+
+        await desk.send(.set, .connected, on: lg, value: .flag(false))
+        if let pending = desk.context.layout.pending {
+            try session.shoot("window-keep-disconnect", group: "windows", title: "Keep window after disconnecting a display", chrome: .window) {
+                LayoutConfirmationView(pending: pending, desk: deskEntries(desk), keep: {}, revert: {})
+            }
+        }
+        await desk.send(.perform, .keepLayout)
+        try shootPanel(session, desk, "arrange-disconnected", group: "arrange", title: "A display the app disconnected", start: .arrange)
+        try shootPanel(session, desk, "panel-one-away", group: "arrange", title: "The panel while a display is disconnected")
+
+        let remembered = SampleDesk()
+        remembered.plugBoth()
+        remembered.plug(SampleDesk.spare(), controller: .monitor(brightness: 40, contrast: 50), modes: SampleDesk.fourKModes, current: SampleDesk.mode(1920, 1080, flags: [.safe, .systemDefault]), frame: DisplayFrame(x: 3200, y: 0, width: 1920, height: 1080))
+        await remembered.start()
+        remembered.unplug(SampleDesk.spareID)
+        await remembered.reconfigure()
+        try shootPanel(session, remembered, "arrange-unplugged", group: "arrange", title: "A monitor that is unplugged", start: .arrange)
+
+        let limited = await self.desk { $0.connectionSystem.availability = .unavailable("This version of macOS does not let an app disconnect a display.") }
+        try shootPanel(session, limited, "detail-no-disconnect", group: "arrange", title: "A display's page where disconnecting is not available", start: .display(limited.tag(SampleDesk.lgID)), maxHeight: 1400)
+    }
+
+    static func deskEntries(_ desk: SampleDesk) -> [DeskMap.Entry] {
+        desk.context.layout.snapshot().entries.filter { $0.mirrorOf == nil }.map { (entry: LayoutEntry) -> DeskMap.Entry in
+            DeskMap.Entry(tag: entry.tag, name: desk.context.registry.record(for: entry.tag)?.displayName ?? "Display", frame: entry.frame, isMain: entry.isMain)
+        }
+    }
+
+    // MARK: Empty and error states
+
+    static func states(_ session: RenderSession) async throws {
         let empty = SampleDesk()
         await empty.start()
         try shootPanel(session, empty, "panel-no-display", group: "states", title: "No display connected")
@@ -92,7 +239,7 @@ enum SurfaceCatalog {
         quiet.plug(SampleDesk.lenovo(), controller: .silent(), modes: SampleDesk.fourKModes, current: SampleDesk.mode(3200, 1800), frame: SampleDesk.lenovoFrame)
         quiet.plug(SampleDesk.lg(), controller: nil, modes: SampleDesk.tallModes, current: SampleDesk.mode(2304, 2048), frame: SampleDesk.lgFrame)
         await quiet.start()
-        try shootPanel(session, quiet, "panel-silent-monitor", group: "states", title: "A silent monitor, and a connection with no control channel", details: true)
+        try shootPanel(session, quiet, "panel-silent-monitor", group: "states", title: "A silent monitor, and a connection with no control channel")
 
         // The check of a monitor is still running.
         let checking = SampleDesk()
@@ -104,139 +251,39 @@ enum SurfaceCatalog {
         controllers.lg.release()
         await checking.idle()
 
-        // A monitor that was here before and is unplugged now.
-        let remembered = SampleDesk()
-        remembered.plugBoth()
-        remembered.plug(SampleDesk.spare(), controller: .monitor(brightness: 40, contrast: 50), modes: SampleDesk.fourKModes, current: SampleDesk.mode(1920, 1080, flags: [.safe, .systemDefault]), frame: DisplayFrame(x: 3200, y: 0, width: 1920, height: 1080))
-        await remembered.start()
-        remembered.unplug(SampleDesk.spareID)
-        await remembered.reconfigure()
-        try shootPanel(session, remembered, "panel-remembered", group: "states", title: "A monitor that is not connected now", expand: ["Not connected"])
-
-        // A laptop on its own: one fixed size, brightness from macOS.
-        let laptop = SampleDesk()
-        laptop.provider.controllers[SampleDesk.builtInID] = [.appleNative: SampleController(
-            kind: .appleNative, capabilities: [.hardwareBrightness: ControlCapability(noticesOutsideChanges: true, rawMaximum: 1, isStepped: false)], values: [.hardwareBrightness: 0.62]
-        )]
-        var screen = SampleDesk.builtIn()
-        screen.isMain = true
-        laptop.plug(screen, controller: nil, modes: [SampleDesk.mode(1512, 982, flags: [.safe, .systemDefault, .native])], current: SampleDesk.mode(1512, 982, flags: [.safe, .systemDefault, .native]), frame: DisplayFrame(x: 0, y: 0, width: 1512, height: 982))
-        await laptop.start()
-        try shootPanel(session, laptop, "panel-built-in", group: "states", title: "A laptop with its own panel only", details: true)
-
-        // Three displays: how long the panel gets.
-        let three = SampleDesk()
-        three.plugBoth()
-        three.provider.controllers[SampleDesk.builtInID] = [.appleNative: SampleController(
-            kind: .appleNative, capabilities: [.hardwareBrightness: ControlCapability(noticesOutsideChanges: true, rawMaximum: 1, isStepped: false)], values: [.hardwareBrightness: 0.62]
-        )]
-        three.plugBuiltIn()
-        await three.start()
-        try shootPanel(session, three, "panel-three-displays", group: "states", title: "Three displays", note: "The panel has no scrolling.", expand: [])
-
         // A change the system refuses.
         let refused = await desk()
         refused.modeSystem.rejectNext = .rejected("the display refused the mode")
         let model = PanelModel(context: refused.context)
         let layoutModel = LayoutPanelModel(context: refused.context, hotKeys: nil)
         model.choose(SampleDesk.mode(2560, 1440), tag: refused.tag(SampleDesk.lenovoID))
-        await refused.settling { await refused.settle() }
-        try session.shoot("panel-error", group: "states", title: "A change that failed", note: "The message line near the bottom.") {
-            PanelView(model: model, layoutModel: layoutModel, quit: {})
+        await refused.until { model.message != nil }
+        try session.shoot("panel-error", group: "states", title: "A change that failed") {
+            PanelView(model: model, layoutModel: layoutModel, maxHeight: 900, openSettings: {}, quit: {})
         }
         model.close()
         layoutModel.close()
+
+        // The recorder waiting for keys.
+        let recording = try await livedIn()
+        try shootPanel(session, recording, "panel-recording", group: "states", title: "The shortcut recorder waiting for keys") { _, layoutModel in
+            layoutModel.recordPreset("Night")
+        }
     }
 
     // MARK: First run and permissions
 
     static func permissions(_ session: RenderSession) async throws {
-        let first = await desk { $0.probe.accessibility = .denied }
-        try shootPanel(session, first, "panel-first-run", group: "permissions", title: "First run: keys need Accessibility")
+        let first = await desk(firstRun: true) { $0.probe.accessibility = .denied }
+        try shootPanel(session, first, "panel-first-run", group: "permissions", title: "First run: a greeting, and the keys need Accessibility")
 
-        first.context.permissions.accessibilityWasRequested()
-        first.context.permissions.refresh()
-        try shootPanel(session, first, "panel-stale-accessibility", group: "permissions", title: "The grant did not take: a stale Accessibility entry")
+        let stale = await desk { $0.probe.accessibility = .denied }
+        stale.context.permissions.accessibilityWasRequested()
+        stale.context.permissions.refresh()
+        try shootPanel(session, stale, "panel-stale-accessibility", group: "permissions", title: "The grant did not take: a stale Accessibility entry")
 
         let login = await desk { $0.probe.loginItem = .requiresApproval }
-        try shootPanel(session, login, "panel-login-approval", group: "permissions", title: "Launch at login waits for approval")
-    }
-
-    // MARK: Arrangement, mirroring, connection, presets, shortcuts
-
-    static func layout(_ session: RenderSession) async throws {
-        let section = ["Arrangement and presets"]
-        let desk = await desk()
-        let lenovo = desk.tag(SampleDesk.lenovoID)
-        let lg = desk.tag(SampleDesk.lgID)
-        try shootPanel(session, desk, "layout-default", group: "layout", title: "Arrangement and presets, nothing saved yet", expand: section)
-
-        // Presets, shortcuts and links, the way the panel and the CLI add them.
-        for name in ["Desk", "Presentation", "Night"] {
-            await desk.send(.set, .savePreset, value: .choice(name))
-        }
-        let bindings: [ShortcutBinding] = [
-            ShortcutBinding(combo: KeyCombo(keyCode: 18, modifiers: [.control, .option], keyLabel: "1"), command: Command(.set, .preset, value: .choice("Desk"), origin: .keyboard), title: "Preset Desk"),
-            ShortcutBinding(combo: KeyCombo(keyCode: 19, modifiers: [.control, .option], keyLabel: "2"), command: Command(.set, .preset, value: .choice("Presentation"), origin: .keyboard), title: "Preset Presentation"),
-            ShortcutBinding(combo: KeyCombo(keyCode: 15, modifiers: [.control, .option, .command], keyLabel: "R"), command: Command(.step, .rotation, on: .tag(lg.rawValue), value: .steps(1, fine: false), origin: .keyboard), title: "Rotate \(lg)"),
-        ]
-        for binding in bindings {
-            let data = try JSONEncoder().encode(binding)
-            await desk.send(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)))
-        }
-        await desk.send(.set, .urlScheme, value: .flag(true))
-        // The app makes a random token. A fixed one keeps two runs' pictures the same.
-        desk.context.settings.update { $0.layout.urlToken = "0123456789abcdef0123456789abcdef" }
-        await desk.send(.set, .protectLayout, value: .flag(true))
-        try shootPanel(session, desk, "layout-presets-shortcuts", group: "layout", title: "Presets, shortcuts, protection and links in use", expand: section)
-
-        // The recorder waiting for keys.
-        do {
-            let model = PanelModel(context: desk.context)
-            let layoutModel = LayoutPanelModel(context: desk.context, hotKeys: nil)
-            layoutModel.recordPreset("Night")
-            try session.shoot("layout-recording", group: "layout", title: "The shortcut recorder waiting for keys", expand: section) {
-                PanelView(model: model, layoutModel: layoutModel, quit: {})
-            }
-            layoutModel.stopRecording()
-            model.close()
-            layoutModel.close()
-        }
-
-        // A display dragged on the canvas: Keep or Revert for the arrangement.
-        await desk.send(.set, .protectLayout, value: .flag(false))
-        await desk.send(.set, .position, on: lg, value: .choice(DisplayPoint(x: -2304, y: 0).description))
-        try shootPanel(session, desk, "layout-pending", group: "layout", title: "Keep or Revert after moving a display", expand: section)
-        if let pending = desk.context.layout.pending {
-            try session.shoot("window-keep-layout", group: "windows", title: "Keep window for an arrangement change", chrome: .window) {
-                LayoutConfirmationView(pending: pending, keep: {}, revert: {})
-            }
-        }
-        await desk.send(.perform, .keepLayout)
-        try session.shoot("window-protection-offer", group: "windows", title: "The offer to protect the arrangement", note: "Shown once, after the first arrangement change is kept.", chrome: .window) {
-            ProtectionOfferView(protect: {}, notNow: {})
-        }
-
-        // Mirroring.
-        await desk.send(.set, .mirror, on: lg, of: lenovo, value: .flag(true))
-        await desk.send(.perform, .keepLayout)
-        try shootPanel(session, desk, "layout-mirrored", group: "layout", title: "One monitor mirrors the other", expand: section)
-        await desk.send(.set, .mirror, on: lg, value: .flag(false))
-        await desk.send(.perform, .keepLayout)
-
-        // A display disconnected by the app.
-        await desk.send(.set, .connected, on: lg, value: .flag(false))
-        if let pending = desk.context.layout.pending {
-            try session.shoot("window-keep-disconnect", group: "windows", title: "Keep window after disconnecting a display", chrome: .window) {
-                LayoutConfirmationView(pending: pending, keep: {}, revert: {})
-            }
-        }
-        await desk.send(.perform, .keepLayout)
-        try shootPanel(session, desk, "layout-disconnected", group: "layout", title: "A display the app disconnected", note: "The last display in use cannot be disconnected.", expand: section)
-
-        // A Mac where displays cannot be disconnected.
-        let limited = await self.desk { $0.connectionSystem.availability = .unavailable("This version of macOS does not let an app disconnect a display.") }
-        try shootPanel(session, limited, "layout-connection-unavailable", group: "layout", title: "Disconnecting is not available", expand: section)
+        try shootPanel(session, login, "panel-login-approval", group: "permissions", title: "Opening at login waits for approval")
     }
 
     // MARK: Indicator, notices
@@ -244,13 +291,13 @@ enum SurfaceCatalog {
     static func floating(_ session: RenderSession) async throws {
         let tag = DisplayTag(1)
         try session.shoot("indicator-brightness", group: "indicator", title: "Indicator: brightness", chrome: .overlay) {
-            IndicatorView(payload: IndicatorPayload(tag: tag, control: .brightness, value: 0.62))
+            IndicatorView(payload: IndicatorPayload(tag: tag, control: .brightness, value: 0.62), name: "LEN P32p-20")
         }
         try session.shoot("indicator-volume", group: "indicator", title: "Indicator: volume", chrome: .overlay) {
-            IndicatorView(payload: IndicatorPayload(tag: tag, control: .volume, value: 0.3))
+            IndicatorView(payload: IndicatorPayload(tag: tag, control: .volume, value: 0.3), name: "LG SDQHD")
         }
         try session.shoot("indicator-muted", group: "indicator", title: "Indicator: muted", chrome: .overlay) {
-            IndicatorView(payload: IndicatorPayload(tag: tag, control: .volume, value: 0.3, isMuted: true))
+            IndicatorView(payload: IndicatorPayload(tag: tag, control: .volume, value: 0.3, isMuted: true), name: "LG SDQHD")
         }
 
         // Protection puts back an arrangement that was changed elsewhere, then gives up
@@ -275,12 +322,34 @@ enum SurfaceCatalog {
         }
     }
 
+    // MARK: Settings
+
+    static func settings(_ session: RenderSession) async throws {
+        let desk = try await livedIn()
+        let model = PanelModel(context: desk.context)
+        let layoutModel = LayoutPanelModel(context: desk.context, hotKeys: nil)
+        for tab in SettingsView.Tab.allCases {
+            try session.shoot("settings-\(tab.rawValue.lowercased())", group: "settings", title: "Settings: \(tab.rawValue)", chrome: .window, active: true) {
+                SettingsView(model: model, layoutModel: layoutModel, start: tab, openLink: { _ in })
+            }
+        }
+        model.close()
+        layoutModel.close()
+    }
+
     // MARK: Menu bar
 
     static func menuBar(_ session: RenderSession) throws {
-        try session.shoot("menu-bar-icon", group: "menu bar", title: "The menu bar icon", note: "One state: the system's display symbol.", chrome: .bare, dumpAccessibility: false) {
-            MenuBarStrip {
-                Image(systemName: "display")
+        let states: [(MenuBarIcon.State, String, String)] = [
+            (.normal, "normal", "The menu bar icon"),
+            (.attention, "attention", "The menu bar icon: something waits for you"),
+            (.safeMode, "safe-mode", "The menu bar icon: safe mode"),
+        ]
+        for (state, name, title) in states {
+            try session.shoot("menu-bar-\(name)", group: "menu bar", title: title, chrome: .bare, dumpAccessibility: false) {
+                MenuBarStrip {
+                    Image(nsImage: MenuBarIcon.image(state)).renderingMode(.template)
+                }
             }
         }
     }

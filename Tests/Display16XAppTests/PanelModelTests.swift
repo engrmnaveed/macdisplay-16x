@@ -14,7 +14,10 @@ import Testing
         defer { model.close() }
 
         #expect(model.cards.map(\.name) == ["LEN P32p-20", "LG SDQHD"])
-        #expect(model.cards[0].subtitle == "External · Main display")
+        #expect(model.cards[0].caption == "32-inch · Main display")
+        #expect(model.cards[1].caption == "External")
+        #expect(model.cards[0].isMain)
+        #expect(abs(model.cards[1].aspect - 2304.0 / 2048.0) < 0.001)
         #expect(model.cards[0].brightness.isAvailable)
         #expect(abs(model.cards[0].brightness.value - 0.53) < 0.001)
         #expect(model.cards[0].strip.count > 1)
@@ -110,11 +113,11 @@ import Testing
         let moved = item(2, DisplayFrame(x: -2304, y: -248, width: 2304, height: 2048))
 
         // Dropped a little off the right edge, tops nearly level: it lands on the edge.
-        let near = ArrangementCanvas.snap(DisplayPoint(x: 3260, y: 40), item: moved, others: [anchor])
+        let near = LayoutPanelModel.snap(DisplayPoint(x: 3260, y: 40), item: moved, others: [anchor])
         #expect(near.x == 3200)
 
         // Dropped far from everything: left where it was dropped.
         let far = DisplayPoint(x: 9000, y: 9000)
-        #expect(ArrangementCanvas.snap(far, item: moved, others: [anchor]) == far)
+        #expect(LayoutPanelModel.snap(far, item: moved, others: [anchor]) == far)
     }
 }

@@ -5,9 +5,6 @@ import SwiftUI
 struct LaunchOptions {
     var safeMode = false
     var verbose = false
-    /// Development aid: render the panel to this PNG without showing it, then quit.
-    var snapshotPath: String?
-    var snapshotDetails = false
 }
 
 @MainActor
@@ -21,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var confirmations: ConfirmationWindowPresenter?
     private var layoutSurfaces: LayoutSurfaceSet?
     private var layoutPanelModel: LayoutPanelModel?
+    private var settingsWindow: SettingsWindowPresenter?
+    private var iconState = MenuBarIcon.State.normal
     private let indicatorPresenter = IndicatorWindowPresenter()
     private var subscription: EventBus.Subscription?
     private var accessibilityObserver: NSObjectProtocol?
@@ -36,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // a moment, so a capital letter typed elsewhere at the wrong instant does not count.
         if options.safeMode {
             start(safeMode: true)
-        } else if options.snapshotPath == nil, NSEvent.modifierFlags.contains(.shift) {
+        } else if NSEvent.modifierFlags.contains(.shift) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                 MainActor.assumeIsolated {
                     self.start(safeMode: NSEvent.modifierFlags.contains(.shift))
@@ -49,16 +48,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func start(safeMode: Bool) {
         let context = AppContext(safeMode: safeMode)
-        if let path = options.snapshotPath {
-            self.context = context
-            context.start()
-            Task { @MainActor in
-                await context.coordinator.waitForDetection()
-                PanelSnapshot.write(context: context, to: path, expandDetails: self.options.snapshotDetails)
-                NSApp.terminate(nil)
-            }
-            return
-        }
         if context.isAnotherInstanceRunning {
             Log.app.notice("Display 16X is already running. This copy quits.")
             NSApp.terminate(nil)
@@ -66,10 +55,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         self.context = context
         context.startServer()
+        indicatorPresenter.displayName = { [registry = context.registry] tag in registry.record(for: tag)?.displayName }
         context.indicator.presenter = indicatorPresenter
         confirmations = ConfirmationWindowPresenter(context: context)
         let layoutSurfaces = LayoutSurfaceSet(context: context)
         self.layoutSurfaces = layoutSurfaces
+        settingsWindow = SettingsWindowPresenter(context: context, hotKeys: layoutSurfaces.hotKeys)
         keyCapture = KeyCapture(keys: context.keys, settings: context.settings)
         keyCapture?.handler = layoutSurfaces.keyHandler
         makeStatusItem()
@@ -79,7 +70,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         subscription = context.bus.subscribe { [weak self] event in
             if event == .permissionsChanged { self?.updateKeyCapture() }
+            switch event {
+            case .permissionsChanged, .gateChanged, .modeConfirmationChanged, .layoutConfirmationChanged: self?.updateStatusIcon()
+            default: break
+            }
         }
+        updateStatusIcon()
         // The system announces changes to Accessibility grants. The new state is readable
         // a moment later, so it is read once after a short wait.
         accessibilityObserver = DistributedNotificationCenter.default().addObserver(
@@ -138,17 +134,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     // MARK: Status item and panel
 
     private func makeStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            let image = NSImage(systemSymbolName: "display", accessibilityDescription: AppPaths.productName)
-            image?.isTemplate = true
-            button.image = image
-            button.toolTip = AppPaths.productName
+            button.image = MenuBarIcon.image(iconState)
+            button.toolTip = MenuBarIcon.description(iconState)
             button.target = self
             button.action = #selector(togglePanel(_:))
-            button.setAccessibilityLabel(AppPaths.productName)
+            button.setAccessibilityLabel(MenuBarIcon.description(iconState))
         }
         statusItem = item
+    }
+
+    /// The icon says when something waits for the user. It changes on events only.
+    private func updateStatusIcon() {
+        guard let context else { return }
+        let state: MenuBarIcon.State
+        if context.gate.isSafeMode {
+            state = .safeMode
+        } else if !context.permissions.advice.isEmpty || !context.modes.pending.isEmpty || context.layout.pending != nil {
+            state = .attention
+        } else {
+            state = .normal
+        }
+        guard state != iconState else { return }
+        iconState = state
+        statusItem?.button?.image = MenuBarIcon.image(state)
+        statusItem?.button?.toolTip = MenuBarIcon.description(state)
+        statusItem?.button?.setAccessibilityLabel(MenuBarIcon.description(state))
     }
 
     @objc private func togglePanel(_ sender: Any?) {
@@ -160,7 +172,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // The panel's content is built now and released when it closes.
         let model = PanelModel(context: context)
         let layoutModel = LayoutPanelModel(context: context, hotKeys: layoutSurfaces?.hotKeys)
-        let hosting = NSHostingController(rootView: PanelView(model: model, layoutModel: layoutModel, quit: { NSApp.terminate(nil) }))
+        // The panel scrolls inside the screen it hangs from instead of growing past it.
+        let screenHeight: CGFloat = (button.window?.screen ?? NSScreen.main)?.visibleFrame.height ?? Skin.size.panelMaxHeight
+        let view = PanelView(
+            model: model, layoutModel: layoutModel, maxHeight: screenHeight * Skin.size.panelScreenShare,
+            openSettings: { [weak self] in self?.openSettings() }, quit: { NSApp.terminate(nil) }
+        )
+        let hosting = NSHostingController(rootView: view)
         hosting.sizingOptions = [.preferredContentSize]
         let popover = NSPopover()
         popover.behavior = .transient
@@ -176,6 +194,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         updateKeyCapture()
     }
 
+    private func openSettings() {
+        popover?.performClose(nil)
+        settingsWindow?.show()
+    }
+
     func popoverDidClose(_ notification: Notification) {
         panelModel?.close()
         panelModel = nil
@@ -183,35 +206,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         layoutPanelModel = nil
         popover?.contentViewController = nil
         popover = nil
-    }
-}
-
-/// Renders the panel off screen, for checking the layout and for screenshots in the docs.
-@MainActor
-enum PanelSnapshot {
-    static func write(context: AppContext, to path: String, expandDetails: Bool) {
-        let model = PanelModel(context: context)
-        let layoutModel = LayoutPanelModel(context: context, hotKeys: nil)
-        let view = PanelView(model: model, layoutModel: layoutModel, quit: {}, expandDetails: expandDetails)
-            .background(Color(nsColor: .windowBackgroundColor))
-        let hosting = NSHostingView(rootView: view)
-        let size = hosting.fittingSize
-        hosting.frame = NSRect(origin: .zero, size: size)
-        let window = NSWindow(contentRect: hosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        window.contentView = hosting
-        hosting.layoutSubtreeIfNeeded()
-        guard let bitmap = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) else {
-            Log.app.error("The panel could not be rendered.")
-            return
-        }
-        hosting.cacheDisplay(in: hosting.bounds, to: bitmap)
-        do {
-            try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
-            Log.app.info("Panel snapshot written to \(path).")
-        } catch {
-            Log.app.error("The panel snapshot could not be written: \(error.localizedDescription)")
-        }
-        model.close()
-        layoutModel.close()
     }
 }

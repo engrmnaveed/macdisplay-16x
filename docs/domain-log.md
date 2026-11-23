@@ -6,6 +6,23 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · Interface pass, stages 2 and 3: the direction the owner chose, and what the rebuilt surfaces settle
+
+**The owner chose direction B, "Studio"**: the family's navy and aqua, displays drawn to scale, thick bars, a stepped text-size strip. The accent is the family's teal and aqua as drawn. **The owner also asked that the look stay cheap to change later.** So the look lives in two files, the skin (values) and the pieces (how a bar or a chip is drawn), surfaces only compose them, and a test fails when a surface brings a color, font, radius, distance or symbol of its own.
+
+Every surface is rebuilt on that and drawn from sample data. The owner has not approved the surfaces yet. What this settles and what it leaves:
+
+- **The panel is three pages in one column**: the displays, one display's page, and Arrange. A page takes the panel's place, and the panel scrolls inside 86% of the height of the screen it hangs from. Settings are a window of their own.
+- **Saved setups are called scenes in the interface**, the PRD's word. The command line and the settings file keep `preset`. **Decision needed** only if one word should be used everywhere.
+- **Confirmed or sent is shown, from what the panel already gets.** A brightness with a software share is marked sent. So is a value whose last change the display accepted without reading it back. Everything else was read from the display. The request to the core from stage 1 shrinks to this: a flag kept with the tracked value is only needed if a surface that never sent a command, such as the indicator, should say it too.
+- **The card says the display's size in inches**, from the size its EDID gives, where the PRD says "connection". How a display is connected is still not available to the interface.
+- **The greeting on first run shows in the first run only**: while the settings file did not exist when the app started. No setting was added for it.
+- **A protection notice is shown as a sentence**, with a capital first. The core's text is unchanged.
+- **Where a control moved.** Each display's mirroring, disconnect, protection switches and shortcuts are on its page. Scenes are on top of the panel and in Settings. Shortcuts, command line access, links and the settings file are in Settings. Displays that are disconnected, behind a closed lid or unplugged are listed under Arrange, and "Forget" is there.
+- **Placing a display without the pointer** uses the placement command that the command line already has. It was not reachable from the panel before.
+- **Not changed, and still open:** the floating Keep windows do not take the keyboard (decision asked for in the entry below). Whether the switch for turning the built-in display off is shown at all is roadmap decision 16; it is where it was, under Arrange.
+- **To check on screen in stage 5:** the popover's arrow keeps the system's material while the panel has the skin's canvas. VoiceOver pressing the pop-ups, which are the system's menus under a drawn label.
+
 ## 23 November 2026 · Interface pass, stage 1: what every surface shows when it is drawn from sample data
 
 Every surface of the app was drawn off screen from made-up monitors, in light and dark, through the app's own panel models. No display was touched and the copy in daily use was left alone. What the pictures and the accessibility trees show about the product:

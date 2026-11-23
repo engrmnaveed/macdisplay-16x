@@ -18,8 +18,17 @@ final class PanelModel: ObservableObject {
     struct Card: Identifiable, Equatable {
         var tag: DisplayTag
         var name: String
-        var subtitle: String
+        /// The line under the name: what kind of display it is and its part on the desk.
+        var caption: String
         var isChecking: Bool
+        var isMain = false
+        var isBuiltIn = false
+        /// Width divided by height as the display stands on the desk, for its small picture.
+        var aspect = 16.0 / 9.0
+        /// Whether each value on the card was read back or only sent.
+        var brightnessKnowledge: ValueKnowledge?
+        var contrastKnowledge: ValueKnowledge?
+        var volumeKnowledge: ValueKnowledge?
         var brightness = ControlState()
         var contrast = ControlState()
         var volume = ControlState()
@@ -62,11 +71,17 @@ final class PanelModel: ObservableObject {
     @Published private(set) var brightnessKeys = true
     @Published private(set) var volumeKeys = true
     @Published private(set) var keyTarget = KeyTargetPolicy.underPointer
+    /// The user was sent to System Settings for Accessibility and the grant is still missing.
+    @Published private(set) var accessibilityDidNotTake = false
+    /// The app has never run on this Mac before: there was no settings file when it started.
+    @Published private(set) var isFirstRun = false
     /// The last thing that went wrong, in the user's terms. Cleared by the next success.
     @Published var message: String?
 
     private let context: AppContext
     private var subscription: EventBus.Subscription?
+    /// Controls whose last change through this panel was accepted and not read back.
+    private var unconfirmed: [DisplayTag: Set<ControlID>] = [:]
 
     init(context: AppContext) {
         self.context = context
@@ -96,9 +111,10 @@ final class PanelModel: ObservableObject {
             if card.volume.isAvailable { features.append(contentsOf: [.volume, .mute]) }
             guard !features.isEmpty else { continue }
             let wanted = features
-            Task { [context] in
+            Task { [weak self, context] in
                 for feature in wanted {
-                    _ = await context.engine.execute(Command(.get, feature, on: .tag(card.tag.rawValue), origin: .interface, options: CommandOptions(refresh: true)))
+                    let result = await context.engine.execute(Command(.get, feature, on: .tag(card.tag.rawValue), origin: .interface, options: CommandOptions(refresh: true)))
+                    if let control = PanelModel.control(for: feature) { self?.note(result, control: control) }
                 }
             }
         }
@@ -142,14 +158,20 @@ final class PanelModel: ObservableObject {
     func rebuild() {
         let registry = context.registry
         let document = context.settings.document
+        var frames: [DisplayTag: DisplayFrame] = [:]
+        for entry in context.layout.snapshot().entries { frames[entry.tag] = entry.frame }
         cards = registry.live.keys.sorted().compactMap { tag -> Card? in
             guard let live = registry.live[tag], let record = registry.record(for: tag) else { return nil }
             let mode = context.modes.currentMode(for: tag)
-            var parts: [String] = [record.kind == .builtIn ? "Built-in" : "External"]
-            if live.snapshot.isMain { parts.append("Main display") }
-            if live.snapshot.mirrorSource != nil { parts.append("Mirrored") }
-
-            var card = Card(tag: tag, name: record.displayName, subtitle: parts.joined(separator: " · "), isChecking: live.isDetecting)
+            let isBuiltIn: Bool = record.kind == .builtIn
+            let caption: String = PanelText.caption(
+                isBuiltIn: isBuiltIn, inches: PanelText.inches(record.physicalSizeOverride ?? record.physicalSize),
+                isMain: live.snapshot.isMain, isMirrored: live.snapshot.mirrorSource != nil
+            )
+            var card = Card(tag: tag, name: record.displayName, caption: caption, isChecking: live.isDetecting)
+            card.isMain = live.snapshot.isMain
+            card.isBuiltIn = isBuiltIn
+            card.aspect = PanelText.aspect(frame: frames[tag], mode: mode)
             card.brightness = state(.brightness, tag: tag)
             card.contrast = state(.contrast, tag: tag)
             card.volume = state(.volume, tag: tag)
@@ -171,13 +193,15 @@ final class PanelModel: ObservableObject {
             }
 
             let composition = context.controls.composition(for: tag)
-            if composition.hasSoftware && composition.hasHardware {
-                card.softwareNote = "Software dimming takes over below \(Int((composition.switchover * 100).rounded()))%."
-            } else if composition.hasSoftware {
-                card.softwareNote = "Brightness is software dimming only."
-            } else {
-                card.softwareNote = context.controls.availability(of: .softwareBrightness, for: tag).reason ?? "Software dimming is off."
-            }
+            let softwareShare: Bool = composition.hasSoftware && (!composition.hasHardware || card.brightness.value < composition.switchover)
+            card.brightnessKnowledge = knowledge(.brightness, tag: tag, state: card.brightness, alwaysSent: softwareShare)
+            card.contrastKnowledge = knowledge(.contrast, tag: tag, state: card.contrast)
+            card.volumeKnowledge = knowledge(.volume, tag: tag, state: card.volume)
+            card.softwareNote = PanelText.dimmingNote(
+                hasSoftware: composition.hasSoftware, hasHardware: composition.hasHardware, switchover: composition.switchover,
+                globallyOn: document.global.colorTablesEnabled ?? SettingsDefaults.colorTablesEnabled,
+                reason: context.controls.availability(of: .softwareBrightness, for: tag).reason
+            )
             var identity = ["Tag \(tag.rawValue)"]
             if let key = record.modelKey { identity.append("model \(key)") }
             if let serial = record.identifiers.serialText { identity.append("serial \(serial)") }
@@ -189,6 +213,8 @@ final class PanelModel: ObservableObject {
             Remembered(tag: $0.tag, name: $0.displayName, lastSeen: $0.lastSeen)
         }
         advice = context.permissions.advice
+        accessibilityDidNotTake = context.permissions.accessibilityDidNotTake
+        if case .fresh = context.settings.loadOutcome { isFirstRun = true } else { isFirstRun = false }
         isSafeMode = context.gate.isSafeMode
         loginItem = context.permissions.state.loginItem
         softwareDimming = document.global.colorTablesEnabled ?? SettingsDefaults.colorTablesEnabled
@@ -197,11 +223,43 @@ final class PanelModel: ObservableObject {
         keyTarget = document.global.keyTarget ?? SettingsDefaults.keyTarget
     }
 
+    // MARK: What is known
+
+    /// A value with a software share is only ever sent. So is one whose last change the
+    /// display accepted without reading it back. Everything else was read from the display.
+    private func knowledge(_ control: ControlID, tag: DisplayTag, state: ControlState, alwaysSent: Bool = false) -> ValueKnowledge? {
+        guard state.isAvailable else { return nil }
+        if alwaysSent || unconfirmed[tag]?.contains(control) == true { return .sent }
+        return .confirmed
+    }
+
+    private func note(_ result: CommandResult, control: ControlID) {
+        var changed = false
+        for entry in result.entries {
+            switch entry.outcome {
+            case .confirmed: changed = unconfirmed[entry.tag]?.remove(control) != nil || changed
+            case .accepted: changed = unconfirmed[entry.tag, default: []].insert(control).inserted || changed
+            case .failed: break
+            }
+        }
+        if changed { rebuild() }
+    }
+
+    static func control(for feature: FeatureID) -> ControlID? {
+        switch feature {
+        case .brightness: .brightness
+        case .contrast: .contrast
+        case .volume: .volume
+        default: nil
+        }
+    }
+
     // MARK: Commands
 
     private func run(_ command: Command, report: Bool = true) {
         Task { [weak self, context] in
             let result = await context.send(command)
+            if report, let control = PanelModel.control(for: command.feature) { self?.note(result, control: control) }
             guard report, let self else { return }
             if let failure = result.error {
                 self.message = failure.prefix(1).uppercased() + failure.dropFirst() + "."

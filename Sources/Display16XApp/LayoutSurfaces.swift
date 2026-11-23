@@ -298,45 +298,19 @@ final class LayoutConfirmationPresenter {
             return
         }
         let context = self.context
+        let desk: [DeskMap.Entry] = context.layout.snapshot().entries.filter { $0.mirrorOf == nil }.map { (entry: LayoutEntry) -> DeskMap.Entry in
+            let name: String = context.registry.record(for: entry.tag)?.displayName ?? "Display"
+            return DeskMap.Entry(tag: entry.tag, name: name, frame: entry.frame, isMain: entry.isMain)
+        }
         let view = LayoutConfirmationView(
             pending: pending,
+            desk: desk,
             keep: { Task { await context.send(Command(.perform, .keepLayout, origin: .interface)) } },
             revert: { Task { await context.send(Command(.perform, .revertLayout, origin: .interface)) } }
         )
         let panel: NSPanel = window ?? FloatingPanel.make()
         window = panel
         FloatingPanel.show(view, in: panel)
-    }
-}
-
-struct LayoutConfirmationView: View {
-    let pending: LayoutConfirmation
-    let keep: () -> Void
-    let revert: () -> Void
-
-    private var title: String {
-        if pending.disconnected.isEmpty { return "Keep this arrangement?" }
-        return pending.disconnected.count == 1 ? "Keep the display disconnected?" : "Keep the displays disconnected?"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(verbatim: title)
-                .font(.headline)
-            Text("If you do not answer, the displays go back to how they were.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            CountdownBar(deadline: pending.deadline, seconds: pending.seconds)
-            HStack {
-                Spacer()
-                Button("Revert", action: revert)
-                    .keyboardShortcut(.cancelAction)
-                Button("Keep", action: keep)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(18)
-        .frame(width: 340)
     }
 }
 
@@ -389,25 +363,6 @@ final class NoticePresenter {
     }
 }
 
-struct NoticeView: View {
-    let notice: ProtectionNotice
-
-    private var symbol: String {
-        notice.kind == .restored ? "arrow.uturn.backward.circle" : "exclamationmark.circle"
-    }
-
-    var body: some View {
-        Label(notice.message, systemImage: symbol)
-            .font(.callout)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(maxWidth: 420)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .padding(6)
-    }
-}
-
 // MARK: Offer to protect the layout
 
 /// Decision 13: after the user keeps an arrangement change, offer layout protection once.
@@ -442,30 +397,5 @@ final class ProtectionOfferPresenter {
             await context.send(Command(.perform, .saveLayout, origin: .interface))
             await context.send(Command(.set, .protectLayout, value: .flag(true), origin: .interface))
         }
-    }
-}
-
-struct ProtectionOfferView: View {
-    let protect: () -> Void
-    let notNow: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Keep this arrangement after sleep?")
-                .font(.headline)
-            Text("Display 16X can put this arrangement, the main display and mirroring back after sleep, reconnects and changes made elsewhere.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Not Now", action: notNow)
-                    .keyboardShortcut(.cancelAction)
-                Button("Protect This Arrangement", action: protect)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(18)
-        .frame(width: 360)
     }
 }

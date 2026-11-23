@@ -12,47 +12,19 @@ extension NSScreen {
 
 // MARK: Indicator
 
-struct IndicatorView: View {
-    let payload: IndicatorPayload
-
-    private var symbol: String {
-        if payload.control == .brightness { return "sun.max.fill" }
-        if payload.isMuted { return "speaker.slash.fill" }
-        return payload.value <= 0 ? "speaker.fill" : "speaker.wave.2.fill"
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 22)
-            HStack(spacing: 3) {
-                ForEach(0..<payload.segments, id: \.self) { index in
-                    let fill = min(max(payload.filledSegments - Double(index), 0), 1)
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(.primary.opacity(0.18 + 0.72 * fill))
-                        .frame(width: 9, height: 9)
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.primary.opacity(0.08)))
-        .padding(6)
-    }
-}
-
 /// The one indicator presenter in v0.1: a small capsule near the bottom of the affected
 /// display. The window exists only while it is on screen.
 @MainActor
 final class IndicatorWindowPresenter: IndicatorPresenter {
     private var window: NSPanel?
     private var hideWork: DispatchWorkItem?
+    /// The name the indicator shows for a display, so the user sees which one a key reached.
+    var displayName: ((DisplayTag) -> String?)?
 
     func present(_ payload: IndicatorPayload, on display: SystemDisplayID) {
         guard let screen = NSScreen.screen(for: display) ?? NSScreen.main else { return }
-        let hosting = NSHostingView(rootView: IndicatorView(payload: payload))
+        let name: String = displayName?(payload.tag) ?? "Display"
+        let hosting = NSHostingView(rootView: IndicatorView(payload: payload, name: name))
         let size = hosting.fittingSize
         let panel = window ?? makeWindow()
         window = panel
@@ -113,9 +85,12 @@ final class ConfirmationWindowPresenter {
             close(tag)
             return
         }
-        let name = context.registry.record(for: tag)?.displayName ?? "this display"
+        let name = context.registry.record(for: tag)?.displayName ?? "This display"
+        let current: ModeDescriptor? = context.modes.currentMode(for: tag)
         let view = ConfirmationWindowView(
             name: name,
+            question: PanelText.keepQuestion(current: current, previous: pending.previousMode, rotation: context.modes.rotation(for: tag), previousRotation: pending.previousRotation),
+            fallback: PanelText.keepFallback(previous: pending.previousMode, current: current, previousRotation: pending.previousRotation),
             pending: pending,
             keep: { [context] in
                 Task { await context.send(Command(.perform, .keepMode, on: .tag(tag.rawValue), origin: .interface)) }
@@ -150,32 +125,5 @@ final class ConfirmationWindowPresenter {
         guard let panel = windows.removeValue(forKey: tag) else { return }
         panel.orderOut(nil)
         panel.contentView = nil
-    }
-}
-
-struct ConfirmationWindowView: View {
-    let name: String
-    let pending: PendingConfirmation
-    let keep: () -> Void
-    let revert: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Keep this setting on \(name)?")
-                .font(.headline)
-            Text("If you do not answer, it goes back to how it was.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            CountdownBar(deadline: pending.deadline, seconds: pending.seconds)
-            HStack {
-                Spacer()
-                Button("Revert", action: revert)
-                    .keyboardShortcut(.cancelAction)
-                Button("Keep", action: keep)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(18)
-        .frame(width: 340)
     }
 }

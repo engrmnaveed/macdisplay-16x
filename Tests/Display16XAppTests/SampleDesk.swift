@@ -20,10 +20,12 @@ final class SampleDesk {
     let probe = SamplePermissionProbe()
     let context: AppContext
 
-    init(safeMode: Bool = false, layoutAvailable: Bool = true, configure: ((inout SettingsDocument) -> Void)? = nil) {
+    /// - Parameter firstRun: No settings file exists yet, as on the very first launch.
+    init(safeMode: Bool = false, layoutAvailable: Bool = true, firstRun: Bool = false, configure: ((inout SettingsDocument) -> Void)? = nil) {
+        let saved: Data? = firstRun ? nil : try? DocumentCoding.encoder().encode(SettingsDocument())
         let adapters = SystemAdapters(
             paths: AppPaths(supportDirectory: URL(fileURLWithPath: "/nonexistent/display16x-render-harness", isDirectory: true)),
-            settingsPersistence: MemoryPersistence(),
+            settingsPersistence: MemoryPersistence(saved),
             recoveryPersistence: MemoryPersistence(),
             scheduler: scheduler,
             modeSystem: modeSystem,
@@ -215,6 +217,17 @@ final class SampleDesk {
         let value = await task.value
         await idle()
         return value
+    }
+
+    /// Moves the clock until something holds, for work a panel model started and the
+    /// caller cannot wait on. It stops short of a Keep countdown running out.
+    func until(_ condition: @MainActor () -> Bool) async {
+        for _ in 0..<60 {
+            if condition() { return }
+            await settle()
+            scheduler.advance(by: context.sequencer.isReconfiguring ? context.settings.document.reconfigurationSettleDelay + 0.01 : 0.2)
+        }
+        await settle()
     }
 
     /// Sends a command the way the panel does, and waits for it.
