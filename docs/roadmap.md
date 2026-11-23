@@ -29,10 +29,10 @@ Licenses were read from the GitHub API on 22 November 2026. Credit any MIT sourc
 | Software dimming | Scale the display's gamma table | Public Core Graphics | Verified while awake and across a lock and unlock, where the app writes the table again. Not checked with a custom color profile | None after the table is set | v0.1, off by default |
 | Brightness and volume keys, on-screen indicator | Event tap for media keys (needs Accessibility permission) and a small indicator window | Public | Verified with Accessibility granted | Negligible | v0.1 |
 | Rotation | Display preferences class of the MonitorPanel framework | Private | Verified once through the timed revert on one monitor | None | v0.1 |
-| Arrangement, main display, mirroring | Configuration transaction | Public Core Graphics | Not yet probed | None | v0.2 |
-| Disconnect and reconnect a display | Window server enable flag | Private SkyLight | Present | None | v0.2 |
-| Configuration restore | Reapply saved state on reconfiguration and wake events | Public | Not yet probed | Event-driven | v0.2 |
-| Presets, shortcuts, CLI, Shortcuts actions | Own code, App Intents | Public | — | None | v0.2 |
+| Arrangement, main display, mirroring | Configuration transaction | Public Core Graphics | Built and unit-tested. No write has run on hardware yet | None | v0.2 |
+| Disconnect and reconnect a display | Window server enable flag | Private SkyLight | Built and unit-tested. No write has run on hardware yet | None | v0.2 |
+| Configuration restore | Reapply saved state on reconfiguration and wake events | Public | Built and unit-tested, off by default. Not yet seen across a wake | Event-driven | v0.2 |
+| Presets, shortcuts, CLI, Shortcuts actions | Own code, App Intents | Public | Presets, custom shortcuts, CLI verbs and the link scheme are built. Shortcuts actions are left out: their metadata step ships with Xcode only | None | v0.2 |
 | Flexible HiDPI scaling, custom resolutions | Display override files per vendor and model with a generated resolution list. Needs administrator authorization and a reconnect | System file format | macOS ships 39 vendor override folders. Writing our own is not yet probed on macOS 27 | None after install | v0.3 |
 | Virtual screens | Virtual display objects owned by the app | Private Core Graphics | Present | None while unused. Mirroring one to a panel adds a full-frame composite per refresh | v0.3 |
 | HDR switching | Window server HDR flag | Private SkyLight | Present. One test monitor reports HDR support | None | v0.4 |
@@ -82,7 +82,7 @@ One small probe per risky mechanism, each recording Mac model, macOS build, moni
 - [ ] Display override install, activation and removal on macOS 27
 - [ ] Virtual display create and destroy
 - [ ] Disconnect and reconnect, HDR switch
-- [ ] Built-in display brightness on a MacBook
+- [ ] Built-in display brightness on a MacBook. The test Mac is one, running with its lid closed, so this can be checked by opening the lid with the owner present
 - [ ] All of the above on a MacBook Air M1
 
 ### v0.1 Core
@@ -148,6 +148,13 @@ Every change to arrangement, mirroring, the main display or a connection is reve
 
 Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
 
+**Status on 23 November 2026.** All five stages are built on the branch `claude/v0-2-layout-14c08e`, with 309 unit tests passing, not pushed. Nothing in v0.2 has written to hardware. Fifteen checks wait for the owner at the desk, listed in order in the branch's feasibility notes: the layout writes one by one, each put back, then the same through the CLI and the panel, a saved layout across a wake, a preset from a shortcut, the budgets, and the lid.
+
+Left out of v0.2, both moved to Later in the inventory:
+
+- **Shortcuts actions.** The step that produces what the Shortcuts app reads ships with Xcode only. The CLI and the link scheme reach every feature from a shortcut in the meantime. See decision 15.
+- **Asking macOS to look for displays again.** The private call exists, and no permitted reference documents its arguments.
+
 ### v0.3 Advanced scaling
 
 Flexible HiDPI scaling and custom resolutions through generated overrides, with a preview of what will be written, administrator authorization, and a one-click removal. Virtual screens for headless and remote use. Mirror-based HiDPI for panels that cannot get it natively, labelled with its GPU cost.
@@ -200,3 +207,14 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 5 | Labels for vendor-specific input values | Shown by number, the user can rename | Keep numbers. Add a table of confirmed labels later, from hardware reports | Later |
 | 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac, separate from the project certificate, whose key stays with the owner and the release secrets | Next development round |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
+| 13 | Whether layout protection switches itself on | Off. Restoring a mode, a rotation or the arrangement happens only for a display where the user switched protection on | Keep it off, and offer the switch at the moment the user arranges displays through the app. macOS already puts the arrangement back by itself after a cable change | v0.2 |
+| 14 | Safe mode when the last display in use goes away while the app holds others disconnected | The reconnect goes through the gate, which safe mode keeps closed, so the Mac could be left without a picture until logout | Let this one reconnect through even in safe mode. With no picture there is no way for the user to act, and it only undoes the app's own change | v0.2 |
+| 15 | Shortcuts actions | Left out, because the Command Line Tools cannot produce their metadata | Leave them out for now. Revisit at the public release: building releases with Xcode on CI would bring them back and would end "builds with the Command Line Tools alone" for releases only | Public release |
+
+### Core changes waiting for the core session
+
+Changes to what v0.1 built are made by the session that built it, on the line of development current at the time.
+
+| Change | Why | Lands on | Status |
+| --- | --- | --- | --- |
+| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Approved by planning. To be sent together with whatever the v0.2 hardware checks turn up |
