@@ -443,6 +443,8 @@ What the read-only hardware report said on the runner:
 
 This is a virtual machine with no monitor, so it says nothing about DDC or real modes on macOS 26. It does show that the app's own rule holds there: a control that is missing is switched off, and nothing stops the tool.
 
+The runner's older compiler (Swift 6.3.3) gave up on a SwiftUI expression that this Mac's Swift 6.4.2 accepts: the body of the v0.2 arrangement canvas, which took 18 ms to type-check here and mixed `Double` and `CGFloat` arithmetic inside one modifier chain. No compile time on this Mac predicts that limit, so the v0.2 app files are now held to 10 ms per expression and 15 ms per function body here, measured with `-warn-long-expression-type-checking=10 -warn-long-function-bodies=15`, with geometry worked out in typed constants before the view uses it. The whole package also builds clean at 100 and 200 ms.
+
 ### Where v0.1 Core stands at the end of 23 November
 
 Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, one rotation with the revert on its own, DDC replies with and without other display utilities, identity across a cable replug and a change of port, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.

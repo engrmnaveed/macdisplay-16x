@@ -19,10 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var panelModel: PanelModel?
     private var keyCapture: KeyCapture?
     private var confirmations: ConfirmationWindowPresenter?
-    private var layoutConfirmations: LayoutConfirmationPresenter?
-    private let notices = NoticePresenter()
-    private var protectionOffer: ProtectionOfferPresenter?
-    private var hotKeys: HotKeyCenter?
+    private var layoutSurfaces: LayoutSurfaceSet?
     private var layoutPanelModel: LayoutPanelModel?
     private let indicatorPresenter = IndicatorWindowPresenter()
     private var subscription: EventBus.Subscription?
@@ -71,29 +68,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         context.startServer()
         context.indicator.presenter = indicatorPresenter
         confirmations = ConfirmationWindowPresenter(context: context)
-        layoutConfirmations = LayoutConfirmationPresenter(context: context)
-        context.protection.onNotice = { [notices] notice in notices.show(notice) }
-        let protectionOffer = ProtectionOfferPresenter(context: context)
-        self.protectionOffer = protectionOffer
-        context.protection.onOffer = { [weak protectionOffer] in protectionOffer?.show() }
-        context.layoutCommands.reservedShortcuts = { HotKeyCenter.systemShortcuts() }
+        let layoutSurfaces = LayoutSurfaceSet(context: context)
+        self.layoutSurfaces = layoutSurfaces
         keyCapture = KeyCapture(keys: context.keys, settings: context.settings)
-        keyCapture?.handler = { [weak context] key, fine in
-            guard let context else { return false }
-            return MirrorAwareKeys.handle(key, fine: fine, context: context)
-        }
+        keyCapture?.handler = layoutSurfaces.keyHandler
         makeStatusItem()
         context.start()
         updateKeyCapture()
-        context.shortcuts.onResult = { binding, result in
-            guard !result.succeeded else { return }
-            let reason = result.error ?? result.entries.first { $0.outcome == .failed }?.detail ?? "unknown"
-            Log.app.notice("Shortcut \(binding.combo) (\(binding.displayTitle)) failed: \(reason)")
-        }
-        let hotKeys = HotKeyCenter(shortcuts: context.shortcuts)
-        hotKeys.start()
-        self.hotKeys = hotKeys
-        context.settings.onChange { [weak hotKeys] in hotKeys?.update() }
+        layoutSurfaces.start()
 
         subscription = context.bus.subscribe { [weak self] event in
             if event == .permissionsChanged { self?.updateKeyCapture() }
@@ -126,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         keyCapture?.stop()
-        hotKeys?.stop()
+        layoutSurfaces?.stop()
         context?.shutdown()
     }
 
@@ -177,7 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let context, let button = statusItem?.button else { return }
         // The panel's content is built now and released when it closes.
         let model = PanelModel(context: context)
-        let layoutModel = LayoutPanelModel(context: context, hotKeys: hotKeys)
+        let layoutModel = LayoutPanelModel(context: context, hotKeys: layoutSurfaces?.hotKeys)
         let hosting = NSHostingController(rootView: PanelView(model: model, layoutModel: layoutModel, quit: { NSApp.terminate(nil) }))
         hosting.sizingOptions = [.preferredContentSize]
         let popover = NSPopover()

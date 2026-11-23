@@ -7,6 +7,58 @@ import SwiftUI
 // change, protection notices, and brightness keys that reach a whole mirror set. Each one
 // builds a command and hands it to the engine.
 
+// MARK: The set
+
+/// Everything v0.2 adds around the panel, made and wired in one place so the app delegate
+/// stays as v0.1 built it, plus one line to start and one to stop.
+@MainActor
+final class LayoutSurfaceSet {
+    private let context: AppContext
+    let hotKeys: HotKeyCenter
+    private let confirmations: LayoutConfirmationPresenter
+    private let notices = NoticePresenter()
+    private let offer: ProtectionOfferPresenter
+
+    init(context: AppContext) {
+        self.context = context
+        hotKeys = HotKeyCenter(shortcuts: context.shortcuts)
+        confirmations = LayoutConfirmationPresenter(context: context)
+        offer = ProtectionOfferPresenter(context: context)
+        let notices = self.notices
+        context.protection.onNotice = { (notice: ProtectionNotice) in notices.show(notice) }
+        context.protection.onOffer = { [weak offer] in offer?.show() }
+        context.layoutCommands.reservedShortcuts = { HotKeyCenter.systemShortcuts() }
+        context.shortcuts.onResult = { (binding: ShortcutBinding, result: CommandResult) in
+            guard !result.succeeded else { return }
+            Log.app.notice("Shortcut \(binding.combo) (\(binding.displayTitle)) failed: \(LayoutSurfaceSet.failure(of: result))")
+        }
+    }
+
+    /// Brightness and volume keys, routed so they reach a whole mirror set.
+    var keyHandler: @MainActor (MediaKey, Bool) -> Bool {
+        let context = self.context
+        return { (key: MediaKey, fine: Bool) -> Bool in MirrorAwareKeys.handle(key, fine: fine, context: context) }
+    }
+
+    func start() {
+        hotKeys.start()
+        let hotKeys = self.hotKeys
+        context.settings.onChange { [weak hotKeys] in hotKeys?.update() }
+    }
+
+    func stop() {
+        hotKeys.stop()
+    }
+
+    static func failure(of result: CommandResult) -> String {
+        if let error = result.error { return error }
+        for entry in result.entries where entry.outcome == CommandOutcome.failed {
+            return entry.detail ?? "unknown"
+        }
+        return "unknown"
+    }
+}
+
 // MARK: Global shortcuts
 
 /// Registers the saved shortcuts with the system as hot keys. Hot keys need no
@@ -26,22 +78,27 @@ final class HotKeyCenter {
         self.shortcuts = shortcuts
     }
 
+    /// The hot key event handler, a plain C function with its types spelled out.
+    private static let eventHandler: EventHandlerUPP = { (_: EventHandlerCallRef?, event: EventRef?, refcon: UnsafeMutableRawPointer?) -> OSStatus in
+        guard let event, let refcon else { return OSStatus(eventNotHandledErr) }
+        var identifier = EventHotKeyID()
+        let size: Int = MemoryLayout<EventHotKeyID>.size
+        let status: OSStatus = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, size, nil, &identifier)
+        guard status == noErr else {
+            Log.app.notice("A shortcut event arrived that could not be read (\(status)).")
+            return status
+        }
+        let center: HotKeyCenter = Unmanaged<HotKeyCenter>.fromOpaque(refcon).takeUnretainedValue()
+        let id: UInt32 = identifier.id
+        MainActor.assumeIsolated { center.pressed(id) }
+        return noErr
+    }
+
     func start() {
         guard handler == nil else { return }
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        let refcon = Unmanaged.passUnretained(self).toOpaque()
-        let installed = InstallEventHandler(GetEventDispatcherTarget(), { _, event, refcon in
-            guard let event, let refcon else { return OSStatus(eventNotHandledErr) }
-            var identifier = EventHotKeyID()
-            let status = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &identifier)
-            guard status == noErr else {
-                Log.app.notice("A shortcut event arrived that could not be read (\(status)).")
-                return status
-            }
-            let center = Unmanaged<HotKeyCenter>.fromOpaque(refcon).takeUnretainedValue()
-            MainActor.assumeIsolated { center.pressed(identifier.id) }
-            return noErr
-        }, 1, &type, refcon, &handler)
+        let refcon: UnsafeMutableRawPointer = Unmanaged.passUnretained(self).toOpaque()
+        let installed: OSStatus = InstallEventHandler(GetEventDispatcherTarget(), HotKeyCenter.eventHandler, 1, &type, refcon, &handler)
         if installed != noErr { Log.app.error("Shortcuts cannot be received (\(installed)).") }
         update()
     }
@@ -61,8 +118,11 @@ final class HotKeyCenter {
         taken = []
         for (index, binding) in bindings.enumerated() {
             let id = UInt32(index + 1)
+            let keyCode = UInt32(binding.combo.keyCode)
+            let modifiers: UInt32 = HotKeyCenter.carbonModifiers(binding.combo.modifiers)
+            let hotKeyID = EventHotKeyID(signature: HotKeyCenter.signature, id: id)
             var reference: EventHotKeyRef?
-            let status = RegisterEventHotKey(UInt32(binding.combo.keyCode), HotKeyCenter.carbonModifiers(binding.combo.modifiers), EventHotKeyID(signature: HotKeyCenter.signature, id: id), GetEventDispatcherTarget(), 0, &reference)
+            let status: OSStatus = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetEventDispatcherTarget(), 0, &reference)
             if status == noErr, let reference {
                 references[id] = reference
                 combos[id] = binding.combo
@@ -185,6 +245,35 @@ enum MirrorAwareKeys {
     }
 }
 
+// MARK: Floating windows
+
+/// The small windows v0.2 shows on the main display: Keep or Revert, and the protection offer.
+@MainActor
+enum FloatingPanel {
+    static func make() -> NSPanel {
+        let panel = NSPanel(contentRect: .zero, styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.isMovableByWindowBackground = true
+        panel.level = .floating
+        panel.hidesOnDeactivate = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+        return panel
+    }
+
+    /// Shows the view in the panel, centred on the main display.
+    static func show<Content: View>(_ view: Content, in panel: NSPanel) {
+        let hosting = NSHostingView(rootView: view)
+        let size: NSSize = hosting.fittingSize
+        panel.contentView = hosting
+        let frame: NSRect = NSScreen.screens.first?.visibleFrame ?? .zero
+        let origin = NSPoint(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        panel.orderFrontRegardless()
+    }
+}
+
 // MARK: Keep or Revert for the layout
 
 /// Shows Keep and Revert on the main display while a layout or connection change waits.
@@ -208,29 +297,15 @@ final class LayoutConfirmationPresenter {
             window = nil
             return
         }
+        let context = self.context
         let view = LayoutConfirmationView(
             pending: pending,
-            keep: { [context] in Task { await context.send(Command(.perform, .keepLayout, origin: .interface)) } },
-            revert: { [context] in Task { await context.send(Command(.perform, .revertLayout, origin: .interface)) } }
+            keep: { Task { await context.send(Command(.perform, .keepLayout, origin: .interface)) } },
+            revert: { Task { await context.send(Command(.perform, .revertLayout, origin: .interface)) } }
         )
-        let hosting = NSHostingView(rootView: view)
-        let size = hosting.fittingSize
-        let panel = window ?? {
-            let panel = NSPanel(contentRect: .zero, styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
-            panel.isMovableByWindowBackground = true
-            panel.level = .floating
-            panel.hidesOnDeactivate = false
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            panel.isReleasedWhenClosed = false
-            return panel
-        }()
+        let panel: NSPanel = window ?? FloatingPanel.make()
         window = panel
-        panel.contentView = hosting
-        let frame = NSScreen.screens.first?.visibleFrame ?? .zero
-        panel.setFrame(NSRect(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2, width: size.width, height: size.height), display: true)
-        panel.orderFrontRegardless()
+        FloatingPanel.show(view, in: panel)
     }
 }
 
@@ -239,9 +314,14 @@ struct LayoutConfirmationView: View {
     let keep: () -> Void
     let revert: () -> Void
 
+    private var title: String {
+        if pending.disconnected.isEmpty { return "Keep this arrangement?" }
+        return pending.disconnected.count == 1 ? "Keep the display disconnected?" : "Keep the displays disconnected?"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(pending.disconnected.isEmpty ? "Keep this arrangement?" : "Keep the display\(pending.disconnected.count == 1 ? "" : "s") disconnected?")
+            Text(verbatim: title)
                 .font(.headline)
             Text("If you do not answer, the displays go back to how they were.")
                 .font(.callout)
@@ -270,42 +350,61 @@ final class NoticePresenter {
 
     func show(_ notice: ProtectionNotice) {
         guard let screen = NSScreen.screens.first else { return }
-        let hosting = NSHostingView(rootView:
-            Label(notice.message, systemImage: notice.kind == .restored ? "arrow.uturn.backward.circle" : "exclamationmark.circle")
-                .font(.callout)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .frame(maxWidth: 420)
-                .fixedSize(horizontal: false, vertical: true)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-                .padding(6)
-        )
-        let size = hosting.fittingSize
-        let panel = window ?? {
-            let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
-            panel.isOpaque = false
-            panel.backgroundColor = .clear
-            panel.level = .statusBar
-            panel.ignoresMouseEvents = true
-            panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-            panel.isReleasedWhenClosed = false
-            return panel
-        }()
+        let hosting = NSHostingView(rootView: NoticeView(notice: notice))
+        let size: NSSize = hosting.fittingSize
+        let panel: NSPanel = window ?? NoticePresenter.makePanel()
         window = panel
         panel.contentView = hosting
-        let frame = screen.visibleFrame
-        panel.setFrame(NSRect(x: frame.midX - size.width / 2, y: frame.maxY - size.height - 12, width: size.width, height: size.height), display: true)
+        let frame: NSRect = screen.visibleFrame
+        let origin = NSPoint(x: frame.midX - size.width / 2, y: frame.maxY - size.height - 12)
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
         panel.orderFrontRegardless()
+        scheduleHide()
+    }
+
+    private static func makePanel() -> NSPanel {
+        let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.level = .statusBar
+        panel.ignoresMouseEvents = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        panel.isReleasedWhenClosed = false
+        return panel
+    }
+
+    private func scheduleHide() {
         hideWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated {
-                self?.window?.orderOut(nil)
-                self?.window?.contentView = nil
-                self?.window = nil
-            }
+            MainActor.assumeIsolated { self?.hide() }
         }
         hideWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
+    }
+
+    private func hide() {
+        window?.orderOut(nil)
+        window?.contentView = nil
+        window = nil
+    }
+}
+
+struct NoticeView: View {
+    let notice: ProtectionNotice
+
+    private var symbol: String {
+        notice.kind == .restored ? "arrow.uturn.backward.circle" : "exclamationmark.circle"
+    }
+
+    var body: some View {
+        Label(notice.message, systemImage: symbol)
+            .font(.callout)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 420)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+            .padding(6)
     }
 }
 
@@ -326,24 +425,9 @@ final class ProtectionOfferPresenter {
             protect: { [weak self] in self?.answer(protect: true) },
             notNow: { [weak self] in self?.answer(protect: false) }
         )
-        let hosting = NSHostingView(rootView: view)
-        let size = hosting.fittingSize
-        let panel = window ?? {
-            let panel = NSPanel(contentRect: .zero, styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
-            panel.isMovableByWindowBackground = true
-            panel.level = .floating
-            panel.hidesOnDeactivate = false
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-            panel.isReleasedWhenClosed = false
-            return panel
-        }()
+        let panel: NSPanel = window ?? FloatingPanel.make()
         window = panel
-        panel.contentView = hosting
-        let frame = NSScreen.screens.first?.visibleFrame ?? .zero
-        panel.setFrame(NSRect(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2, width: size.width, height: size.height), display: true)
-        panel.orderFrontRegardless()
+        FloatingPanel.show(view, in: panel)
     }
 
     private func answer(protect: Bool) {
