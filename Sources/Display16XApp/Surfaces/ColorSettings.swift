@@ -24,6 +24,9 @@ struct ColorSettingsPane: View {
             SkinRule()
             SwitchRow(title: "Color profiles", help: "Choose a display's profile and reference preset from its page, with one to fall back to and one for HDR.", isOn: binding(.profileControls, color.profileControls))
             CostLine(text: "Costs nothing. Software dimming pauses on every display while a profile of your own is assigned.")
+            SkinRule()
+            SwitchRow(title: "Brightness above SDR white", help: "On a display with HDR switched on, go brighter than white from its page or with the brightness keys past 100%.", isOn: binding(.upscaling, color.upscaling))
+            CostLine(text: "Keeps the GPU busy while a display is above white. Never kept across a restart.")
         }
     }
 }

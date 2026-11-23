@@ -62,6 +62,36 @@ struct HDRRows: View {
                 SwitchRow(title: "Brightness changes the backlight in HDR", help: state.sdrLevel, isOn: hardware)
             }
             CostLine(text: "Costs nothing. The display goes dark for a moment when HDR switches, and ordinary windows look paler in HDR.")
+            if color.upscaling {
+                SkinRule()
+                AboveWhiteRow(state: state, color: color)
+            }
+        }
+    }
+}
+
+/// Brightness above SDR white, where the user turned it on. Says why when it cannot be used.
+struct AboveWhiteRow: View {
+    let state: ColorPanelModel.DisplayColor
+    @ObservedObject var color: ColorPanelModel
+
+    private var shown: String {
+        state.upscaleLevel > 0 ? state.upscaleFactor : "SDR white"
+    }
+
+    var body: some View {
+        if let reason = state.upscaleReason {
+            WhyRow(title: "Brighter than SDR white", reason: reason)
+        } else {
+            LineRow(title: "Brighter than SDR white") {
+                PopupMenu(title: "Brightness above SDR white for \(state.name)", shown: shown) {
+                    Button("SDR White") { color.setUpscale(0, tag: state.tag) }
+                    Button("A Quarter of the Way") { color.setUpscale(0.25, tag: state.tag) }
+                    Button("Halfway") { color.setUpscale(0.5, tag: state.tag) }
+                    Button("All the Way") { color.setUpscale(1, tag: state.tag) }
+                }
+            }
+            CostLine(text: "Keeps the GPU busy while the display is above white. Back to white at sleep, at a lock and when Display 16X quits.")
         }
     }
 }

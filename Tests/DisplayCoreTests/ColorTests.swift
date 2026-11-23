@@ -517,3 +517,139 @@ import Testing
         #expect(rig.advanced.virtualSystem.made.values.first?.hdr == .only)
     }
 }
+
+@Suite struct UpscalingMathTests {
+    @Test("The ceiling is the smaller of the user's maximum and the headroom, scaled by the calibration")
+    func maximum() {
+        let lg = ColorFixture.lgHeadroomInHDR
+        #expect(UpscalingMath.maximumFactor(nil, headroom: lg) == 1.6)
+        #expect(UpscalingMath.maximumFactor(UpscalingSettings(maximum: 4), headroom: lg) == 2.95)
+        #expect(abs(UpscalingMath.maximumFactor(UpscalingSettings(maximum: 4, calibration: 0.5), headroom: lg) - 1.975) < 0.000_1)
+        #expect(UpscalingMath.maximumFactor(nil, headroom: Headroom(current: 1, potential: 1)) == 1)
+        #expect(UpscalingMath.factor(level: 0.5, maximum: 1.6) == 1.3)
+        #expect(UpscalingMath.factor(level: 2, maximum: 1.6) == 1.6)
+    }
+
+    @Test("Keys stop at 100% before going above white, and come off the level above white first")
+    func keyStop() {
+        let step = 1.0 / 16
+        // Below white, the core's step does it and ends at 100% at most.
+        #expect(NeutralKeyStop.route(brightness: 0.97, upscale: 0, steps: 1, fine: false, stopAtNeutral: true).passThrough)
+        // At 100%, the next press goes above.
+        #expect(NeutralKeyStop.route(brightness: 1, upscale: 0, steps: 1, fine: false, stopAtNeutral: true) == .init(brightness: nil, upscale: step, passThrough: false))
+        // Without the stop, the part past 100% goes above at once.
+        let through = NeutralKeyStop.route(brightness: 0.97, upscale: 0, steps: 1, fine: false, stopAtNeutral: false)
+        #expect(through.brightness == 1 && abs((through.upscale ?? 0) - (0.97 + step - 1)) < 0.000_1)
+        // Going down, the level above white comes off first and rests at white.
+        #expect(NeutralKeyStop.route(brightness: 1, upscale: step / 2, steps: -1, fine: false, stopAtNeutral: true) == .init(brightness: nil, upscale: 0, passThrough: false))
+        let down = NeutralKeyStop.route(brightness: 1, upscale: step / 2, steps: -1, fine: false, stopAtNeutral: false)
+        #expect(down.upscale == 0 && abs((down.brightness ?? 0) - (1 - step / 2)) < 0.000_1)
+        #expect(NeutralKeyStop.route(brightness: 1, upscale: 0, steps: -1, fine: false, stopAtNeutral: true).passThrough)
+    }
+}
+
+@MainActor
+@Suite struct UpscalingTests {
+    private func rig(stage: Bool = true) async -> ColorRig {
+        let rig = ColorRig()
+        await rig.startWithDesk()
+        await rig.enable(.hdrControls)
+        await rig.enable(.upscaling)
+        if stage { rig.giveUpscalingStage() }
+        return rig
+    }
+
+    @Test("Each missing piece is said in turn: the switch, HDR, and the core's upscaling stage")
+    func reasons() async {
+        let rig = ColorRig()
+        await rig.startWithDesk()
+        let off = await rig.run(.get, .upscale, on: .tag(rig.lgTag.rawValue))
+        #expect(off.entries.first?.detail?.contains("Turn it on in Settings") == true)
+        await rig.enable(.upscaling)
+        let noHDR = await rig.run(.set, .upscale, on: .tag(rig.lgTag.rawValue), value: .absolute(0.5))
+        #expect(noHDR.entries.first?.detail?.contains("Switch HDR on first") == true)
+        let lenovo = await rig.run(.get, .upscale, on: .tag(rig.lenovoTag.rawValue))
+        #expect(lenovo.entries.first?.detail == "The display has no room above SDR white.")
+        await rig.enable(.hdrControls)
+        _ = await rig.run(.set, .hdr, on: .tag(rig.lgTag.rawValue), value: .flag(true))
+        let noStage = await rig.run(.set, .upscale, on: .tag(rig.lgTag.rawValue), value: .absolute(0.5))
+        #expect(noStage.entries.first?.detail == UpscalingService.pipelineMissing)
+        #expect(rig.system.headroomRequests.isEmpty)
+    }
+
+    @Test("With the stage, a level asks for headroom, writes the factor and records it first, and 0 gives it all back")
+    func level() async {
+        let rig = await rig()
+        _ = await rig.run(.set, .hdr, on: .tag(rig.lgTag.rawValue), value: .flag(true))
+        let result = await rig.run(.set, .upscale, on: .tag(rig.lgTag.rawValue), value: .absolute(0.5))
+        #expect(result.entries.first?.outcome == .accepted)
+        #expect(rig.boosts[rig.lgTag] == 1.3)
+        #expect(rig.system.headroomRequests[Fixture.lgID] == true)
+        #expect(rig.rig.recovery.color.upscaling[rig.lgTag]?.requestedHeadroom == true)
+        _ = await rig.run(.set, .upscale, on: .tag(rig.lgTag.rawValue), value: .absolute(0))
+        #expect(rig.boosts[rig.lgTag] == 1)
+        #expect(rig.system.headroomRequests[Fixture.lgID] == false)
+        #expect(rig.rig.recovery.document.color == nil)
+    }
+
+    @Test("HDR switched off, a sleep, the switch turned off and quitting each bring the display back to white")
+    func backToWhite() async {
+        let rig = await rig()
+        _ = await rig.run(.set, .hdr, on: .tag(rig.lgTag.rawValue), value: .flag(true))
+        _ = await rig.run(.set, .upscale, on: .tag(rig.lgTag.rawValue), value: .absolute(1))
+        _ = await rig.run(.set, .hdr, on: .tag(rig.lgTag.rawValue), value: .flag(false))
+        #expect(rig.upscaling.levels.isEmpty && rig.boosts[rig.lgTag] == 1)
+
+        _ = await rig.run(.set, .hdr, on: .tag(rig.lgTag.rawValue), value: .flag(true))
+        _ = await rig.run(.set, .upscale, on: .tag(rig.lgTag.rawValue), value: .absolute(1))
+        rig.rig.bus.publish(.willSleep)
+        #expect(rig.upscaling.levels.isEmpty)
+
+        _ = await rig.run(.set, .upscale, on: .tag(rig.lgTag.rawValue), value: .absolute(1))
+        _ = await rig.run(.set, .upscaling, value: .flag(false))
+        #expect(rig.upscaling.levels.isEmpty && rig.rig.recovery.document.color == nil)
+    }
+
+    @Test("The brightness keys stop at 100%, then go above white, and come back down through white")
+    func keys() async {
+        let rig = await rig()
+        _ = await rig.run(.set, .hdr, on: .tag(rig.lgTag.rawValue), value: .flag(true))
+        _ = await rig.run(.set, .brightness, on: .tag(rig.lgTag.rawValue), value: .absolute(0.97))
+        _ = await rig.run(.step, .brightness, on: .tag(rig.lgTag.rawValue), value: .steps(1, fine: false), origin: .keyboard)
+        #expect(rig.rig.controls.trackedValue(.brightness, for: rig.lgTag) == 1)
+        #expect(rig.upscaling.levels.isEmpty, "the press that reaches 100% stops there")
+        _ = await rig.run(.step, .brightness, on: .tag(rig.lgTag.rawValue), value: .steps(1, fine: false), origin: .keyboard)
+        #expect(rig.upscaling.levels[rig.lgTag] == 1.0 / 16)
+        _ = await rig.run(.step, .brightness, on: .tag(rig.lgTag.rawValue), value: .steps(-1, fine: false), origin: .keyboard)
+        #expect(rig.upscaling.levels.isEmpty)
+        #expect(rig.rig.controls.trackedValue(.brightness, for: rig.lgTag) == 1)
+        _ = await rig.run(.step, .brightness, on: .tag(rig.lgTag.rawValue), value: .steps(-1, fine: false), origin: .keyboard)
+        #expect((rig.rig.controls.trackedValue(.brightness, for: rig.lgTag) ?? 1) < 1)
+    }
+
+    @Test("The limits are set per display and say what they are")
+    func limits() async {
+        let rig = await rig()
+        let set = await rig.run(.set, .upscaleLimits, on: .tag(rig.lgTag.rawValue), value: .choice("max=2 calibration=0.5 stop=off"))
+        #expect(set.entries.first?.actual == .text("max=2.00 calibration=0.50 stop=off"))
+        let wrong = await rig.run(.set, .upscaleLimits, on: .tag(rig.lgTag.rawValue), value: .choice("max=9"))
+        #expect(wrong.entries.first?.outcome == .failed)
+    }
+
+    @Test("What a crash left above white is put back at the next start: the panel's brightness and its preset")
+    func crash() async {
+        let recovery = MemoryPersistence()
+        RecoveryStore(persistence: recovery).updateColor {
+            $0.upscaling[DisplayTag(2)] = UpscalingRecovery(nativeBrightness: 0.4, presetIndex: 1, requestedHeadroom: true)
+        }
+        let system = FakeColorSystem()
+        system.presets[Fixture.lgID] = ColorFixture.xdrPresets
+        let rig = ColorRig(recoveryPersistence: recovery, system: system)
+        await rig.startWithDesk()
+        #expect(rig.lgTag == DisplayTag(2))
+        await rig.upscaling.recoverAtStart()
+        #expect(rig.restoredBrightness[rig.lgTag] == 0.4)
+        #expect(system.presets[Fixture.lgID]?.first(where: \.isActive)?.index == 1)
+        #expect(rig.rig.recovery.document.color == nil)
+    }
+}

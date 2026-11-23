@@ -9,7 +9,7 @@ import Foundation
 /// Night Shift is off.
 @MainActor
 final class FakeColorSystem: ColorSystem {
-    var capabilities = ColorCapabilities(hdrSwitch: true, headroom: true, profiles: true, linkModes: true, referencePresets: true, nightShift: true, trueTone: true)
+    var capabilities = ColorCapabilities(hdrSwitch: true, headroom: true, profiles: true, linkModes: true, referencePresets: true, nightShift: true, trueTone: true, headroomRequest: true)
     var hdr: [SystemDisplayID: HDRStatus] = [
         Fixture.lgID: HDRStatus(offered: true, isOn: false),
         Fixture.lenovoID: HDRStatus(offered: false, isOn: false),
@@ -102,6 +102,12 @@ final class FakeColorSystem: ColorSystem {
         trueToneOn = on
         return true
     }
+
+    var headroomRequests: [SystemDisplayID: Bool] = [:]
+    func requestHeadroom(_ on: Bool, for display: SystemDisplayID) -> Bool {
+        headroomRequests[display] = on
+        return true
+    }
 }
 
 @MainActor
@@ -111,7 +117,12 @@ final class ColorRig {
     let colors: ColorService
     let protection: ColorProtection
     let commands: ColorCommands
+    let upscaling: UpscalingService
+    let upscalingCommands: UpscalingCommands
+    /// What the pipeline's upscaling stage was asked to write, per display.
+    var boosts: [DisplayTag: Double] = [:]
     var notices: [ProtectionNotice] = []
+    var restoredBrightness: [DisplayTag: Double] = [:]
 
     var rig: Rig { advanced.rig }
     var lgTag: DisplayTag { advanced.lgTag }
@@ -124,8 +135,11 @@ final class ColorRig {
         colors = ColorService(registry: rig.registry, settings: rig.settings, recovery: rig.recovery, bus: rig.bus, gate: rig.gate, scheduler: rig.scheduler, system: self.system)
         protection = ColorProtection(registry: rig.registry, settings: rig.settings, colors: colors, sequencer: rig.sequencer, gate: rig.gate, bus: rig.bus, scheduler: rig.scheduler)
         commands = ColorCommands(registry: rig.registry, settings: rig.settings, modes: rig.modes, colors: colors, protection: protection)
-        rig.engine.extensions.append(commands)
+        upscaling = UpscalingService(registry: rig.registry, settings: rig.settings, recovery: rig.recovery, colors: colors, gate: rig.gate, bus: rig.bus)
+        upscalingCommands = UpscalingCommands(registry: rig.registry, settings: rig.settings, controls: rig.controls, upscaling: upscaling)
+        rig.engine.extensions += [upscalingCommands, commands]
         rig.reconciler.register(protection)
+        upscaling.restoreBrightness = { [weak self] tag, value in self?.restoredBrightness[tag] = value }
         colors.backendSafety = { [weak self] in
             guard let self else { return .safe }
             return self.system.custom.values.contains { !$0.isEmpty } ? .unsafe("custom profile") : .safe
@@ -149,6 +163,14 @@ final class ColorRig {
         options.timedRevert = timedRevert
         let command = Command(operation, feature, on: selector, value: value, origin: origin, options: options)
         return await rig.whileSettling { [engine = rig.engine] in await engine.execute(command) }
+    }
+
+    /// Stands in for the pipeline's upscaling stage, which the core does not have yet.
+    func giveUpscalingStage() {
+        upscaling.boost = { [weak self] tag, factor in
+            self?.boosts[tag] = factor
+            return true
+        }
     }
 
     func enable(_ feature: FeatureID) async {

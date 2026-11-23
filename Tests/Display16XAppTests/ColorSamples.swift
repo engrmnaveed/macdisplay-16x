@@ -7,7 +7,7 @@ import Foundation
 /// not, each has its own profile, and Night Shift is off, as on the desk on 24 November 2026.
 @MainActor
 final class SampleColorSystem: ColorSystem {
-    var capabilities = ColorCapabilities(hdrSwitch: true, headroom: true, profiles: true, linkModes: true, referencePresets: true, nightShift: true, trueTone: true)
+    var capabilities = ColorCapabilities(hdrSwitch: true, headroom: true, profiles: true, linkModes: true, referencePresets: true, nightShift: true, trueTone: true, headroomRequest: true)
     var hdr: [SystemDisplayID: HDRStatus] = [SampleDesk.lgID: HDRStatus(offered: true, isOn: false), SampleDesk.lenovoID: HDRStatus(offered: false, isOn: false)]
     var custom: [SystemDisplayID: [String: String]] = [:]
     var presets: [SystemDisplayID: [ReferencePreset]] = [:]
@@ -85,4 +85,5 @@ final class SampleColorSystem: ColorSystem {
     func toggles() -> SystemColorToggles { SystemColorToggles(nightShiftOn: nightShiftOn, trueToneOn: true, trueToneAvailable: false) }
     func setNightShift(_ on: Bool) -> Bool { nightShiftOn = on; return true }
     func setTrueTone(_ on: Bool) -> Bool { true }
+    func requestHeadroom(_ on: Bool, for display: SystemDisplayID) -> Bool { true }
 }

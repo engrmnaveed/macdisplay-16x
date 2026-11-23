@@ -75,7 +75,7 @@ extension FeatureRegistry {
     /// Every feature of v0.1 to v0.4.
     public static let withColor: FeatureRegistry = {
         var registry = FeatureRegistry.complete
-        for feature in colorFeatures { registry.register(feature) }
+        for feature in colorFeatures + upscalingFeatures { registry.register(feature) }
         return registry
     }()
 
@@ -86,6 +86,8 @@ extension FeatureRegistry {
         .hdrProfile: FeatureUsage(values: "a profile's name or file name, factory, or none to use the SDR profile in HDR too", example: "display16x set hdrProfile \"Display P3\" --tag 2"),
         .profileFallback: FeatureUsage(values: "profile names or file names separated by commas, or none", example: "display16x set profileFallback \"Display P3, sRGB Profile.icc\" --tag 2"),
         .referencePreset: FeatureUsage(values: "the preset's name or number, as get lists them", example: "display16x set referencePreset \"Photography (P3-D65)\" --tag 1"),
+        .upscale: FeatureUsage(values: "0 to 1 of what the display's limits allow, a percentage, or an offset. 0 is SDR white", example: "display16x set upscale 50% --tag 2"),
+        .upscaleLimits: FeatureUsage(values: "max=1 to 4, calibration=0.1 to 1, stop=on|off, any of them", example: "display16x set upscaleLimits \"max=2 calibration=0.8\" --tag 2"),
     ]
 
     /// Help for any feature, v0.3 and v0.4 ones included.

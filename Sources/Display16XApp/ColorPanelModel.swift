@@ -32,11 +32,16 @@ final class ColorPanelModel: ObservableObject {
         var linkModes: [String]
         var dithering: Bool?
         var connectionOnlyRates: [String]
+        /// Why the display cannot go above SDR white, when it cannot.
+        var upscaleReason: String?
+        var upscaleLevel: Double
+        var upscaleFactor: String
     }
 
     @Published private(set) var hdrControls = false
     @Published private(set) var profileControls = false
     @Published private(set) var nightShiftInHDR = false
+    @Published private(set) var upscaling = false
     @Published private(set) var togglesLine = ""
     @Published private(set) var installed: [ColorProfile] = []
     @Published var message: String?
@@ -73,6 +78,7 @@ final class ColorPanelModel: ObservableObject {
         hdrControls = colors.hdrControlsEnabled
         profileControls = colors.profileControlsEnabled
         nightShiftInHDR = context.settings.document.color.nightShiftOffInHDR ?? ColorDefaults.nightShiftOffInHDR
+        upscaling = context.upscaling.isEnabled
         togglesLine = ColorPanelModel.togglesLine(colors.toggles(), owed: context.recovery.color)
         // The installed list is read only while profiles can be chosen.
         installed = profileControls ? colors.installedProfiles() : []
@@ -119,7 +125,10 @@ final class ColorPanelModel: ObservableObject {
             presets: colors.referencePresets(for: tag),
             linkModes: link?.offeredModes.map(\.summary) ?? [],
             dithering: link?.dithering,
-            connectionOnlyRates: rates
+            connectionOnlyRates: rates,
+            upscaleReason: context.upscaling.unavailableReason(for: tag),
+            upscaleLevel: context.upscaling.levels[tag] ?? 0,
+            upscaleFactor: String(format: "%.2f times SDR white", context.upscaling.factor(for: tag))
         )
         cache[tag] = state
         return state
@@ -205,6 +214,11 @@ final class ColorPanelModel: ObservableObject {
     /// One profile to fall back to, or "none".
     func chooseFallback(_ value: String, tag: DisplayTag) {
         Task { @MainActor in await send(Command(.set, .profileFallback, on: .tag(tag.rawValue), value: .choice(value), origin: .interface)) }
+    }
+
+    /// 0 to 1 of what the display's limits allow. 0 is SDR white.
+    func setUpscale(_ level: Double, tag: DisplayTag) {
+        Task { @MainActor in await send(Command(.set, .upscale, on: .tag(tag.rawValue), value: .absolute(level), origin: .interface)) }
     }
 
     func choosePreset(_ preset: ReferencePreset, tag: DisplayTag) {

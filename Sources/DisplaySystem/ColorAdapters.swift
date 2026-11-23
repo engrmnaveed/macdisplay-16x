@@ -4,6 +4,8 @@ import CoreGraphics
 import DisplayCore
 import DisplayPrivate
 import Foundation
+import Metal
+import QuartzCore
 
 // v0.4 system adapter: HDR, headroom, color profiles, the link, reference presets, Night Shift
 // and True Tone. Public interfaces where they exist (ColorSync, NSScreen), and the private ones
@@ -24,7 +26,8 @@ public final class SystemColor: ColorSystem {
             setDithering: false,
             referencePresets: privateCapabilities.referencePresets,
             nightShift: privateCapabilities.nightShift,
-            trueTone: privateCapabilities.trueTone
+            trueTone: privateCapabilities.trueTone,
+            headroomRequest: HeadroomRequest.isAvailable
         )
         folders = [
             ("/System/Library/ColorSync/Profiles", .system),
@@ -195,5 +198,69 @@ public final class SystemColor: ColorSystem {
 
     public func setTrueTone(_ on: Bool) -> Bool {
         capabilities.trueTone && TrueTone.setOn(on)
+    }
+
+    // MARK: Headroom
+
+    private var headroomRequests: [SystemDisplayID: HeadroomRequest] = [:]
+
+    public func requestHeadroom(_ on: Bool, for display: SystemDisplayID) -> Bool {
+        guard on else {
+            headroomRequests.removeValue(forKey: display)?.end()
+            return true
+        }
+        if headroomRequests[display] != nil { return true }
+        guard let request = HeadroomRequest(display: display) else { return false }
+        headroomRequests[display] = request
+        return true
+    }
+}
+
+/// Content above SDR white on one display, so macOS raises the headroom there: a one-point,
+/// click-through window in a corner whose layer holds a pixel brighter than white, drawn once
+/// through public Metal. It costs while it is shown, because the display stays in its
+/// extended range. Not proven on hardware yet.
+@MainActor
+final class HeadroomRequest {
+    private let window: NSWindow
+
+    static var isAvailable: Bool { MTLCreateSystemDefaultDevice() != nil }
+
+    init?(display: SystemDisplayID) {
+        guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue(),
+              let screen = NSScreen.screens.first(where: { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == display.rawValue }) else { return nil }
+        let frame = NSRect(x: screen.frame.minX, y: screen.frame.minY, width: 1, height: 1)
+        window = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.ignoresMouseEvents = true
+        window.level = .statusBar
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        window.isReleasedWhenClosed = false
+        let layer = CAMetalLayer()
+        layer.device = device
+        layer.pixelFormat = .rgba16Float
+        layer.wantsExtendedDynamicRangeContent = true
+        layer.colorspace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)
+        layer.drawableSize = CGSize(width: 1, height: 1)
+        let view = NSView(frame: NSRect(origin: .zero, size: frame.size))
+        view.wantsLayer = true
+        view.layer = layer
+        window.contentView = view
+        window.orderFrontRegardless()
+        guard let drawable = layer.nextDrawable(), let buffer = queue.makeCommandBuffer() else { return nil }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = drawable.texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .store
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 4, green: 4, blue: 4, alpha: 1)
+        buffer.makeRenderCommandEncoder(descriptor: pass)?.endEncoding()
+        buffer.present(drawable)
+        buffer.commit()
+    }
+
+    func end() {
+        window.orderOut(nil)
+        window.contentView = nil
     }
 }

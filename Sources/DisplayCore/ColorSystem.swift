@@ -92,4 +92,9 @@ public protocol ColorSystem: AnyObject {
     func toggles() -> SystemColorToggles
     func setNightShift(_ on: Bool) -> Bool
     func setTrueTone(_ on: Bool) -> Bool
+
+    // Upscaling, stage 5
+    /// Shows content above SDR white on the display, or stops, so macOS raises the headroom
+    /// there while it is shown. Keeps the GPU busy while on.
+    func requestHeadroom(_ on: Bool, for display: SystemDisplayID) -> Bool
 }

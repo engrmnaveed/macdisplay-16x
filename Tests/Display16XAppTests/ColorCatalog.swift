@@ -56,6 +56,11 @@ enum ColorCatalog {
         let lenovo = await desk(hdr: true, profiles: true)
         try shootDetail(session, lenovo, "detail-color-no-hdr", title: "A display without HDR", note: "Says why. Its link offers rates the mode list leaves out.", tag: lenovo.tag(SampleDesk.lenovoID))
 
+        let above = await desk(hdr: true, profiles: true)
+        await above.send(.set, .upscaling, value: .flag(true))
+        await above.send(.set, .hdr, on: above.tag(SampleDesk.lgID), value: .flag(true), origin: .command)
+        try shootDetail(session, above, "detail-color-above-white", title: "Brighter than SDR white, waiting for the core", note: "Switched on, HDR on: the row says the color pipeline cannot write above white yet.", tag: above.tag(SampleDesk.lgID))
+
         let presets = await desk(hdr: true, profiles: true)
         presets.colorSystem.presets[SampleDesk.lgID] = [
             ReferencePreset(index: 0, name: "Apple XDR Display (P3-1600 nits)", isActive: true),

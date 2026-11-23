@@ -117,6 +117,8 @@ final class AppContext {
     let colors: ColorService
     let colorProtection: ColorProtection
     let colorCommands: ColorCommands
+    let upscaling: UpscalingService
+    let upscalingCommands: UpscalingCommands
 
     private let listeners: [any SystemListener]
     private var server: UnixSocketServer?
@@ -184,11 +186,18 @@ final class AppContext {
         colorProtection = ColorProtection(registry: registry, settings: settings, colors: colors, sequencer: sequencer, gate: gate, bus: bus, scheduler: scheduler)
         reconciler.register(colorProtection)
         colorCommands = ColorCommands(registry: registry, settings: settings, modes: modes, colors: colors, protection: colorProtection)
-        engine.extensions = [layoutCommands, advancedCommands, colorCommands]
+        upscaling = UpscalingService(registry: registry, settings: settings, recovery: recovery, colors: colors, gate: gate, bus: bus)
+        // The pipeline's upscaling stage cannot write above white yet, so `boost` stays nil
+        // and the feature says it waits for the core.
+        upscaling.restoreBrightness = { [engine] tag, value in
+            _ = await engine.execute(Command(.set, .hardwareBrightness, on: .tag(tag.rawValue), value: .absolute(value), origin: .restore))
+        }
+        upscalingCommands = UpscalingCommands(registry: registry, settings: settings, controls: controls, upscaling: upscaling)
+        engine.extensions = [layoutCommands, advancedCommands, upscalingCommands, colorCommands]
         automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
         listeners = adapters.listeners(sequencer)
         permissions = PermissionBroker(probe: adapters.permissionProbe, bus: bus, settings: settings)
-        engine.statusProvider = { [permissions, colorBackend, loginItem, virtualScreens, overrides, colors, recovery] in
+        engine.statusProvider = { [permissions, colorBackend, loginItem, virtualScreens, overrides, colors, recovery, upscaling] in
             var lines = ["version: \(AppPaths.version)"]
             lines.append(contentsOf: permissions.statusLines)
             lines.append("login item service: \(loginItem.systemStatus)")
@@ -201,6 +210,8 @@ final class AppContext {
             let hdrOn = colors.knownHDR.filter(\.value).keys.sorted().map(\.description)
             lines.append("HDR controls: \(colors.hdrControlsEnabled ? "on" : "off")" + (hdrOn.isEmpty ? "" : ", HDR on for \(hdrOn.joined(separator: ", "))"))
             lines.append("color profile controls: \(colors.profileControlsEnabled ? "on" : "off")")
+            let above = upscaling.levels.filter { $0.value > 0 }.keys.sorted().map(\.description)
+            lines.append("brightness above SDR white: \(upscaling.isEnabled ? "on" : "off")" + (above.isEmpty ? "" : ", running on \(above.joined(separator: ", ")), the GPU keeps content above white on screen"))
             let owed = recovery.color
             if owed.nightShiftTurnedOff || owed.trueToneTurnedOff {
                 lines.append("turned off for HDR, given back afterwards: " + [owed.nightShiftTurnedOff ? "Night Shift" : nil, owed.trueToneTurnedOff ? "True Tone" : nil].compactMap { $0 }.joined(separator: " and "))
@@ -237,6 +248,8 @@ final class AppContext {
             // HDR, profile and preset changes a crash left waiting are undone, and what the
             // app turned off for HDR is given back if no display shows HDR.
             await colors.start()
+            // What a crash left above SDR white is put back.
+            await upscaling.recoverAtStart()
         }
         Log.app.info("Display 16X \(AppPaths.version) started\(gate.isSafeMode ? " in safe mode" : "")\(paths.isDevelopmentDirectory ? ", with its files in \(paths.supportDirectory.path)" : "").")
     }
@@ -244,6 +257,7 @@ final class AppContext {
     func shutdown() {
         server?.stop()
         virtualScreens.shutdown()
+        upscaling.stopAll(reason: "Display 16X quit")
         colors.shutdown()
         connection.reconnectAtQuit()
         for listener in listeners.reversed() { listener.stop() }

@@ -6,6 +6,26 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · Brightness above SDR white: built up to the one hook only the core can give
+
+**Request for the core session, through the planning thread: one transform in the color pipeline.** Everything else for "software upscaling" is built at unit-test level and stays inert until then, saying why in the panel and on the command line.
+
+1. A `ColorTransform` case that multiplies by a factor above 1 without clamping the table at 1, for example `case boost(Float)`: `apply(to:)` multiplies and clamps only at 0, and it is neutral at 1. Today `.gain` clamps every entry at 1, so a factor of 1.5 brightens the middle and flattens the top, which is not a brighter picture.
+2. The pipeline's reserved `upscaling` stage takes it, after dimming, so `pipeline.set(.boost(f), for: .upscaling)` writes one composed table. The gamma backend already writes floats and needs no change.
+3. v0.4 then sets one closure in the app: `UpscalingService.boost`. Nothing else in v0.4 changes.
+
+**A question to settle before the change is worth making:** whether a table value above 1 reaches the panel at all. The framebuffer reports `GCPBypassesEDRPixels = 1`, which reads as "the color table leaves pixels above white alone". The existing `spikes/gamma-table-write-probe.swift`, run on the LG with HDR on and a top value of 1.5, answers it in a minute with the owner at the desk. A pipeline only exists where color tables are switched on, so upscaling also needs that switch.
+
+**What is built, with no change to the core:**
+
+- **A level above white of its own**, `upscale`, 0 to 1 of what the display's limits allow, next to brightness rather than inside it. Putting it on the composite scale above 1 would change the engine, the control service and the keys. It is a later step for the core session, and nothing in v0.4 depends on it.
+- **The neutral key stop through the engine.** The brightness keys already arrive as step commands, so a v0.4 extension sends a press past 100% to the level above white: the press that reaches 100% stops there, the next one goes above, and going down the level above white comes off first. With the stop off, the part past 100% goes above at once.
+- **Limits per display**: the highest factor (1.6 by default), the share of the headroom that looks right (the "visual calibration"), and the key stop.
+- **The headroom request**: a one-point, click-through window showing a pixel above white through public Metal, so macOS raises the headroom for that display. It costs while shown. Not proven on hardware.
+- **Nothing survives the app.** The level lives in memory and is recorded in the recovery store before anything is written. It drops to white at sleep, at a lock, when HDR goes off, when the switch goes off and at quit. What a crash left is put back at the next start, through the gate.
+- **Recovery after direct control** puts back a panel's brightness and its reference preset through the engine. Auto-brightness is recorded and not yet put back: there is no switch for it yet.
+- **Direct XDR upscaling is not built.** It drives a built-in XDR panel's own brightness above white, and no XDR panel was in use on this desk. The command line says so for a built-in display.
+
 ## 24 November 2026 · Virtual HDR: an option on v0.3's virtual screens, built on a code macOS has not confirmed
 
 **For the v0.3 session, through the planning thread.** "Virtual HDR" is a v0.4 row about v0.3's screens, so it touched four of v0.3's files, additively and with no change to what a screen did before: an optional `hdr` in a screen's definition (`hdr=on` adds HDR modes next to the SDR ones, `hdr=only` offers HDR alone), the same in what the window server is asked to make, a transfer function on each requested mode, and the words in the help. A screen saved before has no HDR and is made exactly as before.

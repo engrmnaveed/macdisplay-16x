@@ -46,3 +46,54 @@ public struct UpscalingRecovery: Codable, Sendable, Equatable {
         self.requestedHeadroom = requestedHeadroom
     }
 }
+
+// MARK: The arithmetic
+
+/// How far above SDR white a display may go, and where a level lands.
+public enum UpscalingMath {
+    /// The highest factor the user's limits and the display's headroom allow. 1 means none.
+    public static func maximumFactor(_ settings: UpscalingSettings?, headroom: Headroom) -> Double {
+        let ceiling = (settings?.maximum ?? UpscalingDefaults.maximum).clamped(to: 1...4)
+        let calibration = (settings?.calibration ?? UpscalingDefaults.calibration).clamped(to: 0.1...1)
+        let room = max(1, 1 + (headroom.potential - 1) * calibration)
+        return min(ceiling, room)
+    }
+
+    /// A level 0 to 1 of the allowed range as a factor over SDR white.
+    public static func factor(level: Double, maximum: Double) -> Double {
+        1 + level.clamped(to: 0...1) * (max(maximum, 1) - 1)
+    }
+}
+
+/// Where a brightness key goes once the display can go above SDR white. Going up, a press
+/// that reaches 100% stops there, and the next one goes above it. Going down, the level above
+/// white comes off first, and with the stop it rests at 100% for one press.
+public enum NeutralKeyStop {
+    public struct Route: Sendable, Equatable {
+        /// The brightness to set, or nil to leave the core's own step alone.
+        public var brightness: Double?
+        /// The new level above white, or nil to leave it.
+        public var upscale: Double?
+        /// True when the core should handle the step as before.
+        public var passThrough: Bool
+    }
+
+    public static func route(brightness: Double, upscale: Double, steps: Int, fine: Bool, stopAtNeutral: Bool, scale: StepScale = .standard) -> Route {
+        let step = 1 / Double(fine ? scale.segments * scale.fineDivisions : scale.segments)
+        let atTop = brightness >= 1 - 0.000_5
+        if steps > 0 {
+            if upscale > 0 || atTop {
+                return Route(brightness: nil, upscale: (upscale + Double(steps) * step).clamped(to: 0...1), passThrough: false)
+            }
+            // Below white. With the stop the core's own step ends at 100%. Without it, what goes
+            // past 100% continues above.
+            let target = brightness + Double(steps) * step
+            if stopAtNeutral || target <= 1 { return Route(brightness: nil, upscale: nil, passThrough: true) }
+            return Route(brightness: 1, upscale: (target - 1).clamped(to: 0...1), passThrough: false)
+        }
+        guard upscale > 0 else { return Route(brightness: nil, upscale: nil, passThrough: true) }
+        let remaining = upscale + Double(steps) * step
+        if remaining >= 0 || stopAtNeutral { return Route(brightness: nil, upscale: max(remaining, 0), passThrough: false) }
+        return Route(brightness: (1 + remaining).clamped(to: 0...1), upscale: 0, passThrough: false)
+    }
+}
