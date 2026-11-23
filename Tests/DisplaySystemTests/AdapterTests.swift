@@ -237,6 +237,124 @@ struct AVServiceMatcherTests {
     }
 }
 
+@Suite("Connection matching")
+struct ConnectionMatcherTests {
+    private func edid(vendor: UInt16, product: UInt16, serial: UInt32) -> EDIDInfo? {
+        var bytes = [UInt8](repeating: 0, count: 128)
+        bytes.replaceSubrange(0..<8, with: [0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00])
+        bytes[8] = UInt8(vendor >> 8)
+        bytes[9] = UInt8(vendor & 0xFF)
+        bytes[10] = UInt8(product & 0xFF)
+        bytes[11] = UInt8(product >> 8)
+        for index in 0..<4 { bytes[12 + index] = UInt8((serial >> (8 * UInt32(index))) & 0xFF) }
+        return EDIDInfo(bytes: bytes)
+    }
+
+    private let lenovo = AVServiceMatcher.DisplayFacts(id: SystemDisplayID(4), vendor: 0x30AE, model: 0x62A2, serial: 0x0101_0101)
+    private let lg = AVServiceMatcher.DisplayFacts(id: SystemDisplayID(5), vendor: 0x1E6D, model: 0x5BF6, serial: 0x12345)
+
+    @Test("Each display takes the port of the link that carries its identity, as on the test Mac")
+    func pairsByIdentity() {
+        // What the M5 Pro reported on 23 November: the Lenovo on the HDMI port, the LG on
+        // a USB-C port that carries DisplayPort, neither tunneled.
+        let links = [
+            ConnectionMatcher.Link(edid: edid(vendor: 0x1E6D, product: 0x5BF6, serial: 0x12345), type: ConnectionType(portType: "USB-C", isTunneled: false)),
+            ConnectionMatcher.Link(edid: edid(vendor: 0x30AE, product: 0x62A2, serial: 0x0101_0101), type: ConnectionType(portType: "HDMI", isTunneled: false)),
+        ]
+        let outcome = ConnectionMatcher.match(displays: [lenovo, lg], links: links)
+        #expect(outcome.types == [SystemDisplayID(4): .hdmi, SystemDisplayID(5): .usbC])
+        #expect(outcome.pairs == [SystemDisplayID(4): 1, SystemDisplayID(5): 0])
+    }
+
+    @Test("A display macOS describes no link for is left out, which reads as not known")
+    func noLink() {
+        let links = [ConnectionMatcher.Link(edid: edid(vendor: 0x1E6D, product: 0x5BF6, serial: 0x12345), type: .usbC)]
+        let outcome = ConnectionMatcher.match(displays: [lenovo, lg], links: links)
+        #expect(outcome.types == [SystemDisplayID(5): .usbC])
+        #expect(ConnectionMatcher.match(displays: [lenovo], links: []).types.isEmpty)
+        #expect(ConnectionMatcher.match(displays: [lenovo], links: [ConnectionMatcher.Link(edid: nil, type: .hdmi)]).types.isEmpty)
+    }
+
+    @Test("A link in words this build does not know is paired and stays not known")
+    func unknownWords() {
+        let links = [ConnectionMatcher.Link(edid: edid(vendor: 0x30AE, product: 0x62A2, serial: 0x0101_0101), type: ConnectionType(portType: "Something newer", isTunneled: nil))]
+        let outcome = ConnectionMatcher.match(displays: [lenovo], links: links)
+        #expect(outcome.types == [SystemDisplayID(4): .unknown])
+    }
+
+    @Test("Two identical monitors on the same kind of port both get it, and on different kinds neither does")
+    func identicalMonitors() {
+        let twins = [
+            AVServiceMatcher.DisplayFacts(id: SystemDisplayID(4), vendor: 0x30AE, model: 0x62A2, serial: 0),
+            AVServiceMatcher.DisplayFacts(id: SystemDisplayID(5), vendor: 0x30AE, model: 0x62A2, serial: 0),
+        ]
+        let same = [
+            ConnectionMatcher.Link(edid: edid(vendor: 0x30AE, product: 0x62A2, serial: 0), type: .usbC),
+            ConnectionMatcher.Link(edid: edid(vendor: 0x30AE, product: 0x62A2, serial: 0), type: .usbC),
+        ]
+        #expect(ConnectionMatcher.match(displays: twins, links: same).types == [SystemDisplayID(4): .usbC, SystemDisplayID(5): .usbC])
+
+        // Which unit is on which port cannot be told from identity. A wrong label is worse
+        // than none.
+        let mixed = [
+            ConnectionMatcher.Link(edid: edid(vendor: 0x30AE, product: 0x62A2, serial: 0), type: .hdmi),
+            ConnectionMatcher.Link(edid: edid(vendor: 0x30AE, product: 0x62A2, serial: 0), type: .usbC),
+        ]
+        #expect(ConnectionMatcher.match(displays: twins, links: mixed).types.isEmpty)
+    }
+
+    @Test("The registry's port descriptions are read without a private symbol, and a Mac without them reports no links")
+    func registryRead() {
+        // Read-only: the I/O registry is looked at and nothing is sent to a monitor.
+        let links = PortLinkDirectory.displayLinks()
+        if !PortLinkDirectory.isAvailable { #expect(links.isEmpty) }
+        for link in links {
+            #expect(!link.edid.isEmpty)
+            #expect(ConnectionType.allCases.contains(ConnectionType(portType: link.portType, isTunneled: link.isTunneled)))
+        }
+        #expect(PrivateCapabilities.current.portLinks == PortLinkDirectory.isAvailable)
+        #expect(PrivateCapabilities.current.summary.contains { $0.hasPrefix("Port descriptions (connection type): ") })
+    }
+
+    @Test("The inventory names a connection for every display it lists, read-only")
+    @MainActor
+    func inventory() {
+        // Reads the window server's list and the registry, as the app does at every
+        // topology change. Nothing is sent to a monitor.
+        let inventory = SystemDisplayInventory()
+        for snapshot in inventory.connectedDisplays() {
+            if snapshot.kind == .builtIn {
+                #expect(snapshot.connection == .builtIn)
+            } else {
+                #expect(snapshot.connection != .builtIn)
+                // A label is only ever claimed from a link macOS describes for this display.
+                #expect(snapshot.connection == .unknown || inventory.links[snapshot.systemID] != nil)
+            }
+        }
+    }
+
+    @Test("The hardware report gives the label and what macOS said behind it")
+    func reportLine() {
+        var hdmi = DisplaySnapshot(systemID: SystemDisplayID(4), identifiers: DisplayIdentifiers(), name: "LEN P32p-20")
+        hdmi.connection = .hdmi
+        let link = PortLink(edid: [1], portType: "HDMI", portNumber: 1, isTunneled: false, hasConverter: true, lanes: 4, linkRate: "8.1 Gbps (HBR3)")
+        #expect(HardwareProbe.connectionLine(hdmi, link: link) == "HDMI (the Mac's HDMI port 1, not tunneled, through a converter, 4 DisplayPort lanes at 8.1 Gbps (HBR3))")
+
+        // Seen on the LG while the displays slept: the entry stays and the link is down.
+        var usbC = DisplaySnapshot(systemID: SystemDisplayID(5), identifiers: DisplayIdentifiers(), name: "LG SDQHD")
+        usbC.connection = .usbC
+        let asleep = PortLink(edid: [1], portType: "USB-C", portNumber: 3, isTunneled: false, lanes: 4, linkRate: "No Link")
+        #expect(HardwareProbe.connectionLine(usbC, link: asleep) == "USB-C (the Mac's USB-C port 3, not tunneled, 4 DisplayPort lanes, no link at the moment)")
+
+        let virtual = DisplaySnapshot(systemID: SystemDisplayID(6), identifiers: DisplayIdentifiers(), name: "Display")
+        #expect(HardwareProbe.connectionLine(virtual, link: nil) == "Not known. macOS describes no link for this display")
+
+        var panel = DisplaySnapshot(systemID: SystemDisplayID(1), identifiers: DisplayIdentifiers(), name: "Built-in Display", kind: .builtIn)
+        panel.connection = .unknown
+        #expect(HardwareProbe.connectionLine(panel, link: nil) == "Built-in")
+    }
+}
+
 @Suite("Mode list from the window server")
 @MainActor
 struct ModeMergeTests {

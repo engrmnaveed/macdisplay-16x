@@ -14,6 +14,7 @@ Display layout, from v0.2 Layout. Fourteen of fifteen hardware checks ran on a L
 - Resolution by name (`default`, `native`, `previous`, `largest`, `smallest`), favourite modes, size steps along the text-size strip, and rotation by steps or as a toggle.
 - Brightness and volume keys reach every display that mirrors the one they target. `display16x perform indicator --pointer` shows the indicator without changing anything.
 - Command line: help for every feature (`display16x help placement`), a `perform` verb, `min` and `max` as values, JSON listings of a display's modes, inputs and identifiers, raw DDC reads and writes (`display16x get vcp 0x10 --tag 1`, writing needs `--confirm`), and a switch that turns command line access off.
+- `display16x list` and the hardware report say how each display is attached: the Mac's HDMI or USB-C port, Thunderbolt, built-in, or not known. A `get` says whether its value was read back from the monitor or only sent. The app keeps both facts for every display and control. The panel does not show them yet.
 - `display16x://` links run commands too, behind their own switch (off by default) and a token shown in the panel, with x-callback-url callbacks.
 - Export, import and reset all settings from the panel or with `display16x settings export|import|reset`. What the app needs to undo its own changes on your Mac is never part of it.
 - For development: `DISPLAY16X_SUPPORT_DIRECTORY` gives a build its own settings folder and command socket, and such a build does not start while the normal copy runs.

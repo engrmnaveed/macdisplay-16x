@@ -334,6 +334,7 @@ public final class DisplayCoordinator {
         if settings.recordSettings(tag).currentInput == nil, let raw = lastReportedInput[tag],
            let entry = controls.inputs(for: tag).first(where: { $0.rawValue == raw }) {
             settings.updateRecord(tag) { $0.currentInput = entry.id }
+            controls.noteReadBack(.input, for: tag)
         }
         bus.publish(.controllersReady(tag))
     }
@@ -345,6 +346,10 @@ public final class DisplayCoordinator {
             if control == .input {
                 // An input is a choice, not a level. It is matched to the list later.
                 lastReportedInput[tag] = Int(raw)
+                if let current = settings.recordSettings(tag).currentInput,
+                   controls.inputs(for: tag).first(where: { $0.id == current })?.rawValue == Int(raw) {
+                    controls.noteReadBack(.input, for: tag)
+                }
                 continue
             }
             guard let owner = controls.owner(of: control, for: tag, forcing: kind) else { continue }
@@ -359,6 +364,7 @@ public final class DisplayCoordinator {
             let known = settings.recordSettings(tag).values[control]
             if known == nil {
                 controls.track(control, value: value, for: tag, origin: .startup)
+                controls.noteReadBack(control, for: tag)
             }
         }
     }

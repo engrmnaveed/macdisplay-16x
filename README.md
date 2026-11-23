@@ -72,6 +72,8 @@ dist/display16x set restoreAfterWake on --tag 2            # for a monitor that 
 dist/display16x features                   # every feature and its operations
 ```
 
+`list` and `probe` say how each connected display is attached: HDMI, USB-C, Thunderbolt, built-in, or not known. That names the Mac's own port. What is at the far end of the cable is not something macOS reports. A `get` says whether the value it returns was read back from the monitor or only sent.
+
 `probe` is read-only and runs on its own, which makes it the thing to attach to a bug report. Every other command is sent to the running app over a socket only your user can open, with a timeout and a clear message when the app is not running. Each display gets one line: `confirmed` (read back from the device), `accepted` (sent or stored, not proven) or `failed` with the reason.
 
 Layout, from v0.2. Fourteen of fifteen hardware checks ran on the two test monitors; a saved layout across a long display sleep with protection on, and the built-in panel coming back when the last external display goes away, are unit-tested only (see the [feasibility notes](docs/feasibility.md#the-owner-checks-23-november-1217-to-1309-the-owner-at-the-desk)):

@@ -84,6 +84,7 @@ public enum HardwareProbe {
             traits.append("rotation \(snapshot.rotation)°")
             if let size = snapshot.physicalSize { traits.append("\(Int(size.widthMillimeters.rounded())) × \(Int(size.heightMillimeters.rounded())) mm") }
             lines.append("  " + traits.joined(separator: " · "))
+            lines.append("  connection: " + connectionLine(snapshot, link: inventory.links[id]))
 
             let available = modes.availableModes(for: id)
             let current = modes.currentMode(for: id)
@@ -157,6 +158,25 @@ public enum HardwareProbe {
             scheduler.invalidate()
         }
         return lines
+    }
+
+    /// The label the app shows, then what macOS reported behind it. The label names the
+    /// Mac's own port. What is at the far end of the cable is not something macOS knows.
+    static func connectionLine(_ snapshot: DisplaySnapshot, link: PortLink?) -> String {
+        guard snapshot.kind != .builtIn else { return ConnectionType.builtIn.label }
+        guard let link else {
+            return "\(snapshot.connection.label). macOS describes no link for this display"
+        }
+        var facts: [String] = []
+        if let port = link.portType { facts.append("the Mac's \(port) port" + (link.portNumber.map { " \($0)" } ?? "")) }
+        if let tunneled = link.isTunneled { facts.append(tunneled ? "tunneled through Thunderbolt or USB4" : "not tunneled") }
+        if link.hasConverter { facts.append("through a converter") }
+        if let lanes = link.lanes {
+            // A monitor on a direct link drops it while the displays sleep. The entry stays.
+            let rate = link.linkRate.map { $0.lowercased() == "no link" ? ", no link at the moment" : " at \($0)" } ?? ""
+            facts.append("\(lanes) DisplayPort lanes" + rate)
+        }
+        return snapshot.connection.label + (facts.isEmpty ? "" : " (" + facts.joined(separator: ", ") + ")")
     }
 
     /// The arrangement, the main display, mirroring and the lid, read-only. Added in v0.2.

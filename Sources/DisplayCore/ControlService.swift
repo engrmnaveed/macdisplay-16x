@@ -55,6 +55,10 @@ public final class ControlService {
         self.settings = settings
         self.bus = bus
         self.sequencer = sequencer
+        bus.subscribe { [weak self] event in
+            // A monitor can come out of sleep with other values than it went in with.
+            if case .willSleep = event { self?.forgetReadBack() }
+        }
     }
 
     // MARK: Ownership and availability
@@ -221,6 +225,64 @@ public final class ControlService {
         settings.recordSettings(tag).chosen.contains(control)
     }
 
+    // MARK: How a value is known
+
+    /// How the value in use of a control is known on a connected display: read back from
+    /// the monitor, only sent, or not known. It follows what happens anyway and never
+    /// causes a read of its own.
+    ///
+    /// Composite brightness answers for its parts. With software dimming at work it is
+    /// sent at best, because that part cannot be read back. Mute done through the volume
+    /// is known as well as the volume is.
+    public func knowledge(of control: ControlID, for tag: DisplayTag) -> ValueKnowledge {
+        guard let live = registry.live[tag] else { return .unknown }
+        switch control {
+        case .brightness:
+            let composition = composition(for: tag)
+            guard composition.isAvailable else { return .unknown }
+            let software = knowledge(of: .softwareBrightness, for: tag)
+            guard composition.hasHardware else { return software }
+            let hardware = knowledge(of: .hardwareBrightness, for: tag)
+            return hasActiveSoftwareDimming(tag) && hardware == .readBack ? .sent : hardware
+        case .softwareBrightness:
+            guard owner(of: .softwareBrightness, for: tag) != nil,
+                  settings.recordSettings(tag).values[.softwareBrightness] != nil else { return .unknown }
+            return .sent
+        case .mute where owner(of: .mute, for: tag) == nil || settings.effective(tag).muteStrategy == .volumeToZero:
+            guard settings.recordSettings(tag).values[.mute] != nil else { return .unknown }
+            return knowledge(of: .volume, for: tag)
+        case .input:
+            return settings.recordSettings(tag).currentInput == nil ? .unknown : live.valueKnowledge[.input] ?? .unknown
+        default:
+            guard settings.recordSettings(tag).values[control] != nil else { return .unknown }
+            return live.valueKnowledge[control] ?? .unknown
+        }
+    }
+
+    /// Records how a value is known and tells the surfaces when that changed. `live` is
+    /// the connection the fact belongs to: a display that left meanwhile is not marked.
+    private func note(_ knowledge: ValueKnowledge?, of control: ControlID, on live: LiveDisplay?) {
+        guard let live, registry.live[live.tag] === live, live.valueKnowledge[control] != knowledge else { return }
+        live.valueKnowledge[control] = knowledge
+        bus.publish(.valueKnowledgeChanged(live.tag))
+    }
+
+    /// The monitor reported the tracked value of a control, in a read made elsewhere:
+    /// when the display was checked for what it supports.
+    public func noteReadBack(_ control: ControlID, for tag: DisplayTag) {
+        note(.readBack, of: control, on: registry.live[tag])
+    }
+
+    /// At sleep, what was read back stops counting as known. The read after the wake has
+    /// settled renews it. A value that was only sent stays sent: nothing was claimed for it.
+    private func forgetReadBack() {
+        for tag in registry.live.keys.sorted() {
+            guard let live = registry.live[tag], live.valueKnowledge.values.contains(.readBack) else { continue }
+            live.valueKnowledge = live.valueKnowledge.filter { $0.value != .readBack }
+            bus.publish(.valueKnowledgeChanged(tag))
+        }
+    }
+
     // MARK: Single control
 
     /// Sends one normalized value to the control's owner and reports what happened.
@@ -234,7 +296,7 @@ public final class ControlService {
         access: ControlAccess? = nil,
         recompose: Bool = true
     ) async -> ControlWriteResult {
-        guard registry.live[tag] != nil else { return .failed(ControlFailure.notConnected.reason) }
+        guard let live = registry.live[tag] else { return .failed(ControlFailure.notConnected.reason) }
         guard let owner = owner(of: control, for: tag, forcing: kind) else {
             return .failed(availability(of: control, for: tag).reason ?? ControlFailure.unsupported.reason)
         }
@@ -247,7 +309,10 @@ public final class ControlService {
         // Track first, so the next step or drag starts from the newest request.
         let previous = settings.recordSettings(tag).values[control]
         let previousRaw = previous.map { isSwitch ? mapping.raw(forSwitch: $0 >= 0.5) : mapping.raw(for: $0) }
+        let previousKnowledge = live.valueKnowledge[control]
         track(control, value: target, for: tag, origin: origin, recompose: recompose)
+        // On its way, and nothing has confirmed it yet.
+        note(.sent, of: control, on: live)
 
         switch await owner.controller.write(control, raw: raw, access: access) {
         case .superseded:
@@ -260,6 +325,7 @@ public final class ControlService {
                 } else {
                     settings.updateRecord(tag) { $0.values[control] = nil }
                 }
+                note(previous == nil ? nil : previousKnowledge, of: control, on: live)
             }
             return .failed(failure.reason, actual: previous)
         case .written:
@@ -279,6 +345,8 @@ public final class ControlService {
             if matches {
                 // A change that took is proof the control works.
                 if let previousRaw, previousRaw != raw { noteWrite(control, kind: owner.kind, tag: tag, effective: true) }
+                // A newer request may already be tracked. This read says nothing about it.
+                if settings.recordSettings(tag).values[control] == target { note(.readBack, of: control, on: live) }
                 return ControlWriteResult(outcome: .confirmed, actual: target)
             }
         }
@@ -296,6 +364,7 @@ public final class ControlService {
         let actual = isSwitch ? (mapping.switchState(forRaw: reported).map { $0 ? 1.0 : 0.0 } ?? target) : mapping.normalized(for: reported)
         if settings.recordSettings(tag).values[control] == target {
             track(control, value: actual, for: tag, origin: .outsideChange, recompose: recompose, trusted: true)
+            note(.readBack, of: control, on: live)
         }
         return .failed("sent \(format(raw)), but the display reports \(format(reported))", actual: actual)
     }
@@ -348,7 +417,7 @@ public final class ControlService {
 
     /// Reads the device. A value that differs from the tracked one is adopted as an outside change.
     public func refresh(_ control: ControlID, for tag: DisplayTag, forcing kind: ControllerKind? = nil) async -> Result<Double, ControlFailure> {
-        guard registry.live[tag] != nil else { return .failure(.notConnected) }
+        guard let live = registry.live[tag] else { return .failure(.notConnected) }
         guard let owner = owner(of: control, for: tag, forcing: kind) else { return .failure(.unsupported) }
         guard owner.capability.readability != .writeOnly else { return .failure(.unavailable("this control cannot be read from the display")) }
         let mapping = mapping(for: control, tag: tag, owner: owner)
@@ -369,6 +438,11 @@ public final class ControlService {
             if tracked == nil || !mapping.isSameRaw(tracked!, value) || control == .mute && tracked != value {
                 track(control, value: value, for: tag, origin: .outsideChange)
             }
+            // The tracked value is the monitor's now, unless the read was thrown away as
+            // one made during wake.
+            if let now = settings.recordSettings(tag).values[control], control == .mute ? now == value : mapping.isSameRaw(now, value) {
+                note(.readBack, of: control, on: live)
+            }
             return .success(settings.recordSettings(tag).values[control] ?? value)
         }
     }
@@ -388,10 +462,14 @@ public final class ControlService {
     public var isInWakeTransition: Bool { sequencer.isInWakeTransition }
 
     /// Reads a control from the device and compares it with the tracked value, without
-    /// changing anything. A raw value read a moment ago, while the display was being
+    /// changing the value. A raw value read a moment ago, while the display was being
     /// checked, stands in for the read.
+    ///
+    /// How the value is known follows the answer: the same value is read back from now
+    /// on, and a monitor that was asked and said nothing leaves it not known. A value that
+    /// differs is the caller's to take over or to write back.
     public func compareWithDevice(_ control: ControlID, for tag: DisplayTag, knownRaw: Double? = nil) async -> DeviceReading {
-        guard registry.live[tag] != nil, let owner = owner(of: control, for: tag),
+        guard let live = registry.live[tag], let owner = owner(of: control, for: tag),
               owner.capability.readability != .writeOnly else { return .unanswered }
         let mapping = mapping(for: control, tag: tag, owner: owner)
         let raw: Double
@@ -399,19 +477,24 @@ public final class ControlService {
             raw = knownRaw
         } else {
             guard case .success(let reading) = await owner.controller.read(control, access: ControlAccess(codes: mapping.codeOverride)) else {
+                note(nil, of: control, on: live)
                 return .unanswered
             }
             raw = reading.value
         }
         let value: Double
         if control == .mute {
-            guard let state = mapping.switchState(forRaw: raw) else { return .unanswered }
+            guard let state = mapping.switchState(forRaw: raw) else {
+                note(nil, of: control, on: live)
+                return .unanswered
+            }
             value = state ? 1 : 0
         } else {
             value = mapping.normalized(for: raw)
         }
         guard let tracked = settings.recordSettings(tag).values[control] else { return .differs(value) }
         let same = control == .mute ? tracked == value : mapping.isSameRaw(tracked, value)
+        if same { note(.readBack, of: control, on: live) }
         return same ? .same : .differs(value)
     }
 
@@ -419,6 +502,7 @@ public final class ControlService {
     /// choice, because the device evidently holds something else now.
     public func adopt(_ control: ControlID, value: Double, for tag: DisplayTag) {
         track(control, value: value, for: tag, origin: .outsideChange, trusted: true, endsChoice: true)
+        note(.readBack, of: control, on: registry.live[tag])
     }
 
     // MARK: The restore floor
@@ -614,7 +698,7 @@ public final class ControlService {
     /// Input switching is a one-shot action. It is never restored, and never read back,
     /// because a monitor may stop answering once it shows another input.
     public func setInput(_ id: String, for tag: DisplayTag, origin: ChangeOrigin) async -> ControlWriteResult {
-        guard registry.live[tag] != nil else { return .failed(ControlFailure.notConnected.reason) }
+        guard let live = registry.live[tag] else { return .failed(ControlFailure.notConnected.reason) }
         guard let owner = owner(of: .input, for: tag) else {
             return .failed(availability(of: .input, for: tag).reason ?? ControlFailure.unsupported.reason)
         }
@@ -632,6 +716,7 @@ public final class ControlService {
             return ControlWriteResult(outcome: .accepted, detail: "replaced by a newer value")
         case .written:
             settings.updateRecord(tag) { $0.currentInput = entry.id }
+            note(.sent, of: .input, on: live)
             return ControlWriteResult(outcome: .accepted, detail: "sent. Monitors do not confirm input changes")
         }
     }
