@@ -4,9 +4,14 @@
 #
 #   scripts/package-macos.sh
 #   DISPLAY16X_SIGN_IDENTITY="My Code Signing Certificate" scripts/package-macos.sh
+#   DISPLAY16X_SIGN_IDENTITY="…" DISPLAY16X_SIGN_KEYCHAIN=path/to/file.keychain-db scripts/package-macos.sh
 #
 # The app is a menu bar item with no Dock icon (LSUIElement). The command line tool is
 # placed inside the bundle at Contents/MacOS/display16x and copied to dist/display16x.
+#
+# The version comes from scripts/release-version, the same file the build reads for the
+# command line tool and the app. The build number counts the commits, so a release is
+# packaged from a checkout with the full history.
 set -euo pipefail
 
 ROOT="${0:A:h:h}"
@@ -14,8 +19,15 @@ cd "$ROOT"
 
 PRODUCT_NAME="Display 16X"
 BUNDLE_ID="com.16xbrains.macdisplay16x"
-VERSION="0.1.0"
+VERSION="$(<scripts/release-version)"
+if [[ ! "$VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
+    print -u2 "scripts/release-version must hold three numbers such as 0.1.0, not '$VERSION'"
+    exit 1
+fi
 BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+if [[ "$(git rev-parse --is-shallow-repository 2>/dev/null)" == true ]]; then
+    print -u2 "Warning: this is a shallow clone, so the build number ($BUILD_NUMBER) counts only the fetched commits. Package a release from the full history."
+fi
 APP="dist/${PRODUCT_NAME}.app"
 
 echo "Building release…"
@@ -74,9 +86,16 @@ PLIST
 # DISPLAY16X_SIGN_IDENTITY set to the name of a code signing certificate in the keychain
 # (a self-signed one is enough for development), the signature stays the same and so does
 # the grant.
+#
+# DISPLAY16X_SIGN_KEYCHAIN names a keychain file to take the identity from, so a
+# certificate can live outside the login keychain and the search list.
 IDENTITY="${DISPLAY16X_SIGN_IDENTITY:--}"
-codesign --force --sign "$IDENTITY" "$APP/Contents/MacOS/display16x"
-codesign --force --sign "$IDENTITY" "$APP"
+SIGN_OPTIONS=(--force --sign "$IDENTITY")
+if [[ -n "${DISPLAY16X_SIGN_KEYCHAIN:-}" ]]; then
+    SIGN_OPTIONS+=(--keychain "$DISPLAY16X_SIGN_KEYCHAIN")
+fi
+codesign "${SIGN_OPTIONS[@]}" "$APP/Contents/MacOS/display16x"
+codesign "${SIGN_OPTIONS[@]}" "$APP"
 codesign --verify --strict "$APP"
 if [[ "$IDENTITY" == "-" ]]; then
     echo "Signed ad hoc. Accessibility has to be granted again for this build."
@@ -84,5 +103,5 @@ else
     echo "Signed with: $IDENTITY"
 fi
 
-echo "Packaged $APP"
+echo "Packaged $APP, version $VERSION ($BUILD_NUMBER)"
 echo "Command line tool: dist/display16x"
