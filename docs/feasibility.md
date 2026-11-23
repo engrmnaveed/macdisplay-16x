@@ -718,6 +718,76 @@ The rotation question was asked for every display on every build, and only a dis
 
 A development build in place of the copy in daily use: the panel's open time on screen, memory with the panel closed (at most 50 MiB), and wakeups when idle. And by eye: the popover's arrow against the skin's canvas, real blur, the feel of the bars, full keyboard access through the panel, VoiceOver, and Increase Contrast, Reduce Motion and Reduce Transparency switched on in System Settings.
 
+## 23 November 2026 · v0.3 Advanced scaling spikes · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
+
+**Not proven on hardware yet, unless a later section says so:** that macOS 27 reads an override file from `/Library/Displays`, which shape of size entry it accepts, what makes it read the file (a cable replug, the app's own disconnect and reconnect, a logout), that a file carrying the app's marker key is still accepted, that removing the file brings the mode list back, and that a virtual screen can be created and removed by this process. Everything below the next heading was read without writing anything.
+
+Same Mac and monitors as above: the Lenovo P32p-20 on the Mac's HDMI port (main display) and the LG SDQHD on a USB-C port, rotated 270°. The owner's Display 16X 0.2.0 and other display utilities were running and were left alone. The probes print no serial number, UUID or manufacture date. Vendor and product numbers below name a model, not a unit.
+
+### Override files: what is on this Mac (read-only, `spikes/override-probe.swift`)
+
+- **The system's own overrides are in `/System/Library/Displays/Contents/Resources/Overrides`**: 37 vendor folders and 441 product files, owned by root, on the sealed system volume. A file is named `DisplayVendorID-<vendor in hex>/DisplayProductID-<product in hex>`, with no leading zeros, and has no extension. Next to them are a few `.icns`, `.tiff` and `.mtdd` files. Two product files are not dictionaries.
+- **Neither test monitor has a system override.** The Lenovo is vendor 30ae, product 62a2. The LG is vendor 1e6d, product 5bf6. macOS ships 22 files for LG's vendor number, none for this model.
+- **`/Library/Displays` does not exist** on this Mac, and neither does a folder under the user's own Library. An install has to create the whole chain `/Library/Displays/Contents/Resources/Overrides/DisplayVendorID-1e6d`. Whether macOS 27 reads `/Library` at all is the first thing the writing spike answers. A folder in the user's Library was not looked for any further: nothing on this Mac or in the system's files suggests it is read.
+- **What the system's files carry.** By how many of the 441 product files use them: vendor and product (373 and 371), product name (290), `scale-resolutions` (251), color and gamma keys (about 179), `DisplayIsTV` (37), `target-default-ppmm` (33), `IODisplayEDID` (27), `edid-patches` (18), `DisplayPixelDimensions` (6), `default-resolution` (6). The rest are rarer.
+- **A `scale-resolutions` entry is a small block of big-endian 32-bit words**: width, height, then flags. Seen: 1,860 entries of 12 bytes (flags 1), 639 of 16 bytes (flags 1 with `0x00200000`, or flags 9 with `0x00a00000`), 341 of 8 bytes (width and height only), 63 of 9 bytes and 4 that are not data at all. On a built-in "Color LCD" whose `DisplayPixelDimensions` is 2304 × 1440, the 16-byte entries run up to 2560 × 1440 and 2880 × 1800, larger than the panel. So the width and height of a 16-byte entry are the backing store of a HiDPI size, twice its points. That is the shape the generator uses, and the one the writing spike tests.
+- `DisplayPixelDimensions` is 8 bytes, width and height of the panel. `default-resolution` is 12 bytes, for example 1024, 768, then `0x004bffff`. The meaning of that last word is not known.
+
+### What the window server already offers (read-only)
+
+| | Lenovo P32p-20 | LG SDQHD |
+| --- | --- | --- |
+| Panel, before rotation | 3840 × 2160 | 2560 × 2880 |
+| Modes in the window server's list | 158 | 53 |
+| HiDPI sizes | 33, from 400 × 300 to 3840 × 2160 | 23, from 300 × 400 to 2304 × 2048 |
+| Largest HiDPI size | 3840 × 2160, backed by 7680 × 4320 | 2304 × 2048, backed by 4608 × 4096 |
+| Refresh rates | 30, 50, 60 Hz | 30, 50, 60 Hz |
+| Physical size reported | 701 × 391 mm | 520 × 471 mm |
+
+- **The Lenovo already offers its own native grid as a HiDPI size.** An override can only add finer steps between the ones it has, for example 2880 × 1620 or 3456 × 1944.
+- **The LG stops at 2304 × 2048 HiDPI**, which is 0.8 of its panel. 2560 × 2880 HiDPI (backing 5120 × 5760) is missing, although the Lenovo's list shows the window server driving a 7680 × 4320 backing store on this Mac. This is the case the feature is for.
+- **The list is reported in the rotated frame.** The LG's native-flagged mode reads 2880 × 2560 while the display is turned 270°. An override is written in the panel's own frame, so the app has to turn sizes back before it writes them.
+- About a third of each list is sizes off the panel's aspect (14 on the Lenovo, 11 on the LG).
+
+### The virtual display interface (read-only, `spikes/virtual-display-probe.swift`)
+
+- **All four classes resolve**: `CGVirtualDisplayDescriptor`, `CGVirtualDisplayMode`, `CGVirtualDisplaySettings` and `CGVirtualDisplay`, exported by Core Graphics. Their properties are the ones the MIT-licensed DeskPad documents (name, vendor, product and serial, maximum pixels, size in millimetres, a dispatch queue and a termination handler; modes of width, height and refresh rate; settings with modes and a HiDPI flag; the display with its ID and `applySettings:`). macOS 27 adds color primaries and a white point to the descriptor, a rotation, a "reference" flag and a refresh deadline to the settings, and a transfer function to the mode.
+- **A newer family resolves too**, exported by SkyLight: `SLVirtualDisplay` with `initWithConfiguration:error:`, `applySettings:error:`, `destroy` and a delegate, and configuration, mode, settings and capability classes. Its class method `capabilities` answers without creating anything: **at most 16384 × 16384 pixels, 0.25 to 4 pixels per point, and no slower than 24 Hz.** That is the window server's limit for "sizes above 8K".
+- Neither family was used to create a display. No virtual display was online.
+
+### Prepared, not run: the writing spikes
+
+Each records the state before, does one thing, and puts it back. Each needs the owner at the desk and a yes in the session.
+
+| Step | Command | What it answers |
+| --- | --- | --- |
+| Show the file | `override-write-probe plan 1e6d 5bf6` | Read-only. The file byte for byte (692 bytes), where it goes and the folders it creates |
+| Install | `override-write-probe install 1e6d 5bf6 --yes` | Records the LG's sizes and the folders that exist, then writes the file through the macOS administrator prompt, which the owner answers |
+| Activate | `override-write-probe activate 1e6d 5bf6 --yes` | Takes the LG out of use for 3 seconds and back, the way the app's own disconnect works. Whether that is enough for macOS to read the file. A cable replug or a logout are the other ways |
+| Check | `override-write-probe check 1e6d 5bf6` | Read-only. Which of the four sizes appeared: 1792 × 2016 HiDPI (a step inside the range the LG has, so a size limit cannot explain its absence), 2304 × 2592 HiDPI, 2560 × 2880 HiDPI, and 1792 × 2016 at low density (the 8-byte shape) |
+| Remove | `override-write-probe remove 1e6d 5bf6 --yes` | Deletes the file and only the folders install created, through the administrator prompt. Then activate and check again: the list should be what it was |
+| Virtual screen | `virtual-display-write-probe run --yes` | Creates "Display 16X probe", 1920 × 1080 HiDPI at 60 Hz, reads what the window server reports for it, holds 8 seconds, releases it, compares the arrangement with the record and puts the origins back if they moved |
+
+The file the install writes, for the record:
+
+```xml
+<dict>
+	<key>DisplayProductID</key>      <integer>23542</integer>
+	<key>DisplayVendorID</key>       <integer>7789</integer>
+	<key>com.16xbrains.macdisplay16x</key>
+	<dict><key>format</key><integer>1</integer><key>generator</key><string>Display 16X override-write-probe</string></dict>
+	<key>scale-resolutions</key>
+	<array>
+		<data>AAAOAAAAD8AAAAABACAAAA==</data>   <!-- 3584 × 4032, flags 1, 0x00200000: 1792 × 2016 HiDPI -->
+		<data>AAASAAAAFEAAAAABACAAAA==</data>   <!-- 4608 × 5184: 2304 × 2592 HiDPI -->
+		<data>AAAUAAAAFoAAAAABACAAAA==</data>   <!-- 5120 × 5760: 2560 × 2880 HiDPI -->
+		<data>AAAHAAAAB+A=</data>               <!-- 1792 × 2016, low density -->
+	</array>
+</dict>
+```
+
+Two side effects the owner should know before saying yes. The virtual screen is a new display to every running display utility, the owner's Display 16X included, which will remember it as a display of its own (vendor 1616) until the retention period removes it. And the activate step is a disconnect and reconnect of the LG, which v0.2's checks showed macOS puts back in its place.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:
@@ -737,9 +807,11 @@ swiftc -O spikes/ddc-write-probe.swift -o /tmp/ddc-write-probe && /tmp/ddc-write
 swiftc -O spikes/ddc-reliability-probe.swift -o /tmp/ddc-reliability-probe && /tmp/ddc-reliability-probe
 swiftc -O spikes/layout-probe.swift -o /tmp/layout-probe && /tmp/layout-probe   # add --watch to follow changes
 swiftc -O spikes/connection-probe.swift -o /tmp/connection-probe && /tmp/connection-probe
+swiftc -O spikes/override-probe.swift -o /tmp/override-probe && /tmp/override-probe
+swiftc -O spikes/virtual-display-probe.swift -o /tmp/virtual-display-probe && /tmp/virtual-display-probe
 ```
 
-The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header.
+The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header. `override-probe` and `virtual-display-probe` are read-only and create nothing. `override-write-probe.swift` writes a file as administrator and `virtual-display-write-probe.swift` creates a display: both are run only with the owner present, see their headers.
 
 To list the display-related functions a system framework exports on a given macOS version:
 
