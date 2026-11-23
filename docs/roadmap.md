@@ -91,7 +91,7 @@ Ready when the performance budget in the [PRD](../PRD.md#performance-budget) is 
 Left before v0.1 is called done:
 
 1. Watch software dimming across a lock and unlock.
-2. Watch one wake with the after-wake default and the restore floor as [decided](#5-open-decisions). Both are built and unit-tested, and have not run on hardware yet.
+2. Build decisions 10 and 11, then watch one wake and one start with the after-wake default and the restore floor as [decided](#5-open-decisions). Decisions 2 and 4 are built and unit-tested, and have not run on hardware yet.
 3. Settle the open decisions marked v0.1.
 4. One rotation run through the timed revert, or ship rotation marked unverified.
 5. Register the login item once.
@@ -137,6 +137,8 @@ Raised by build work in the [domain log](domain-log.md). The maintainer decides.
 | 2 | DDC values after wake and on reconnect | Read and adopt what the monitor reports. "Restore after wake" is a setting per display, off by default, for monitors that forget. It reads first and writes only a value the monitor no longer has. |
 | 3 | Software dimming by default | Off in v0.1. Revisit once it has been watched across a lock and with a custom color profile. |
 | 4 | The restore floor | Hardware brightness set by hand is restored exactly as set. The floor applies to the software part only, when the user returns. |
+| 10 | What counts as the user returning, for the floor | App start, and a wake, unlock or session return after the displays were off or the screen was locked for 30 minutes or more. A shorter blank leaves a picture that was dimmed on purpose alone. The time comes from the sleep and lock events, with no timer. |
+| 11 | Values at app start | Read and adopt, the same rule as after wake. The check of each display already reads the values, so it costs no extra queries. |
 
 The rules are written out in the [core architecture](core-architecture.md), sections 5 and 7.
 
@@ -149,5 +151,3 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 7 | One rotation test on the owner's desk | Never run | One run on the monitor that is not rotated, through the timed revert, with the owner present | v0.1 |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
 | 9 | A clean DDC measurement with no other display utility running | Every number so far was taken with one running | One short run before v0.1 is called done, when the owner agrees to quit the other utility for a few minutes | v0.1 |
-| 10 | Whether a short blank counts as the user returning, for the restore floor | The floor applies at every wake, so a one-second idle blank lifts a picture that was dimmed below the floor on purpose | Apply the floor at app start, and at a wake, unlock or session return only when the displays were off or the screen was locked for 30 minutes or more. The time is taken from the sleep and lock events, with no timer | v0.1 |
-| 11 | Whether the app reads and adopts at start too | The stored value is trusted at start, so a monitor changed while the app was not running shows the old value until the panel opens | Read and adopt at start as well. It is the same rule everywhere and costs no extra queries, because the check of each display already reads the values | v0.1 |
