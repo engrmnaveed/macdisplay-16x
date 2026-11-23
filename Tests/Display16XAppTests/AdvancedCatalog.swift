@@ -17,8 +17,8 @@ enum AdvancedCatalog {
     }
 
     static func desk(overrides: Bool = false, virtual: Bool = false) async -> SampleDesk {
-        let desk = await SurfaceCatalog.desk { desk in
-            desk.context.settings.update { document in
+        let desk = await SurfaceCatalog.desk { sample in
+            sample.context.settings.update { document in
                 document.advanced.overridesEnabled = overrides ? true : nil
                 document.advanced.virtualScreensEnabled = virtual ? true : nil
             }

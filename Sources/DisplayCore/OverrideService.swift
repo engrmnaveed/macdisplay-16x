@@ -250,8 +250,8 @@ public final class OverrideService {
         let files = written().filter { model == nil || $0.model == model }
         guard !files.isEmpty else { return nil }
         let entries = files.map { ($0.model, writtenFile($0.model)?.createdFolders ?? []) }
-        let affected = files.flatMap { affected($0.model) }
-        return OverridePlanner.remove(entries, affected: affected, mainIsAffected: files.contains { mainIsAffected($0.model) })
+        let reached = files.flatMap { affected($0.model) }
+        return OverridePlanner.remove(entries, affected: reached, mainIsAffected: files.contains { mainIsAffected($0.model) })
     }
 
     public func undoPlan(_ model: ModelKey) -> SystemFilePlan? {
