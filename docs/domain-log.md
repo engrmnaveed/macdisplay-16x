@@ -6,9 +6,17 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · A development build gets a settings folder of its own
+
+A build under test shared the settings folder, the recovery store and the command socket of the copy in daily use, and a v0.2 build writes a settings document that a v0.1 copy drops parts of. The paths belong to the core, so this is said here: `AppPaths` now reads `DISPLAY16X_SUPPORT_DIRECTORY`. When it is set, the app and the command line tool keep settings, the recovery store and the socket in that folder. Unset, every path is what it was. A build with its own folder also refuses to start while the copy in daily use answers on the standard socket, because both would drive the same monitors and color tables. The socket path must stay under about 100 characters, so a short folder such as `~/d16x-dev` is the one to use.
+
+A side benefit: the smoke test can now run its "the app is not running" branch on a Mac where the app is in use, with the variable pointing at a folder no app uses. It passed on the M5 Pro.
+
 ## 23 November 2026 · v0.2: links need one line in the packaging script
 
 The `display16x://` handler is built: it runs behind its own switch, off by default, checks a token the panel shows, goes through the engine and opens x-callback-url callbacks. macOS only routes a scheme to an app whose `Info.plist` declares it under `CFBundleURLTypes`. The plist is written by `scripts/package-macos.sh`, which v0.2 was asked to leave alone until the release branch has merged. **Change needed after that merge:** add a `CFBundleURLTypes` entry with the scheme `display16x` to the generated `Info.plist`. Until then links do nothing, and the URL scheme row of the feature inventory is built but not reachable.
+
+Update, 23 November, after main took the release branch: done. The generated `Info.plist` declares the scheme, and the packaged bundle passes `plutil` and the version check. Links have not been opened on hardware yet.
 
 ## 23 November 2026 · At a wake, macOS runs the remaining monitor in another mode while the LG is away
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+Display layout, from v0.2 Layout. Built and unit-tested, and not yet run on hardware: every change below that moves, mirrors or disconnects a display still has to be tried on the test monitors.
+
+- Arrange displays from the panel or the command line: make a display the main one, drag it on a small canvas, put it next to another (`display16x set placement left:end --tag 2 --of-tag 1`), mirror one display onto another and stop it again. Each change is one system transaction, and from the panel or with `--try` it asks **Keep** or **Revert** and goes back on its own after 15 seconds. `display16x revert` with no display named puts the last layout change back.
+- Take a display out of use without unplugging it, and bring it back: `display16x disconnect --tag 2`, `display16x reconnect --all`, keep only the main display, or make one display the only one. The last display in use is never disconnected unless you allow it. A disconnect lasts until you log out at most, and the app reconnects what it disconnected when it quits, and at the next start if it stopped unexpectedly.
+- Optionally turn the built-in panel off while an external display is attached, with displays you can exclude. It does nothing with the lid closed, and it steps back after you reconnect the panel by hand. Off by default.
+- Protection: save a layout and have it put back after sleep, reconnects and changes made elsewhere, and keep a display's resolution or rotation the same way. It follows the changes you make through the app, skips a mode the display no longer offers, waits until displays have stopped coming and going, gives up after three attempts in two minutes, and says on screen what it did. Off by default.
+- Presets: save the current sizes, rotation and arrangement (and optionally brightness) under a name, and apply them from the panel, the command line or a shortcut.
+- Global keyboard shortcuts for any command, recorded in the panel or added with `display16x shortcut add ctrl+opt+1 set preset Desk`. They need no Accessibility permission. Conflicts with your other shortcuts and with macOS's are pointed out. Repeated size steps are gathered into one change.
+- Resolution by name (`default`, `native`, `previous`, `largest`, `smallest`), favourite modes, size steps along the text-size strip, and rotation by steps or as a toggle.
+- Brightness and volume keys reach every display that mirrors the one they target. `display16x perform indicator --pointer` shows the indicator without changing anything.
+- Command line: help for every feature (`display16x help placement`), a `perform` verb, `min` and `max` as values, JSON listings of a display's modes, inputs and identifiers, raw DDC reads and writes (`display16x get vcp 0x10 --tag 1`, writing needs `--confirm`), and a switch that turns command line access off.
+- `display16x://` links run commands too, behind their own switch (off by default) and a token shown in the panel, with x-callback-url callbacks.
+- Export, import and reset all settings from the panel or with `display16x settings export|import|reset`. What the app needs to undo its own changes on your Mac is never part of it.
+- For development: `DISPLAY16X_SUPPORT_DIRECTORY` gives a build its own settings folder and command socket, and such a build does not start while the normal copy runs.
+- Not included: Shortcuts app actions, which cannot be built with the Command Line Tools alone, and asking macOS to look for displays again.
+
 ## 0.1.0
 
 The first release of Display 16X, a menu bar utility for the display controls macOS leaves out. It needs an Apple silicon Mac with macOS 14 or later.

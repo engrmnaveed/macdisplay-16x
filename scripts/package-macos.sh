@@ -77,6 +77,17 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <string>Copyright © 2026 16X Brains. MIT License.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>${BUNDLE_ID}.command</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>display16x</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
 PLIST

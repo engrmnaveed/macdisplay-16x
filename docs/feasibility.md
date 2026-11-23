@@ -537,7 +537,7 @@ Not measured: the idle and memory budgets with v0.2. Nothing in v0.2 repeats: ev
 
 #### The checks for the owner, in order
 
-Before starting: record the layout with `layout-probe`, and decide which Display 16X runs. Starting the v0.2 build means quitting the running 0.1.0 copy, and an ad hoc build loses the Accessibility grant (shortcuts do not need it, the brightness keys do).
+Before starting: record the layout with `layout-probe`, and decide which Display 16X runs. The v0.2 build refuses to start while the 0.1.0 copy runs, so that copy is quit first. Start the v0.2 build with `DISPLAY16X_SUPPORT_DIRECTORY=~/d16x-dev` so it keeps its settings apart and never writes the 0.1.0 copy's file, and use the command line tool with the same variable. An ad hoc build loses the Accessibility grant (shortcuts do not need it, the brightness keys do).
 
 | # | Check | How | Done when |
 | --- | --- | --- | --- |
@@ -557,7 +557,7 @@ Before starting: record the layout with `layout-probe`, and decide which Display
 | 14 | Budgets | Ten minutes idle with the panel closed, then memory after use | Within the PRD's targets |
 | 15 | Lid, optional | Turn on "Built-in panel off while an external display is attached", open the lid | The built-in panel comes on and the app turns it off; the log shows the lid events |
 
-The links (`display16x://`) cannot be checked yet: macOS only sends them to an app whose bundle declares the scheme, and the packaging script does not declare it.
+The links (`display16x://`) can be checked once the packaged v0.2 app has run once, so macOS knows it declares the scheme: switch links on in the panel, then `open "display16x://get/brightness?main&token=TOKEN"`.
 
 ## Running the probes
 
