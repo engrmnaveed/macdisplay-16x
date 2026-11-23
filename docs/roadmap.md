@@ -61,7 +61,8 @@ One small probe per risky mechanism, each recording Mac model, macOS build, moni
 - [x] Gamma-table dimming while awake
 - [ ] Gamma-table dimming across a lock and unlock (the blind rewrite needs to be watched once), with Night Shift, and with a custom color profile on any connected display
 - [x] DDC readiness after a short display sleep: both monitors answer within a second, and bad replies stop within 3.4 seconds
-- [ ] DDC readiness after a real standby, a full system sleep and a cable reconnect
+- [x] DDC readiness after a long display sleep (five and a half hours): the DisplayPort monitor leaves the system and returns 3.3 seconds later, answers before it is listed, and gives "not ready" replies on and off for at least 16 seconds. Both monitors kept their values
+- [ ] DDC readiness after a full system sleep and a cable reconnect
 - [ ] The same DDC timings with no other display utility running
 - [ ] Key capture without Accessibility permission
 - [x] A display's system UUID survives a display sleep and a reconnect during wake
@@ -85,13 +86,13 @@ Built to the [core architecture](core-architecture.md), in this order:
 
 Ready when the performance budget in the [PRD](../PRD.md#performance-budget) is met on the baseline Mac, a monitor that ignores DDC leaves the menu responsive, and settings follow a monitor across a reconnect and a restart.
 
-**Status on 23 November 2026.** All four stages are built on the `v0.1-core` branch, with 208 unit tests. On the two test monitors the owner has checked brightness, contrast and volume from the panel, the text-size strip with Keep and Revert, refresh rate, the brightness and volume keys with the indicator, and software dimming while awake. The idle and memory budgets are met on the M5 Pro.
+**Status on 23 November 2026.** All four stages are built on the `v0.1-core` branch, with 221 unit tests. On the two test monitors the owner has checked brightness, contrast and volume from the panel, the text-size strip with Keep and Revert, refresh rate, the brightness and volume keys with the indicator, and software dimming while awake. The idle and memory budgets are met on the M5 Pro.
 
 Left before v0.1 is called done:
 
 1. Watch software dimming across a lock and unlock.
-2. Measure how soon each monitor accepts DDC after a real standby.
-3. Build the after-wake default and the restore floor as [decided](#5-open-decisions), and settle the open decisions marked v0.1.
+2. Watch one wake with the after-wake default and the restore floor as [decided](#5-open-decisions). Both are built and unit-tested, and have not run on hardware yet.
+3. Settle the open decisions marked v0.1.
 4. One rotation run through the timed revert, or ship rotation marked unverified.
 5. Register the login item once.
 6. Run the app and the budget measurements on a MacBook Air M1, with its built-in panel.
@@ -114,7 +115,7 @@ HDR switching, XDR brightness on capable hardware, color profile and color mode 
 | --- | --- |
 | Private interfaces change between macOS releases | One module, run-time lookup, a capability flag per feature, and the probe run on each macOS beta. |
 | System display identifiers change across wake, reconnects and OS installs, and identical monitors collide | Settings are keyed by our own record tag. The match rule is chosen per display, with a transfer operation between records. |
-| A monitor is not ready for commands right after wake or reconnect | Restores wait for reconfiguration to settle plus a per-display delay, pass the automation gate, and retry from a persisted queue. |
+| A monitor is not ready for commands right after wake or reconnect | Reads and restores wait for reconfiguration to settle plus a per-display delay, pass the automation gate, and retry a bounded number of times. A missing reply never removes a control or a value that was known before. One test monitor gives "not ready" replies for at least 16 seconds after a long sleep. |
 | Monitors differ in DDC behavior | Lenient parsing, a quirks table, bounded retries, per-display overrides, and software dimming as a fallback. One of our two test monitors needs every query twice and garbles the reply header. The other reports a volume control it ignores. |
 | Another display utility shares the DDC channel | A reply counts only when it names the feature that was asked for. Expect more retries, and say so in the user-facing notes on running next to other display tools. |
 | macOS resets the color table at unlock without telling the app | Write the table again at the known moments without checking. Report software dimming as accepted, never confirmed. Keep it off by default until this is proven. |
@@ -148,3 +149,5 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 7 | One rotation test on the owner's desk | Never run | One run on the monitor that is not rotated, through the timed revert, with the owner present | v0.1 |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
 | 9 | A clean DDC measurement with no other display utility running | Every number so far was taken with one running | One short run before v0.1 is called done, when the owner agrees to quit the other utility for a few minutes | v0.1 |
+| 10 | Whether a short blank counts as the user returning, for the restore floor | The floor applies at every wake, so a one-second idle blank lifts a picture that was dimmed below the floor on purpose | Apply the floor at app start, and at a wake, unlock or session return only when the displays were off or the screen was locked for 30 minutes or more. The time is taken from the sleep and lock events, with no timer | v0.1 |
+| 11 | Whether the app reads and adopts at start too | The stored value is trusted at start, so a monitor changed while the app was not running shows the old value until the panel opens | Read and adopt at start as well. It is the same rule everywhere and costs no extra queries, because the check of each display already reads the values | v0.1 |
