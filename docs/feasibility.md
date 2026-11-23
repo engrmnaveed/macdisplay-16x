@@ -559,6 +559,30 @@ Before starting: record the layout with `layout-probe`, and decide which Display
 
 The links (`display16x://`) can be checked once the packaged v0.2 app has run once, so macOS knows it declares the scheme: switch links on in the panel, then `open "display16x://get/brightness?main&token=TOKEN"`.
 
+### The owner checks (23 November, 12:17 to 13:09, the owner at the desk)
+
+The layout was recorded at 12:17 (the Lenovo, display 4, main at 0,0, 3200 × 1800; the LG, display 5, at −2304,−248, 2304 × 2048, 270°) and matched that record after every check. The owner's Display 16X 0.1.0 ran during checks 1 to 5 and was quit, with the owner's agreement, for the rest. The v0.2 build ran from its own folder (`DISPLAY16X_SUPPORT_DIRECTORY`), and the checksum of the 0.1.0 copy's settings file was recorded before. Other display utilities were not inspected and may have been running.
+
+| # | Check | Result |
+| --- | --- | --- |
+| 1 | Empty transaction | Completed with status 0 and **no reconfiguration callback**. A transaction that sets every origin to its current value is silent too |
+| 2 | Move the LG 100 points and back | macOS kept the exact place asked for. The LG got "moved, desktop shape", the Lenovo "desktop shape" alone |
+| 3 | LG main and back | Shifting every origin is the whole change. The new main display got "moved, set main, desktop shape", the old one "moved, desktop shape". The online list puts the main display first |
+| 4 | Mirror and back | The LG got "moved, mode, mirror, desktop shape" and then **reported the Lenovo's frame and size** (3200 × 1800 at 0,0). Ending the mirror ("moved, mode, unmirror") gave it back its own mode, its 270° and its place |
+| 5 | Disconnect and back, private call | The LG left the online list ("removed, disabled"). While it was out **the Lenovo ran at 1920 × 1080**, as at the 11:39 wake. Reconnect brought the LG back under the same display ID, mode, rotation and place |
+| 6 | Main display from the CLI, unanswered | Reverted on its own at 15 seconds |
+| 7 | Placement right:start, Keep, revert | Placed at 3200,0 exactly, kept, and put back by `display16x revert` |
+| 8 | Mirroring with the countdown | **Failed at first**: the revert was refused as an overlap and the LG stayed mirrored until it was put back by hand. Fixed (the saved size is used for a display that stops mirroring). The rerun reverted in one transaction |
+| 9 | Disconnect, unanswered, then quit | Back 1.35 seconds after the countdown ended, under tag 2. Disconnected again and the app quit: reconnected at quit, nothing left in the recovery store |
+| 10 | The panel | Make Main, a canvas drag (snapped to 3200,−248, bottoms aligned), Mirror and Disconnect, each with Revert in the Keep window: all four worked, confirmed by the owner and the log |
+| 11 | Saved layout across a long sleep | **Not run.** The displays did sleep for about an hour afterwards (to 14:11) with the v0.2 build running and protection off: the LG left and returned in 3.5 seconds and the app wrote nothing |
+| 12 | Moving the LG in System Settings with protection on | Put back after each of the owner's two drags, with the notice |
+| 13 | A preset from ⌃⌥1 | The menu bar moved back to the Lenovo. The press arrived without the Accessibility permission |
+| 14 | Idle budget | 0.02 s of CPU in 610 seconds (0.003% of a core), 1 idle wakeup, 3 threads, a 47 MB footprint after a heavy session (50 MB at the start of the ten minutes). Within the budget; memory is 6 MB above v0.1's measurement |
+| 15 | Lid, with the built-in panel turned off automatically | The lid event arrived, macOS added the panel 1.3 seconds later and the app turned it off 1.2 seconds after that. **Turning the panel back on with the lid closed lit it up**: macOS made it the main display, ran the Lenovo at 1920 × 1080 and the LG at 2560 × 2880 unrotated. Opening and closing the lid put everything back. Fixed: a built-in panel now comes back only once the lid is open |
+
+Also seen: `AppleClamshellCausesSleep` read 1 at 11:12 and 12:17 and 0 from about 12:50, after the built-in panel had been turned off, and stayed 0 after it came back. Whether the app caused it is not known.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:

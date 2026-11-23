@@ -6,6 +6,18 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The owner checks: what macOS does when a layout changes, and two bugs they found
+
+Mac17,9, macOS 27.2.1, the Lenovo P32p-20 on HDMI and the LG SDQHD on DisplayPort, with the owner at the desk. Every result is in the feasibility notes. What matters for the product:
+
+- **macOS keeps a configuration per set of displays and applies it by itself.** Seen three ways now: at a wake when the LG is briefly away, when the app disconnects the LG, and when the built-in panel joins. In each case the remaining monitors change mode (the Lenovo to 1920 × 1080) and change back when the set does. The app must treat these as macOS's own, not as outside changes.
+- **A display that mirrors reports its source's size,** and gets its own mode back when it stops. Undoing a mirror with the size it had while mirroring looked like an overlap and was refused. Fixed.
+- **Never turn the built-in panel on while the lid is closed.** It lights up behind the lid, becomes the main display, takes the menu bar, and macOS switches the external monitors to the three-display configuration. Fixed: it waits for the lid to open, at quit too.
+- **An empty configuration transaction is silent,** so the app could even apply a no-op safely. It skips them anyway.
+- **Shortcuts work without the Accessibility permission,** as system hot keys.
+
+**Decision needed, raised by the owner:** turning the built-in panel off automatically leaves it dark until something brings it back, and when the app is not running only logging out does. The owner's view is that the internal display should not be left dark. It is off by default and comes back when the last external display goes away (unit-tested, not yet tried on hardware). The options: keep it as built, drop the feature, or limit it, for example to a panel that is turned off only while the app runs and is turned back on at quit whatever the lid does.
+
 ## 23 November 2026 · A development build gets a settings folder of its own
 
 A build under test shared the settings folder, the recovery store and the command socket of the copy in daily use, and a v0.2 build writes a settings document that a v0.1 copy drops parts of. The paths belong to the core, so this is said here: `AppPaths` now reads `DISPLAY16X_SUPPORT_DIRECTORY`. When it is set, the app and the command line tool keep settings, the recovery store and the socket in that folder. Unset, every path is what it was. A build with its own folder also refuses to start while the copy in daily use answers on the standard socket, because both would drive the same monitors and color tables. The socket path must stay under about 100 characters, so a short folder such as `~/d16x-dev` is the one to use.
