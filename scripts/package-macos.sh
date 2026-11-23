@@ -5,6 +5,7 @@
 #   scripts/package-macos.sh
 #   DISPLAY16X_SIGN_IDENTITY="My Code Signing Certificate" scripts/package-macos.sh
 #   DISPLAY16X_SIGN_IDENTITY="…" DISPLAY16X_SIGN_KEYCHAIN=path/to/file.keychain-db scripts/package-macos.sh
+#   DISPLAY16X_HARDENED_RUNTIME=1 scripts/package-macos.sh
 #
 # The app is a menu bar item with no Dock icon (LSUIElement). The command line tool is
 # placed inside the bundle at Contents/MacOS/display16x and copied to dist/display16x.
@@ -39,7 +40,6 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Display16XApp" "$APP/Contents/MacOS/${PRODUCT_NAME}"
 cp "$BIN/display16x" "$APP/Contents/MacOS/display16x"
-cp "$BIN/display16x" "dist/display16x"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -89,18 +89,29 @@ PLIST
 #
 # DISPLAY16X_SIGN_KEYCHAIN names a keychain file to take the identity from, so a
 # certificate can live outside the login keychain and the search list.
+#
+# DISPLAY16X_HARDENED_RUNTIME=1 signs with the hardened runtime, as notarization does, to
+# check a build under it. scripts/notarize-macos.sh adds it on its own.
 IDENTITY="${DISPLAY16X_SIGN_IDENTITY:--}"
 SIGN_OPTIONS=(--force --sign "$IDENTITY")
 if [[ -n "${DISPLAY16X_SIGN_KEYCHAIN:-}" ]]; then
     SIGN_OPTIONS+=(--keychain "$DISPLAY16X_SIGN_KEYCHAIN")
 fi
+if [[ "${DISPLAY16X_HARDENED_RUNTIME:-}" == 1 ]]; then
+    SIGN_OPTIONS+=(--options runtime)
+fi
 codesign "${SIGN_OPTIONS[@]}" "$APP/Contents/MacOS/display16x"
 codesign "${SIGN_OPTIONS[@]}" "$APP"
 codesign --verify --strict "$APP"
+# The copy next to the bundle carries the same signature as the tool inside it.
+cp "$APP/Contents/MacOS/display16x" dist/display16x
 if [[ "$IDENTITY" == "-" ]]; then
     echo "Signed ad hoc. Accessibility has to be granted again for this build."
 else
     echo "Signed with: $IDENTITY"
+fi
+if [[ "${DISPLAY16X_HARDENED_RUNTIME:-}" == 1 ]]; then
+    echo "With the hardened runtime."
 fi
 
 echo "Packaged $APP, version $VERSION ($BUILD_NUMBER)"

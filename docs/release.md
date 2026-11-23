@@ -106,7 +106,7 @@ Needs a membership in the Apple Developer Program.
 2. In App Store Connect, under Users and Access → Integrations, create a team API key for the notary service and download its `.p8` file. Note the key ID and the issuer ID.
 3. Set all six secrets in `release-signing`.
 
-The workflow signs a copy of the app inside out with the hardened runtime and a secure timestamp, checks that the private interfaces resolve as they do without the hardened runtime, notarizes it, staples the ticket and checks it with `spctl`. The hardened runtime check has passed on the developer's Mac with an ad hoc signature, and DDC reads from the hardened tool worked there. The app itself has never run with the hardened runtime: open it after the first notarized build and check the controls and the keys.
+The workflow signs a copy of the app inside out with the hardened runtime and a secure timestamp, checks that the private interfaces resolve as they do without the hardened runtime, notarizes it, staples the ticket and checks it with `spctl`. On the developer's Mac, a build signed ad hoc with the hardened runtime gave the same probe results as one without it, private interfaces and DDC replies alike, and passed the smoke test. The menu bar app itself has never run with the hardened runtime: open it after the first notarized build and check the controls and the keys.
 
 ### Project certificate
 
@@ -187,6 +187,13 @@ NOTARY_PROFILE='display16x-notary' \
 ```
 
 The script signs a copy, so the input bundle stays available for local checks, and writes the ZIP, its checksum and `dist/macos-notary-log.json`.
+
+To check a build under the hardened runtime without any certificate or starting the app, sign it ad hoc with the runtime and run the read-only checks:
+
+```sh
+DISPLAY16X_HARDENED_RUNTIME=1 scripts/package-macos.sh
+scripts/smoke-test.sh
+```
 
 For a project certificate kept in a keychain file of its own, outside the login keychain and the search list:
 
