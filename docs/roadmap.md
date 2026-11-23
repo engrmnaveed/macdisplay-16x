@@ -132,7 +132,9 @@ The v0.1 interface was built to exercise the core, and it looks like it. This mi
 4. **Identity.** The app icon, the name treatment and the About panel.
 5. **Quality bar.** Every control reachable by keyboard and VoiceOver. Reduce Motion and Increase Contrast respected. The panel still opens in under 100 ms warm, is built on open and released on close, and the memory budget holds.
 
-Ready when the owner has approved each surface on their own Mac and the budgets are measured again. It runs after release 0.1.0 works end to end. Later milestones build their interface on the design system, so their first panels stay plain until it lands.
+Ready when the owner has approved each surface on their own Mac and the budgets are measured again. Later milestones build their interface on the design system, so their first panels stay plain until it lands.
+
+**Order.** On 23 November 2026 the owner moved this milestone ahead: it starts as soon as v0.2 is on `main`, before release 0.1.0 and before v0.3. It needs the owner's choices on rendered options and no time at the monitors. Release 0.1.0 waits on the owner's certificate, and v0.3 opens with hardware spikes. The surfaces now include the v0.2 panels: the arrangement canvas, mirroring, connection and presets, the Keep window for a layout change, the protection offer and the protection notices. Images and the app icon are made with the image generator the owner has set up, and each one is a candidate for the owner to approve.
 
 ### v0.2 Layout
 
