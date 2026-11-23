@@ -188,6 +188,35 @@ struct ConnectionTests {
         #expect(rig.rig.registry.state(of: builtIn) == .disconnectedBySystem)
     }
 
+    @Test("A built-in panel is turned back on only once the lid is open, also at quit")
+    func builtInWaitsForLid() async {
+        // Found in the owner check on 23 November: turning the built-in panel on with the
+        // lid closed lit it up and moved the menu bar onto it.
+        let rig = LayoutRig()
+        rig.plugBuiltIn()
+        await rig.startWithBoth()
+        let builtIn = rig.rig.tag(Fixture.builtInID)
+        _ = await rig.run(.set, .connected, on: .tag(builtIn.rawValue), value: .flag(false))
+        #expect(rig.connection.disconnectedTags == [builtIn])
+        rig.lid.isLidClosed = true
+        rig.connectionSystem.calls.removeAll()
+
+        let waiting = await rig.run(.set, .connected, on: .tag(builtIn.rawValue), value: .flag(true))
+        #expect(waiting.entries.first?.outcome == .accepted)
+        #expect(waiting.entries.first?.detail?.contains("lid") == true)
+        #expect(rig.connectionSystem.calls.isEmpty)
+        rig.connection.reconnectAtQuit()
+        #expect(rig.connectionSystem.calls.isEmpty)
+        #expect(rig.connection.disconnectedTags == [builtIn])
+
+        rig.lid.isLidClosed = false
+        rig.rig.bus.publish(.lidOpened)
+        await rig.advance(2)
+        #expect(rig.connectionSystem.calls.map(\.enabled) == [true])
+        #expect(rig.rig.registry.live[builtIn] != nil)
+        #expect(rig.connection.waitingForLid.isEmpty)
+    }
+
     @Test("A risky model keeps the built-in panel on unless allowed")
     func modelSafeguard() async {
         let rig = LayoutRig()

@@ -148,6 +148,8 @@ public final class ConnectionService {
     public var settleTimeout: TimeInterval = 6
     /// Told when the user brings a display back by hand, so automation can step back.
     public var onManualReconnect: (@MainActor (DisplayTag) -> Void)?
+    /// Built-in panels whose reconnect waits for the lid to open.
+    public private(set) var waitingForLid: Set<DisplayTag> = []
 
     public init(
         registry: DisplayRegistry,
@@ -262,6 +264,14 @@ public final class ConnectionService {
         guard let system else { return entry(tag, .failed, connected: false, requested: true, detail: "reconnecting is not available in this build") }
         // Said before the display returns, so automation reacting to its return already knows.
         if !origin.isAutomatic { onManualReconnect?(tag) }
+        if isBehindClosedLid(tag) {
+            // Measured on 23 November: a built-in panel turned back on with the lid closed
+            // lights up, and macOS moves the menu bar onto it and changes the other
+            // displays' modes. It comes back when the lid opens instead.
+            waitingForLid.insert(tag)
+            Log.core.info("Display \(tag) \(name(tag)) comes back when the lid is opened.")
+            return entry(tag, .accepted, connected: false, requested: true, detail: "the lid is closed. The built-in panel comes back when the lid is opened")
+        }
         if case .failure(let error) = system.setEnabled(true, display: SystemDisplayID(raw)) {
             Log.core.notice("Reconnecting \(tag) was refused: \(error.reason).")
             return entry(tag, .failed, connected: false, requested: true, detail: error.reason)
@@ -384,6 +394,10 @@ public final class ConnectionService {
         guard let system else { return }
         for tag in disconnectedTags {
             guard let raw = recovery.document.disconnectedByApp[tag] else { continue }
+            if isBehindClosedLid(tag) {
+                Log.core.notice("Display \(tag) stays off at quit because the lid is closed. The next start brings it back once the lid is open, and logging out does too.")
+                continue
+            }
             if case .success = system.setEnabled(true, display: SystemDisplayID(raw)) {
                 recovery.update { $0.disconnectedByApp[tag] = nil }
                 Log.core.info("Display \(tag) reconnected at quit.")
@@ -393,8 +407,26 @@ public final class ConnectionService {
         }
     }
 
+    private func isBehindClosedLid(_ tag: DisplayTag) -> Bool {
+        registry.record(for: tag)?.kind == .builtIn && policy.lid?.isLidClosed == true
+    }
+
+    /// Brings back built-in panels that waited for the lid. An automatic write, so it
+    /// passes the gate, and it runs again when the wake that opening the lid causes settles.
+    public func reconnectWaitingForLid() async {
+        guard !waitingForLid.isEmpty, policy.lid?.isLidClosed != true else { return }
+        if case .blocked = gate.check(.restore) { return }
+        for tag in waitingForLid.sorted() {
+            waitingForLid.remove(tag)
+            guard recovery.document.disconnectedByApp[tag] != nil else { continue }
+            _ = await reconnect(tag, origin: .restore)
+        }
+    }
+
     private func handle(_ event: DisplayEvent) {
         switch event {
+        case .lidOpened:
+            Task { @MainActor [weak self] in await self?.reconnectWaitingForLid() }
         case .willSleep:
             cancelOperations("the Mac went to sleep")
         case .sessionInactive:
@@ -409,7 +441,10 @@ public final class ConnectionService {
             guard !layout.expectedRemovals.contains(tag), recovery.document.disconnectedByApp[tag] == nil else { return }
             Task { @MainActor [weak self] in await self?.reconnectIfNoneLeft() }
         case .wakeSettled:
-            Task { @MainActor [weak self] in await self?.reconnectIfNoneLeft() }
+            Task { @MainActor [weak self] in
+                await self?.reconnectWaitingForLid()
+                await self?.reconnectIfNoneLeft()
+            }
         default:
             break
         }
