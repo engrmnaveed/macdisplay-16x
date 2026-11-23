@@ -269,9 +269,9 @@ The app during the same wake, from its log:
 - **The wake delay held for the Lenovo.** Its first usable answer came at 1.09 s and the app wrote at 3.1 s.
 - Not measured: a full system sleep, and a wake with no other program on the DDC channel.
 
-#### The first build that reads after wake (started 08:29)
+#### The first build that reads after wake (started 08:32)
 
-The build with the decided after-wake rule (read the monitor and take its word, write nothing) was started at 08:29 while the displays were asleep again. As before, the Lenovo answered and the LG did not, and nothing was written. **Result pending:** what this build does at the next wake, from its own log, with no probe on the DDC channel this time.
+The build with the decided after-wake rule (read the monitor and take its word, write nothing) was started at 08:32 while the displays were asleep again. As before, the Lenovo answered and the LG did not, and nothing was written. `display16x get restoreAfterWake --all` answered "off" for both monitors, which is the default. **Result pending:** what this build does at the next wake, from its own log, with no probe on the DDC channel this time.
 
 Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 
