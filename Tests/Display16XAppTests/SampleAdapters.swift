@@ -192,8 +192,13 @@ final class SampleRotation: RotationSystem {
 
     func rotation(of display: SystemDisplayID) -> Int? { degrees[display] ?? 0 }
 
+    /// How often the system was asked whether a display can be rotated. The real answer
+    /// takes up to 20 ms, so the panel may not ask when it opens.
+    var availabilityQuestions = 0
+
     func availability(for display: SystemDisplayID) -> RotationAvailability {
-        unavailableReason.map(RotationAvailability.unavailable) ?? .available
+        availabilityQuestions += 1
+        return unavailableReason.map(RotationAvailability.unavailable) ?? .available
     }
 
     func setRotation(_ degrees: Int, for display: SystemDisplayID) -> Bool {

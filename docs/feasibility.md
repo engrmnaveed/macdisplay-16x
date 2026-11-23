@@ -699,7 +699,20 @@ The owner removed the 0.1.0 copy and asked for the latest build to run in its pl
 
 **Two budgets are at or over the line on the fastest Mac we have.** The log splits an open: building the two models takes 33 to 51 ms, building the views 0, bringing the app forward 2 to 5, and showing the popover 36 to 61. Off screen, on made-up monitors, models and views together took about 20 ms, so on real displays it is the models that cost: what they ask the system for on every open has not been profiled yet. Memory was 41 MB for v0.1 and 47 MB for v0.2 by the same measure.
 
-**Idle.** The first ten-minute window (20:04:31 to 20:14:32) had four panel opens in it and was thrown away: 3.30 s of CPU and 23 idle wakeups with those opens. The second window started at 20:14:33. In its first five minutes the process used 0.04 s of CPU, which is 0.013% of a core.
+**Idle.** The first ten-minute window (20:04:31 to 20:14:32) had four panel opens in it and was thrown away: 3.30 s of CPU and 23 idle wakeups with those opens. The second window, 20:14:33 to 20:24:34, had none: **0.20 s of CPU in 601 s, which is 0.033% of a core, and no idle wakeup.** The owner was typing in that time and the key capture was on, which v0.1's figure of 0.02 s did not have. Memory at the end: 53 MB, peak 59 MB.
+
+**Where an open's time went, and the one thing changed.** The calls behind one build of the panel's models were timed on these two monitors, read-only:
+
+| Call | Time |
+| --- | --- |
+| Whether a display can be rotated | 21.7 ms for the Lenovo, 4.3 ms for the LG |
+| The list of modes | 2.2 ms and 0.6 ms |
+| The current mode, the frame, the main display, mirroring, the lid | 0.05 ms or less each |
+| Listing the connected displays (not part of an open; it runs when the set of displays changes) | 17.5 ms |
+
+The rotation question was asked for every display on every build, and only a display's page shows the answer. It is now asked once, when that page opens. That takes about 26 ms out of the 33 to 51 ms the models took. **Not measured on screen yet:** the copy in daily use is `897c40f`, which does not have this change.
+
+**The owner's word on the budgets (23 November, in the interface session):** no over-engineering. Where a budget is still missed after a quick look, it may be extended by 10%. Memory with the panel closed is the one that needs it: 53 MB against 50 MiB.
 
 ### Still to be measured with the app running
 

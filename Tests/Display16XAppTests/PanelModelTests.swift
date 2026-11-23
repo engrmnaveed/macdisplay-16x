@@ -58,6 +58,27 @@ import Testing
         #expect(model.cards[0].currentMode?.logicalWidth == 3200)
     }
 
+    @Test("Whether a display can be rotated is asked when its page opens, not when the panel does")
+    func rotationIsAskedLate() async {
+        let desk = await SurfaceCatalog.desk { $0.rotation.unavailableReason = "Rotation is not offered on this Mac." }
+        let before: Int = desk.rotation.availabilityQuestions
+        let model = PanelModel(context: desk.context)
+        defer { model.close() }
+        model.opened()
+        model.rebuild()
+        #expect(desk.rotation.availabilityQuestions == before, "building and opening the panel asks nothing about rotation")
+        #expect(model.cards[0].rotationReason == nil)
+
+        let lenovo = desk.tag(SampleDesk.lenovoID)
+        model.loadRotationAvailability(tag: lenovo)
+        model.loadRotationAvailability(tag: lenovo)
+        #expect(desk.rotation.availabilityQuestions == before + 1, "a display's page asks once")
+        #expect(model.cards[0].rotationReason == "Rotation is not offered on this Mac.")
+        model.rebuild()
+        #expect(model.cards[0].rotationReason == "Rotation is not offered on this Mac.", "the answer is kept while the panel is open")
+        #expect(model.cards[1].rotationReason == nil)
+    }
+
     @Test("Safe mode, missing permissions and an empty desk reach the panel")
     func states() async {
         let safe = await SurfaceCatalog.desk(safeMode: true)

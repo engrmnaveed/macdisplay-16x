@@ -84,6 +84,11 @@ final class PanelModel: ObservableObject {
 
     private let context: AppContext
     private var subscription: EventBus.Subscription?
+    /// Whether a display can be rotated, asked once when its page opens. macOS takes up to
+    /// 20 ms to answer for one display, and only that page shows the answer, so the
+    /// question is kept out of the panel's opening.
+    private var rotationAsked: Set<DisplayTag> = []
+    private var rotationReasons: [DisplayTag: String] = [:]
 
     init(context: AppContext) {
         self.context = context
@@ -139,7 +144,11 @@ final class PanelModel: ObservableObject {
             // last write is read back, or the Mac goes to sleep.
             guard let index = cards.firstIndex(where: { $0.tag == tag }) else { return }
             setKnowledge(&cards[index])
-        case .displayAdded, .displayRemoved, .controllersReady, .modeChanged, .modeConfirmationChanged,
+        case .displayAdded, .displayRemoved:
+            rotationAsked.removeAll()
+            rotationReasons.removeAll()
+            rebuild()
+        case .controllersReady, .modeChanged, .modeConfirmationChanged,
              .reconfigurationSettled, .permissionsChanged, .gateChanged, .wakeSettled:
             rebuild()
         default:
@@ -190,7 +199,7 @@ final class PanelModel: ObservableObject {
             card.currentMode = mode
             card.refreshRates = context.modes.refreshRates(for: tag)
             card.rotation = context.modes.rotation(for: tag)
-            if case .unavailable(let reason) = context.modes.rotationAvailability(for: tag) { card.rotationReason = reason }
+            card.rotationReason = rotationReasons[tag]
             card.pending = context.modes.pending[tag]
             card.keyboardControl = document.effectiveSettings(for: tag).keyboardControl
             card.restoreAfterWake = document.effectiveSettings(for: tag).restoreAfterWake
@@ -225,6 +234,16 @@ final class PanelModel: ObservableObject {
         brightnessKeys = document.global.captureBrightnessKeys ?? SettingsDefaults.captureBrightnessKeys
         volumeKeys = document.global.captureVolumeKeys ?? SettingsDefaults.captureVolumeKeys
         keyTarget = document.global.keyTarget ?? SettingsDefaults.keyTarget
+    }
+
+    // MARK: Rotation
+
+    /// Asks once whether this display can be rotated, for its page.
+    func loadRotationAvailability(tag: DisplayTag) {
+        guard rotationAsked.insert(tag).inserted else { return }
+        guard case .unavailable(let reason) = context.modes.rotationAvailability(for: tag) else { return }
+        rotationReasons[tag] = reason
+        if let index = cards.firstIndex(where: { $0.tag == tag }) { cards[index].rotationReason = reason }
     }
 
     // MARK: What is known

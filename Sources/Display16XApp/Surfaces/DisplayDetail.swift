@@ -26,6 +26,7 @@ struct DisplayDetail: View {
             OptionsSection(card: card, item: item, model: model, layoutModel: layoutModel)
             AboutDisplaySection(card: card, model: model)
         }
+        .onAppear { model.loadRotationAvailability(tag: card.tag) }
     }
 }
 

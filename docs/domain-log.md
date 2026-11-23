@@ -6,6 +6,15 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The budgets on screen, and the owner's word on them
+
+Apple M5 Pro (Mac17,9), macOS 27.2.1, the Lenovo P32p-20 and the LG SDQHD. This branch at `897c40f` has been the owner's copy in daily use since 19:59. Figures are in the feasibility notes.
+
+- **Decision made by the owner, in the interface session:** "don't try to over-engineer, we can extend the budget by 10% if needs to be, just have a quick look if anything in hindsight is there to improve else increase budget a little bit." **For the planning thread:** the PRD's memory line needs it, 50 MiB to 55 MiB: the app is at 53 MB with the panel closed after use (41 MB for v0.1, 47 MB for v0.2). The open-time line can stay at 100 ms if the change below holds on screen, and would otherwise go to 110 ms.
+- **Asking macOS whether a display can be rotated is slow: 22 ms for one monitor, 4 ms for the other, every time.** The panel asked for every display on every build. It asks now when a display's page opens, once. **Rule: nothing that is only shown one level down is asked for when the panel opens.** For the core session, if it wants it: the answer could be kept per connected display.
+- **Listing the connected displays takes 17 ms** since the port descriptions are read for the connection. It runs when the set of displays changes and not when the panel opens, so it costs nothing in daily use. For the core session to know.
+- **Warm panel opens were 77 to 109 ms** before that change, of which 33 to 51 ms were the models and 36 to 61 ms showing the popover. **Idle is inside its budget:** 0.033% of a core over ten minutes with the key capture on and the owner typing, and no idle wakeup.
+
 ## 23 November 2026 · Interface pass, stage 5 off screen: Increase Contrast cannot be asked for by name
 
 Apple M5 Pro (Mac17,9), macOS 27.2.1, from the render harness. Measurements are in the feasibility notes.
