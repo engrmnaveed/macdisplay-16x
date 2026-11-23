@@ -90,6 +90,7 @@ Provisional targets for the MacBook Air M1 (8 GB). Record measured numbers befor
 | Spikes | Each risky mechanism has a small probe and a recorded result on real hardware. Mode listing and DDC reads are done. See [feasibility](docs/feasibility.md). |
 | v0.1 Core | Resolution, refresh rate, DDC brightness and volume, software dimming and brightness keys work from the menu bar on the test monitors. The idle and memory budgets are met. *Done on 23 November 2026.* |
 | Release 0.1.0 | A tag builds, checks and publishes the app to GitHub Releases, and `brew install --cask` installs it from our tap. |
+| Interface pass | Every surface has a designed look the owner has approved, with keyboard and VoiceOver access, inside the performance budget. Done before the public release. |
 | v0.2 Layout | Arrangement, disconnect and reconnect, configuration restore, presets, and the CLI. |
 | v0.3 Advanced | Flexible scaling through overrides and virtual screens, each behind its own switch with a clean uninstall path. |
 | Public release | Signed, notarized artifacts, an installation guide, a tested-hardware list, and contribution issues. |

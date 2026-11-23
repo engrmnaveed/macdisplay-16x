@@ -14,6 +14,13 @@
 - **Build work** owns `Sources/`, `Tests/`, `scripts/`, `spikes/`, `.github/`, `packaging/`, `README.md`, `CHANGELOG.md`, `docs/feasibility.md`, `docs/install.md` and `docs/release.md`.
 - **[docs/domain-log.md](docs/domain-log.md)** is how build work reports upward. Append a dated entry for anything about the domain or the product: how a monitor, a connection or macOS actually behaves, a rule the product should follow, a decision the maintainer needs to make, a place where the architecture did not fit and what was done instead. Keep implementation detail out of it. If the architecture needs to change, log it, take the smallest workable deviation, and carry on.
 
+## Sessions and branches
+
+- The planning session supervises. Each milestone is built in its own session, on its own branch, in its own worktree. The main checkout is the planning session's workspace.
+- A change to a part that another session built goes back to that session, through the planning session. Do not rewrite the v0.1 core's existing behavior from a later milestone. Build on the hooks it reserved, and when existing behavior has to change, log it in the domain log and say so in your report.
+- Finished branches are closed. `v0.1-core` takes no more commits. Work lands on the current line of development and ships with the milestone in progress, never as an addition to an older version.
+- Everything reaches `main` through a pull request that passes CI. Commit locally at the end of each coherent piece. Pushing a branch, opening a pull request, merging into `main`, tagging and publishing each wait for the owner's word.
+
 ## Rules
 
 - **Independent implementation.** Do not open, disassemble, trace or list symbols of BetterDisplay, DisplayBuddy or any other proprietary app, and do not copy their text, icons, screenshots or layouts. Allowed references are Apple documentation, public feature descriptions, exports of Apple's own frameworks, and MIT, BSD or Apache licensed projects, credited in `THIRD_PARTY.md` when code is adapted. GPL projects are concept references only.
@@ -31,6 +38,6 @@
 
 - Run `swift test` for every change. Hardware checks come after the unit tests pass.
 - Before a hardware write, read and record the current value. Restore it afterwards.
-- Never change arrangement, mirroring or the main display in a test. Change a mode only through the timed revert.
+- Change arrangement, mirroring, the main display or a connection only in a check that the roadmap plans for it, with the owner present, after recording the layout, and put it back afterwards. Never do it in a unit test or an unattended run. Change a mode only through the timed revert.
 - Leave other display utilities that are running alone. Do not quit, configure or inspect them. Note in the domain log when one may have interfered with a result.
 - Probes and spikes live in [`spikes/`](spikes). Keep them read-only unless the file name says otherwise, and record results in the feasibility notes with the Mac model, macOS build, monitor and connection.
