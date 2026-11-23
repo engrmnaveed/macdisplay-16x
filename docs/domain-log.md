@@ -6,6 +6,15 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The first release is 0.2.0, ad hoc signed, and every milestone gets a release
+
+**Owner's word, through the planning thread:** "no release available on GitHub yet, please do release the latest version, and keep release cycle updated, every major version should have a release". So 0.1.0 is never published, 0.2.0 is the first release, and each milestone on `main` is released as its version (0.3.0 for v0.3). A release is two steps, prepare in a pull request and tag the merged commit, described in the release runbook.
+
+- **0.2.0 is ad hoc signed, because the project certificate (decision 12) has not been made.** Its users allow the first launch and give the Accessibility permission again after every update, and Homebrew warns that the signer changed. That cost lasts until the first release signed with the certificate, which still asks for both once more, because its signature differs from the ad hoc one. Its release notes say so on their own: the release workflow now names the last release in them when the new app does not satisfy that release's signing requirement. **Decision needed from the owner:** make the certificate before v0.3 is released, or 0.3.0 is ad hoc signed as well and its users pay the same cost once more.
+- **The cask reaches the tap only with the deploy key.** Without `HOMEBREW_TAP_DEPLOY_KEY` the release is published but `brew install --cask engrmnaveed/tap/display16x` does not find it until the owner commits the cask to the tap by hand. The run now says so in a warning and in its summary, not only in a notice.
+- **GitHub was found set up as the runbook asks**, read only: the `release` environment with the owner as required reviewer and `v*` tags only, `release-signing` with `v*` tags only and no secrets, immutable releases on, and rulesets protecting `main` and `v*` tags. With immutable releases, a published version cannot get its assets replaced, so a fault found after **Publish** is fixed with the next patch version.
+- **The release has never run.** The first tag push is the first real run of the workflow. The ad hoc path, the archive check, the signer comparison with no earlier release and the notes were run on the developer's Mac; the upload of the build, the attestation and the release itself have not run in this repository. Space 16X publishes the same way, so the step that hands the build to the publish job has worked there.
+
 ## 23 November 2026 · The app icon is chosen
 
 **Decision made by the owner, in the interface session:** the icon is the code-drawn candidate A, a display with its menu bar line standing on a foot, in aqua on the family's navy. It is the mark the app already draws in its panel and in the menu bar, and it is drawn by a script in the repository, as Space 16X's icon is, so it can be changed and made again.
