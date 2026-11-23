@@ -89,7 +89,7 @@ To see how the installed app is signed, run:
 codesign -d -r- "/Applications/Display 16X.app"
 ```
 
-A line that starts with `designated => cdhash` means ad hoc. A line with `identifier "com.16xbrains.macdisplay16x"` means a certificate or a Developer ID.
+A requirement that names a `cdhash` means ad hoc. One that starts with `identifier "com.16xbrains.macdisplay16x"` or `anchor apple generic` means the project certificate or a Developer ID.
 
 ## Remove Display 16X
 

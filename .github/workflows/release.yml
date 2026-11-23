@@ -163,7 +163,7 @@ jobs:
             xcrun stapler validate "$app"
             spctl --assess --type execute --verbose "$app"
           fi
-          requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => //p')"
+          requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^\(# \)\{0,1\}designated => //p')"
           echo "REQUIREMENT=$requirement" >> "$GITHUB_ENV"
           echo "UNPACKED_APP=$app" >> "$GITHUB_ENV"
           {
@@ -186,7 +186,7 @@ jobs:
           old="$(mktemp -d "$RUNNER_TEMP/display16x-previous.XXXXXX")"
           gh release download "$previous" --pattern 'display16x-*-macos-arm64.zip' --dir "$old"
           unzip -qq "$old"/display16x-*-macos-arm64.zip -d "$old/app"
-          old_requirement="$(codesign -d -r- "$old/app/Display 16X.app" 2>&1 | sed -n 's/^designated => //p')"
+          old_requirement="$(codesign -d -r- "$old/app/Display 16X.app" 2>&1 | sed -n 's/^\(# \)\{0,1\}designated => //p')"
           if [[ "$old_requirement" == cdhash* ]]; then
             echo "$previous was ad hoc signed, so its users grant Accessibility again with this update in any case."
           elif codesign --verify -R="$old_requirement" "$UNPACKED_APP"; then
