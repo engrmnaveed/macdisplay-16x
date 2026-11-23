@@ -241,11 +241,11 @@ public final class UpscalingCommands: CommandExtension {
     }
 
     private func limits(_ command: Command, tag: DisplayTag) -> DisplayResult {
-        var limits = upscaling.limits(for: tag)
+        var chosen = upscaling.limits(for: tag)
         func summary(_ value: UpscalingSettings) -> String {
             String(format: "max=%.2f calibration=%.2f stop=%@", value.maximum ?? UpscalingDefaults.maximum, value.calibration ?? UpscalingDefaults.calibration, (value.neutralKeyStop ?? UpscalingDefaults.neutralKeyStop) ? "on" : "off")
         }
-        if command.operation == .get { return DisplayResult(tag: tag, name: name(tag), outcome: .confirmed, actual: .text(summary(limits))) }
+        if command.operation == .get { return DisplayResult(tag: tag, name: name(tag), outcome: .confirmed, actual: .text(summary(chosen))) }
         guard case .choice(let text)? = command.value else { return DisplayResult(tag: tag, name: name(tag), outcome: .failed, detail: "write max=1.6 calibration=0.8 stop=on, any of them") }
         for word in text.lowercased().split(separator: " ") {
             let pair = word.split(separator: "=", maxSplits: 1).map(String.init)
@@ -253,19 +253,19 @@ public final class UpscalingCommands: CommandExtension {
             switch pair[0] {
             case "max", "maximum":
                 guard let value = Double(pair[1]), (1...4).contains(value) else { return DisplayResult(tag: tag, name: name(tag), outcome: .failed, detail: "max takes 1 to 4") }
-                limits.maximum = value
+                chosen.maximum = value
             case "calibration":
                 guard let value = Double(pair[1]), (0.1...1).contains(value) else { return DisplayResult(tag: tag, name: name(tag), outcome: .failed, detail: "calibration takes 0.1 to 1") }
-                limits.calibration = value
+                chosen.calibration = value
             case "stop":
                 guard ["on", "off"].contains(pair[1]) else { return DisplayResult(tag: tag, name: name(tag), outcome: .failed, detail: "stop takes on or off") }
-                limits.neutralKeyStop = pair[1] == "on"
+                chosen.neutralKeyStop = pair[1] == "on"
             default:
                 return DisplayResult(tag: tag, name: name(tag), outcome: .failed, detail: "\(pair[0]) is not a limit. Use max, calibration or stop")
             }
         }
-        settings.updateColor(tag) { $0.upscaling = limits }
-        return DisplayResult(tag: tag, name: name(tag), outcome: .confirmed, actual: .text(summary(limits)))
+        settings.updateColor(tag) { $0.upscaling = chosen }
+        return DisplayResult(tag: tag, name: name(tag), outcome: .confirmed, actual: .text(summary(chosen)))
     }
 
     /// A brightness key on a display that can go above white: past 100% it moves the level

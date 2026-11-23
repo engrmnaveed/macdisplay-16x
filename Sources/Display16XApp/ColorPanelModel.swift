@@ -107,7 +107,7 @@ final class ColorPanelModel: ObservableObject {
         let link: LinkReport? = colors.link(for: tag)
         let name: String = context.registry.record(for: tag)?.displayName ?? "This display"
         let current: ProfileChoice = profiles?.customPath.map(ProfileChoice.file) ?? .factory
-        let rates: [String] = ColorPanelModel.rates(link.map { $0.connectionOnlyRates(listed: context.modes.modes(for: tag)) } ?? [])
+        let rateLines: [String] = ColorPanelModel.rates(link.map { $0.connectionOnlyRates(listed: context.modes.modes(for: tag)) } ?? [])
         let state = DisplayColor(
             tag: tag, name: name,
             hdrOffered: status?.offered == true, hdrOn: status?.isOn == true,
@@ -125,7 +125,7 @@ final class ColorPanelModel: ObservableObject {
             presets: colors.referencePresets(for: tag),
             linkModes: link?.offeredModes.map(\.summary) ?? [],
             dithering: link?.dithering,
-            connectionOnlyRates: rates,
+            connectionOnlyRates: rateLines,
             upscaleReason: context.upscaling.unavailableReason(for: tag),
             upscaleLevel: context.upscaling.levels[tag] ?? 0,
             upscaleFactor: String(format: "%.2f times SDR white", context.upscaling.factor(for: tag))
