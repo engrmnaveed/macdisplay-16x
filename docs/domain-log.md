@@ -22,6 +22,13 @@ Three places where the decision left room, and what was built:
 
 One consequence worth knowing: after the app takes a monitor's value, that control is no longer "chosen", so switching "Put my values back after sleep" on later restores nothing for it until the user sets a value through the app again.
 
+Update, 23 November, 09:02: points 1 and 3 were decided (decisions 10 and 11) and are built.
+
+- The floor applies at the start of the app, and at a wake, unlock or session return only after the displays were off or the screen was locked for 30 minutes or more. The threshold is a setting. The time is read from the clock at the sleep and lock events. Lock, then sleep, then wake at the login window, then unlock counts as one absence, from the lock.
+- At start the app reads each monitor and takes its word. With "Put my values back after sleep" on, a chosen value the monitor no longer has is written back at start as well, since a monitor that forgets in standby forgets across a restart too. A controller's startup policy can still say trust or write.
+- Point 2 was narrowed to fit decision 10. A display that comes back gets the floor only when it comes back within one minute of a return from a long absence, or of the start of the app. That covers the LG dropping off at wake. A monitor that drops off in the middle of a session gets its dimming back exactly as it was set. The one minute is a fixed value in the code, not a setting. Say so if it should be one.
+- The first start on hardware with this rule: both monitors read in half a second each, every value matched, nothing was written.
+
 ## 23 November 2026 · After a long display sleep the LG leaves the system, and both monitors still have their values
 
 Mac17,9, macOS 27.2.1, Lenovo P32p-20 on HDMI, LG SDQHD on DisplayPort. The displays slept for five and a half hours with nobody at the Mac. BetterDisplay and the earlier prototype were running. Timings are in the feasibility notes.

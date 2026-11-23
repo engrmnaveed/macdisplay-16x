@@ -290,7 +290,16 @@ The displays then woke at 08:54:30, after a sleep of 36 minutes 37 seconds (macO
 - **The LG leaves the system after 37 minutes of display sleep too.** It stayed through sleeps of 74 and 88 seconds, and left after 37 minutes and after five and a half hours. Where between 88 seconds and 37 minutes it starts to leave is not measured.
 - **Without the probe the check of the LG was fast and complete**: 0.46 seconds here, 3.2 seconds with two controls lost at 08:10. The other display utilities were running both times. So the losses at 08:10 came mostly from the probe asking four times a second.
 - Not seen yet: the app taking over a value that was changed on the monitor during a sleep, and "Put my values back after sleep" writing one back. Both need someone to change a monitor by its own buttons while the displays are asleep, or a monitor that forgets.
-- The app logs nothing at the normal level when a monitor still has its values. A line in the verbose log now says which controls were asked and matched. That line is in the source, not yet in the running build.
+- The app logs nothing at the normal level when a monitor still has its values. A line in the verbose log now says which controls were asked and matched.
+
+#### A start with the displays awake (09:02)
+
+The build with the two later decisions (the floor only after a long absence, and reading the monitor at start) was started at 09:02 with both displays awake. BetterDisplay and the earlier prototype were running.
+
+- The check of the LG took 0.48 seconds and the check of the Lenovo 0.50 seconds. Every control answered.
+- The verbose log says "At startup, #2 LG SDQHD still has its brightness, contrast, volume, mute" and "At startup, #1 LEN P32p-20 still has its brightness, contrast". The Lenovo's volume is not asked, because that control is marked as reported and ignored.
+- Nothing was written to either monitor.
+- Not seen yet on hardware: the floor after a long absence, because software dimming is switched off, and a value taken over from a monitor that was changed elsewhere.
 
 Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 
