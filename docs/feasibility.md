@@ -422,6 +422,27 @@ Three things the toolchain does not do on its own, each worked around in the rep
 - `swift test` does not find the Swift Testing macro plugin. The manifest adds its folder for the test targets.
 - In the macOS 27 SDK, SwiftUI's `@State` is a macro whose plugin ships with Xcode only. The app declares view state with the `State` type instead.
 
+### A second machine: the CI runner (23 November)
+
+The first CI run on the pull request is the first time the project was built and run anywhere but the developer's Mac.
+
+| | Developer's Mac | GitHub's `macos-latest` runner |
+| --- | --- | --- |
+| Machine | Mac17,9, Apple M5 Pro | VirtualMac2,1, Apple M1 (Virtual), 7 GB |
+| macOS | 27.2.1 | 26.7.2 (25G332) |
+| Swift | 6.4.2, Command Line Tools | 6.3.3, Xcode |
+| Build and 224 unit tests | Pass | Pass |
+| Packaging and smoke test | Pass | Pass |
+
+What the read-only hardware report said on the runner:
+
+- All four private interfaces resolved on macOS 26.7.2 as well: the AV service for DDC, native brightness, rotation and the window server's mode list. The nine symbols reserved for later milestones were present too.
+- The runner has one display, "Apple Virtual", with vendor 0 and model 0. The app classes it as an external placeholder. It offers 12 modes, 11 of them marked safe, at 1024 × 768 and 60 Hz, and macOS offers rotation for it.
+- No DDC channel and no native brightness on that display, and both are reported as a missing control, not as an error.
+- Without the app running, a command for the app exits with "not running" at once. This branch of the smoke test cannot run on the developer's Mac while the app is in use.
+
+This is a virtual machine with no monitor, so it says nothing about DDC or real modes on macOS 26. It does show that the app's own rule holds there: a control that is missing is switched off, and nothing stops the tool.
+
 ### Where v0.1 Core stands at the end of 23 November
 
 Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, one rotation with the revert on its own, DDC replies with and without other display utilities, identity across a cable replug and a change of port, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
@@ -436,7 +457,7 @@ Built and unit-tested, and not run on hardware:
 Not measured:
 
 - A full system sleep, as opposed to a display sleep.
-- Any Mac other than the M5 Pro, in particular the MacBook Air M1 the PRD sets the budgets for.
+- Any real Mac other than the M5 Pro, in particular the MacBook Air M1 the PRD sets the budgets for. The CI runner is a virtual M1 on macOS 26 with no monitor.
 
 ## Running the probes
 
