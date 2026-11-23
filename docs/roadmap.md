@@ -136,12 +136,19 @@ Ready when the owner has approved each surface on their own Mac and the budgets 
 
 **Order.** On 23 November 2026 the owner moved this milestone ahead: it starts as soon as v0.2 is on `main`, before release 0.1.0 and before v0.3. It needs the owner's choices on rendered options and no time at the monitors. Release 0.1.0 waits on the owner's certificate, and v0.3 opens with hardware spikes. The surfaces now include the v0.2 panels: the arrangement canvas, mirroring, connection and presets, the Keep window for a layout change, the protection offer and the protection notices. Images and the app icon are made with the image generator the owner has set up, and each one is a candidate for the owner to approve.
 
-**Status on 23 November 2026.** On the branch `claude/peaceful-nobel-53c773`, not pushed, with 352 unit tests passing.
+**Status on 23 November 2026.** On the branch `claude/peaceful-nobel-53c773`, not pushed, with 388 unit tests passing. The redesigned app has not been started yet: everything so far was checked on renders and in tests.
 
 - **Stage 1 is done.** A render harness draws every surface and state from sample data, in light and dark, inside a test target that never ships. The app is not started for it and no display is touched.
 - **The owner chose direction B, "Studio"**: the family's navy and aqua, displays drawn to scale, thick bars and a stepped text-size strip.
-- **Stages 2 and 3 are built and wait for the owner's approval**, group by group. The panel is one column with three pages: the displays with scenes on top, one display's page, and Arrange with the desk drawn to scale. Its height is bounded and it scrolls. There is a settings window, and a menu bar icon drawn in code with three states.
-- **Stage 4 has started.** The packaging script takes an icon file made with macOS's own tools. Icon candidates wait for the owner to sign in to the image generator.
+- **Stages 2 and 3 are built, and the owner approved the surfaces from the renders.** The panel is one column with three pages: the displays with scenes on top, one display's page, and Arrange with the desk drawn to scale. Its height is bounded and it scrolls. There is a settings window, and a menu bar icon drawn in code with three states. The card's caption reads size, connection and role, and a value that was only sent or is not known carries a small tag. Those two additions came after the approval and have not been put to the owner.
+- **Stage 4 waits for the icon.** The packaging script takes an icon file made with macOS's own tools. The image generator showed as signed out, so no generated candidate exists. Three code-drawn candidates were shown as extras.
+- **Stage 5 is done as far as it goes off screen.** Every control on all 47 surfaces and states has a name and a spoken value for VoiceOver. Contrast was measured in four looks and one color changed. The panel's content builds in 18 to 30 ms on the M5 Pro.
+
+Left, and all of it needs the owner:
+
+- **The icon:** a sign-in to the image generator, or a pick among the three code-drawn candidates.
+- **One run of a development build in place of the daily copy**, to measure the panel's open time, memory with the panel closed and idle wakeups, and to see what renders cannot show: real blur, full keyboard access, VoiceOver's reading order, and the three accessibility settings switched on. macOS gives out its increased-contrast appearance only while Increase Contrast is on in System Settings, so that look has to be seen once on screen.
+- **Decision 18.** Until it is answered the Keep window stays as built.
 
 **The look must stay cheap to change.** The owner asked for an interface that is "easy and cost-effective (from agentic tokens POV) to re-skin". So the look has three layers: one file of values (colors, distances, fonts, symbols), a few files of pieces (bar, chip, card, banner), and surfaces that only compose them. A test fails when a surface holds a color, a font, a radius, a distance or a symbol of its own. A re-skin is checked on one sheet that shows every value and piece. Later milestones build their panels the same way.
 
