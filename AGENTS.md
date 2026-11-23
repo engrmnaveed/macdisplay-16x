@@ -39,5 +39,6 @@
 - Run `swift test` for every change. Hardware checks come after the unit tests pass.
 - Before a hardware write, read and record the current value. Restore it afterwards.
 - Change arrangement, mirroring, the main display or a connection only in a check that the roadmap plans for it, with the owner present, after recording the layout, and put it back afterwards. Never do it in a unit test or an unattended run. Change a mode only through the timed revert.
+- The owner's own running copy of Display 16X lives in `dist/` of the main checkout. Never build or package there, and do not quit or restart that copy during your work without the owner's word. When your milestone's work ends, make your build the running copy: keep the previous app and a copy of the settings folder, start the new build with the standard settings folder, and write down how to go back.
 - Leave other display utilities that are running alone. Do not quit, configure or inspect them. Note in the domain log when one may have interfered with a result.
 - Probes and spikes live in [`spikes/`](spikes). Keep them read-only unless the file name says otherwise, and record results in the feasibility notes with the Mac model, macOS build, monitor and connection.
