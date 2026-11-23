@@ -171,6 +171,28 @@ struct ConnectionTests {
         #expect(rig.rig.recovery.document.disconnectedByApp.isEmpty)
     }
 
+    @Test("Decision 14: with no display left, the displays the app disconnected come back in safe mode too, but not during sleep")
+    func noneLeftInSafeMode() async {
+        let rig = LayoutRig(safeMode: true)
+        await rig.startWithBoth()
+        let lg = rig.lgTag
+        // A disconnect by hand works in safe mode; only automatic changes wait.
+        _ = await rig.run(.set, .connected, on: .tag(lg.rawValue), value: .flag(false))
+        #expect(rig.rig.registry.live[lg] == nil)
+
+        rig.rig.sequencer.systemWillSleep()
+        rig.rig.unplug(Fixture.lenovoID)
+        await rig.rig.reconfigure()
+        await rig.advance(1)
+        #expect(rig.rig.registry.live[lg] == nil)
+
+        rig.rig.sequencer.systemDidWake()
+        await rig.advance(4)
+        #expect(rig.rig.registry.live[lg] != nil)
+        #expect(rig.rig.recovery.document.disconnectedByApp.isEmpty)
+        #expect(rig.rig.gate.isSafeMode)
+    }
+
     @Test("With the lid closed the built-in panel is out of use by the system and never offered")
     func lid() async {
         let rig = LayoutRig()

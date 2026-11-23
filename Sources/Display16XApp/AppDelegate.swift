@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var confirmations: ConfirmationWindowPresenter?
     private var layoutConfirmations: LayoutConfirmationPresenter?
     private let notices = NoticePresenter()
+    private var protectionOffer: ProtectionOfferPresenter?
     private var hotKeys: HotKeyCenter?
     private var layoutPanelModel: LayoutPanelModel?
     private let indicatorPresenter = IndicatorWindowPresenter()
@@ -72,6 +73,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         confirmations = ConfirmationWindowPresenter(context: context)
         layoutConfirmations = LayoutConfirmationPresenter(context: context)
         context.protection.onNotice = { [notices] notice in notices.show(notice) }
+        let protectionOffer = ProtectionOfferPresenter(context: context)
+        self.protectionOffer = protectionOffer
+        context.protection.onOffer = { [weak protectionOffer] in protectionOffer?.show() }
         context.layoutCommands.reservedShortcuts = { HotKeyCenter.systemShortcuts() }
         keyCapture = KeyCapture(keys: context.keys, settings: context.settings)
         keyCapture?.handler = { [weak context] key, fine in

@@ -638,7 +638,10 @@ public final class LayoutCommands: CommandExtension {
                 layoutEntry(tag, report: report, requested: nil) { self.positionText(tag, in: $0) }
             }, report: report.actual.map { "arrangement: \($0.arrangementText)" })
         case .keepLayout:
-            return layout.keep() ? CommandResult(report: "layout kept") : .failure("no layout change is waiting for confirmation")
+            let waiting = layout.pending
+            guard layout.keep() else { return .failure("no layout change is waiting for confirmation") }
+            let offer = protection.layoutKept(waiting, origin: command.origin)
+            return CommandResult(report: ["layout kept", offer].compactMap { $0 }.joined(separator: "\n"))
         case .revertLayout:
             let report = await layout.undoLastChange(origin: command.origin)
             if let failure = report.failure { return .failure(failure) }

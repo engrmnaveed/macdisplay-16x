@@ -79,6 +79,13 @@ public final class ConfigurationProtection: RestoreStage {
     /// back. The LG on the test desk returns 3.3 to 3.6 seconds after it leaves at a wake.
     public var topologyQuiet: TimeInterval = 5
     public var onNotice: (@MainActor (ProtectionNotice) -> Void)?
+    /// Decision 13: after the user keeps an arrangement, main display or mirroring change
+    /// made through the app, layout protection is offered, once per change. Declining
+    /// stops the offers until the app starts again.
+    public private(set) var offerPending = false
+    public private(set) var offerDeclined = false
+    /// Shows the offer. Set by the app.
+    public var onOffer: (@MainActor () -> Void)?
 
     public init(registry: DisplayRegistry, settings: SettingsStore, modes: ModeService, layout: LayoutService, sequencer: EventSequencer, gate: AutomationGate, bus: EventBus, scheduler: any Scheduler) {
         self.registry = registry
@@ -128,6 +135,7 @@ public final class ConfigurationProtection: RestoreStage {
     }
 
     public func setProtectLayout(_ on: Bool) {
+        offerPending = false
         settings.update {
             $0.layout.protectLayout = on
             if on, $0.layout.savedLayout == nil { $0.layout.savedLayout = layout.snapshot() }
@@ -157,6 +165,27 @@ public final class ConfigurationProtection: RestoreStage {
         saved = LayoutSnapshot(entries: saved.entries.filter { !present.contains($0.tag) } + actual.entries)
         settings.update { $0.layout.savedLayout = saved }
         resetTarget("layout")
+    }
+
+    // MARK: The offer
+
+    /// Called when a change waiting for Keep was kept. Returns a line for a surface that
+    /// cannot show the offer, such as the command line, which says it once per run.
+    public func layoutKept(_ confirmation: LayoutConfirmation?, origin: ChangeOrigin) -> String? {
+        guard let confirmation, confirmation.disconnected.isEmpty, !protectsLayout, !offerDeclined else { return nil }
+        if origin == .interface {
+            offerPending = true
+            onOffer?()
+            return nil
+        }
+        offerDeclined = true
+        return "Layout protection is off. To have this arrangement put back after sleep, reconnects and changes made elsewhere: display16x perform saveLayout, then display16x set protectLayout on"
+    }
+
+    /// "Not now": the offer is not made again until the app starts again.
+    public func declineOffer() {
+        offerPending = false
+        offerDeclined = true
     }
 
     // MARK: Events

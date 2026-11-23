@@ -308,3 +308,80 @@ final class NoticePresenter {
         DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
     }
 }
+
+// MARK: Offer to protect the layout
+
+/// Decision 13: after the user keeps an arrangement change, offer layout protection once.
+@MainActor
+final class ProtectionOfferPresenter {
+    private let context: AppContext
+    private var window: NSPanel?
+
+    init(context: AppContext) {
+        self.context = context
+    }
+
+    func show() {
+        let view = ProtectionOfferView(
+            protect: { [weak self] in self?.answer(protect: true) },
+            notNow: { [weak self] in self?.answer(protect: false) }
+        )
+        let hosting = NSHostingView(rootView: view)
+        let size = hosting.fittingSize
+        let panel = window ?? {
+            let panel = NSPanel(contentRect: .zero, styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
+            panel.titleVisibility = .hidden
+            panel.titlebarAppearsTransparent = true
+            panel.isMovableByWindowBackground = true
+            panel.level = .floating
+            panel.hidesOnDeactivate = false
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.isReleasedWhenClosed = false
+            return panel
+        }()
+        window = panel
+        panel.contentView = hosting
+        let frame = NSScreen.screens.first?.visibleFrame ?? .zero
+        panel.setFrame(NSRect(x: frame.midX - size.width / 2, y: frame.midY - size.height / 2, width: size.width, height: size.height), display: true)
+        panel.orderFrontRegardless()
+    }
+
+    private func answer(protect: Bool) {
+        window?.orderOut(nil)
+        window?.contentView = nil
+        window = nil
+        guard protect else {
+            context.protection.declineOffer()
+            return
+        }
+        Task { [context] in
+            await context.send(Command(.perform, .saveLayout, origin: .interface))
+            await context.send(Command(.set, .protectLayout, value: .flag(true), origin: .interface))
+        }
+    }
+}
+
+struct ProtectionOfferView: View {
+    let protect: () -> Void
+    let notNow: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Keep this arrangement after sleep?")
+                .font(.headline)
+            Text("Display 16X can put this arrangement, the main display and mirroring back after sleep, reconnects and changes made elsewhere.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Not Now", action: notNow)
+                    .keyboardShortcut(.cancelAction)
+                Button("Protect This Arrangement", action: protect)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(18)
+        .frame(width: 360)
+    }
+}

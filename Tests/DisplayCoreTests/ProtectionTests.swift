@@ -161,6 +161,63 @@ struct ProtectionTests {
         #expect(rig.notices.isEmpty)
     }
 
+    @Test("Keeping an arrangement change offers protection once, and declining stops the offers")
+    func offerAfterKeep() async {
+        let rig = LayoutRig()
+        await rig.startWithBoth()
+        var offers = 0
+        rig.protection.onOffer = { offers += 1 }
+        let lg = DisplaySelector.tag(rig.lgTag.rawValue)
+        _ = await rig.run(.set, .main, on: lg, value: .flag(true), origin: .interface)
+        let kept = await rig.run(.perform, .keepLayout, origin: .interface)
+        #expect(kept.report == "layout kept")
+        #expect(offers == 1)
+        #expect(rig.protection.offerPending)
+
+        rig.protection.declineOffer()
+        _ = await rig.run(.set, .main, on: .tag(rig.lenovoTag.rawValue), value: .flag(true), origin: .interface)
+        _ = await rig.run(.perform, .keepLayout, origin: .interface)
+        #expect(offers == 1)
+        #expect(!rig.protection.protectsLayout)
+    }
+
+    @Test("Accepting saves the arrangement in use, a disconnect or protection already on brings no offer")
+    func offerAcceptAndExceptions() async {
+        let rig = LayoutRig()
+        await rig.startWithBoth()
+        var offers = 0
+        rig.protection.onOffer = { offers += 1 }
+        _ = await rig.run(.set, .connected, on: .tag(rig.lgTag.rawValue), value: .flag(false), origin: .interface)
+        _ = await rig.run(.perform, .keepLayout, origin: .interface)
+        #expect(offers == 0)
+        _ = await rig.run(.perform, .reconnectAll, origin: .interface)
+
+        _ = await rig.run(.set, .position, on: .tag(rig.lgTag.rawValue), value: .choice("3200,0"), origin: .interface)
+        _ = await rig.run(.perform, .keepLayout, origin: .interface)
+        #expect(offers == 1)
+        _ = await rig.run(.perform, .saveLayout, origin: .interface)
+        _ = await rig.run(.set, .protectLayout, value: .flag(true), origin: .interface)
+        #expect(!rig.protection.offerPending)
+        #expect(rig.rig.settings.document.layout.savedLayout?.entry(rig.lgTag)?.frame.origin == DisplayPoint(x: 3200, y: 0))
+
+        _ = await rig.run(.set, .position, on: .tag(rig.lgTag.rawValue), value: .choice("0,1800"), origin: .interface)
+        _ = await rig.run(.perform, .keepLayout, origin: .interface)
+        #expect(offers == 1)
+    }
+
+    @Test("From the command line the offer is a line in the result, said once per run")
+    func offerOnCommandLine() async {
+        let rig = LayoutRig()
+        await rig.startWithBoth()
+        let lg = DisplaySelector.tag(rig.lgTag.rawValue)
+        _ = await rig.run(.set, .main, on: lg, value: .flag(true), options: CommandOptions(timedRevert: true))
+        let first = await rig.run(.perform, .keepLayout)
+        #expect(first.report?.contains("display16x set protectLayout on") == true)
+        _ = await rig.run(.set, .main, on: .tag(rig.lenovoTag.rawValue), value: .flag(true), options: CommandOptions(timedRevert: true))
+        let second = await rig.run(.perform, .keepLayout)
+        #expect(second.report == "layout kept")
+    }
+
     @Test("The limiter counts within its window and starts again on a new target")
     func limiter() {
         var limiter = EnforcementLimiter(limit: 2, window: 60)

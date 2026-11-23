@@ -451,14 +451,18 @@ public final class ConnectionService {
     }
 
     /// When the last display in use went away by itself and the app still holds others
-    /// disconnected, they are brought back so the Mac is never left without a picture.
+    /// disconnected, they are brought back at once, in safe mode too (decision 14). Without
+    /// a picture nobody can act, and it only undoes the app's own change, like the
+    /// reconnect at quit. It is the one automatic change that does not wait for the gate,
+    /// except while the Mac sleeps: then it runs when the wake settles.
     public func reconnectIfNoneLeft() async {
         guard policy.physicalInUse().isEmpty, !disconnectedTags.isEmpty else { return }
-        if case .blocked(let reason) = gate.check(.restore) {
-            Log.core.notice("No display is left in use, and reconnecting has to wait: \(reason).")
+        if gate.closures.contains(.asleep) {
+            Log.core.notice("No display is left in use. The displays the app disconnected come back when the Mac wakes.")
             return
         }
-        Log.core.notice("No display is left in use. Reconnecting the displays the app disconnected.")
+        let reason = gate.closedReason.map { ", although \($0)," } ?? ""
+        Log.core.notice("No display is left in use. Reconnecting the displays the app disconnected\(reason) because without a picture nobody can act, and it only undoes the app's own change.")
         _ = await reconnectAll(origin: .restore)
     }
 }
