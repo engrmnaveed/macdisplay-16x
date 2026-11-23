@@ -6,7 +6,10 @@
 //   /tmp/override-write-probe install VENDOR PRODUCT --yes   record the state, then write the file
 //   /tmp/override-write-probe check   VENDOR PRODUCT      read-only: which sizes the window server now lists
 //   /tmp/override-write-probe activate VENDOR PRODUCT --yes  take the display out of use for 3 s and back
+//   /tmp/override-write-probe replace VENDOR PRODUCT --yes   overwrite a file this probe wrote, keeping the record
 //   /tmp/override-write-probe remove  VENDOR PRODUCT --yes   delete the file and the folders install made
+//
+//   --variant 2   the second set of entries, see `requested`
 //
 // VENDOR and PRODUCT are the hexadecimal numbers `override-probe` prints, for example
 // 1e6d 5bf6 for the LG SDQHD on the test desk.
@@ -41,7 +44,7 @@ func fail(_ message: String) -> Never {
     exit(2)
 }
 guard arguments.count >= 3, let vendor = UInt32(arguments[1], radix: 16), let product = UInt32(arguments[2], radix: 16) else {
-    fail("usage: override-write-probe plan|install|check|activate|remove VENDOR PRODUCT [--yes]")
+    fail("usage: override-write-probe plan|install|replace|check|activate|remove VENDOR PRODUCT [--yes] [--variant 2]")
 }
 let step = arguments[0]
 let confirmed = arguments.contains("--yes")
@@ -123,37 +126,61 @@ func panelPixels(_ id: CGDirectDisplayID) -> (Int, Int)? {
 
 // MARK: The file
 
-/// One entry of `scale-resolutions`: big-endian width, height, then flags, as the system's
-/// own files carry them. `hidpi` gives the backing store at twice the size, flag 1 and
-/// 0x00200000, the shape of most of the system's 16-byte entries. A low-density size is the
-/// 8-byte shape, width and height only.
-func entry(width: Int, height: Int, hidpi: Bool) -> Data {
-    var words: [UInt32] = hidpi ? [UInt32(width * 2), UInt32(height * 2), 0x0000_0001, 0x0020_0000] : [UInt32(width), UInt32(height)]
-    var data = Data()
-    for index in words.indices {
-        words[index] = words[index].bigEndian
-        withUnsafeBytes(of: words[index]) { data.append(contentsOf: $0) }
+/// One entry of `scale-resolutions`: big-endian 32-bit words, as the system's own files
+/// carry them. The shapes seen there are width and height alone (8 bytes), with flags
+/// (12 bytes), and with flags and one more word (16 bytes).
+struct Entry {
+    var pixelWidth: Int
+    var pixelHeight: Int
+    var words: [UInt32]
+    var expect: String
+
+    var data: Data {
+        var data = Data()
+        for word in [UInt32(pixelWidth), UInt32(pixelHeight)] + words {
+            withUnsafeBytes(of: word.bigEndian) { data.append(contentsOf: $0) }
+        }
+        return data
     }
-    return data
 }
 
-/// The sizes to add, in the panel's own frame (before rotation), chosen from the panel's
-/// aspect: one step inside the range the system already offers, so a size limit cannot be
-/// the reason it is missing, one above the largest HiDPI size, and the native grid as HiDPI.
-/// One low-density size tests the second shape.
-func requested(panel: (Int, Int)) -> [(width: Int, height: Int, hidpi: Bool)] {
+let variant = arguments.firstIndex(of: "--variant").flatMap { arguments.indices.contains($0 + 1) ? Int(arguments[$0 + 1]) : nil } ?? 1
+
+/// The sizes to add, in the panel's own frame (before rotation), from the panel's aspect.
+///
+/// Variant 1 asks for HiDPI sizes with the 16-byte shape (backing store, flags 1,
+/// 0x00200000): one step inside the range the system already offers, so a size limit
+/// cannot be the reason it is missing, one above the largest HiDPI size, and the native
+/// grid. One low-density size tests the 8-byte shape.
+///
+/// Variant 2, after variant 1 showed the 8-byte shape working and the 16-byte one not:
+/// each shape on a size of its own inside the range, and the 8-byte shape on the native
+/// grid as HiDPI, which tests the size limit with the shape known to work.
+func requested(panel: (Int, Int)) -> [Entry] {
     func scaled(_ factor: Double) -> (Int, Int) {
         let width = Int((Double(panel.0) * factor / 8).rounded()) * 8
         let height = Int((Double(width) * Double(panel.1) / Double(panel.0)).rounded())
         return (width, height)
     }
-    let inside = scaled(0.7), above = scaled(0.9), native = panel
-    return [
-        (inside.0, inside.1, true),
-        (above.0, above.1, true),
-        (native.0, native.1, true),
-        (inside.0, inside.1, false),
-    ]
+    func hidpi(_ size: (Int, Int)) -> String { "\(size.0) × \(size.1) HiDPI" }
+    let p70 = scaled(0.7), p65 = scaled(0.65), p60 = scaled(0.6), p90 = scaled(0.9)
+    switch variant {
+    case 2:
+        return [
+            Entry(pixelWidth: p70.0 * 2, pixelHeight: p70.1 * 2, words: [], expect: hidpi(p70)),
+            Entry(pixelWidth: panel.0 * 2, pixelHeight: panel.1 * 2, words: [], expect: hidpi(panel)),
+            Entry(pixelWidth: p65.0 * 2, pixelHeight: p65.1 * 2, words: [0x0000_0001], expect: hidpi(p65)),
+            Entry(pixelWidth: p60.0 * 2, pixelHeight: p60.1 * 2, words: [0x0000_0009, 0x00a0_0000], expect: hidpi(p60)),
+            Entry(pixelWidth: p70.0, pixelHeight: p70.1, words: [], expect: "\(p70.0) × \(p70.1)"),
+        ]
+    default:
+        return [
+            Entry(pixelWidth: p70.0 * 2, pixelHeight: p70.1 * 2, words: [0x0000_0001, 0x0020_0000], expect: hidpi(p70)),
+            Entry(pixelWidth: p90.0 * 2, pixelHeight: p90.1 * 2, words: [0x0000_0001, 0x0020_0000], expect: hidpi(p90)),
+            Entry(pixelWidth: panel.0 * 2, pixelHeight: panel.1 * 2, words: [0x0000_0001, 0x0020_0000], expect: hidpi(panel)),
+            Entry(pixelWidth: p70.0, pixelHeight: p70.1, words: [], expect: "\(p70.0) × \(p70.1)"),
+        ]
+    }
 }
 
 func fileContents(panel: (Int, Int)) -> Data {
@@ -166,9 +193,9 @@ func fileContents(panel: (Int, Int)) -> Data {
     plist["DisplayVendorID"] = Int(vendor)
     plist["DisplayProductID"] = Int(product)
     var entries = (plist["scale-resolutions"] as? [Data]) ?? []
-    for size in requested(panel: panel) { entries.append(entry(width: size.width, height: size.height, hidpi: size.hidpi)) }
+    for entry in requested(panel: panel) { entries.append(entry.data) }
     plist["scale-resolutions"] = entries
-    plist["com.16xbrains.macdisplay16x"] = ["generator": "Display 16X override-write-probe", "format": 1]
+    plist["com.16xbrains.macdisplay16x"] = ["generator": "Display 16X override-write-probe", "format": 1, "variant": variant]
     // XML, so the owner can read the preview.
     return (try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)) ?? Data()
 }
@@ -207,8 +234,8 @@ let folders = ["/Library/Displays", "/Library/Displays/Contents", "/Library/Disp
 func showPlan() {
     print("\(name): panel \(panel.0) × \(panel.1) pixels before rotation, rotation \(Int(CGDisplayRotation(id)))°, main \(CGDisplayIsMain(id) != 0)")
     print("Sizes to add, in the panel's frame:")
-    for size in requested(panel: panel) {
-        print("  \(size.width) × \(size.height)\(size.hidpi ? " HiDPI (backing \(size.width * 2) × \(size.height * 2))" : " low density")")
+    for entry in requested(panel: panel) {
+        print("  \(entry.pixelWidth) × \(entry.pixelHeight) pixels, \(entry.data.count) bytes: for \(entry.expect)")
     }
     print("\nThe file: \(target)  (\(contents.count) bytes, SHA-256 \(digest))")
     print(String(decoding: contents, as: UTF8.self))
@@ -242,6 +269,23 @@ case "install":
     try? FileManager.default.removeItem(atPath: staged)
     print("\(stamp()) install \(ok ? "done" : "did not happen"). Now unplug and replug the cable, or run activate, then check.")
 
+case "replace":
+    guard confirmed else { fail("replace writes as administrator. Add --yes once the owner has agreed") }
+    guard FileManager.default.fileExists(atPath: target), let existing = FileManager.default.contents(atPath: target),
+          String(decoding: existing, as: UTF8.self).contains("Display 16X override-write-probe") else {
+        fail("replace only overwrites a file this probe wrote. Use install")
+    }
+    showPlan()
+    let staged = "/tmp/display16x-override-\(ProcessInfo.processInfo.processIdentifier)"
+    try contents.write(to: URL(fileURLWithPath: staged))
+    let ok = asAdministrator([
+        "/bin/cp \(quoted(staged)) \(quoted(target))",
+        "/usr/sbin/chown root:wheel \(quoted(target))",
+        "/bin/chmod 644 \(quoted(target))",
+    ])
+    try? FileManager.default.removeItem(atPath: staged)
+    print("\(stamp()) replace \(ok ? "done" : "did not happen"). The record of the state before install is kept. Activate, then check.")
+
 case "check":
     let now = sizes(id)
     print("\(stamp()) \(name): \(now.count) sizes now")
@@ -250,10 +294,12 @@ case "check":
         print("  new since install: " + (now.subtracting(before).sorted().joined(separator: ", ").nilIfEmpty ?? "none"))
         print("  gone since install: " + (before.subtracting(now).sorted().joined(separator: ", ").nilIfEmpty ?? "none"))
     }
-    for size in requested(panel: panel) {
-        let label = size.hidpi ? " hidpi" : ""
-        let upright = "\(size.width)x\(size.height)\(label)", turned = "\(size.height)x\(size.width)\(label)"
-        print("  \(size.width) × \(size.height)\(size.hidpi ? " HiDPI" : ""): " + (now.contains(upright) ? "listed" : now.contains(turned) ? "listed, turned with the rotation" : "not listed"))
+    for entry in requested(panel: panel) {
+        let parts = entry.expect.components(separatedBy: " ")
+        let isHiDPI = entry.expect.hasSuffix("HiDPI")
+        let label = isHiDPI ? " hidpi" : ""
+        let upright = "\(parts[0])x\(parts[2])\(label)", turned = "\(parts[2])x\(parts[0])\(label)"
+        print("  \(entry.data.count)-byte entry for \(entry.expect): " + (now.contains(upright) ? "listed" : now.contains(turned) ? "listed, turned with the rotation" : "not listed"))
     }
     print("  file present: \(FileManager.default.fileExists(atPath: target))")
 
@@ -286,7 +332,7 @@ case "remove":
     print("\(stamp()) remove \(ok ? "done" : "did not happen"). file present: \(FileManager.default.fileExists(atPath: target)). Replug or activate, then check.")
 
 default:
-    fail("the step is plan, install, check, activate or remove")
+    fail("the step is plan, install, replace, check, activate or remove")
 }
 
 extension String {

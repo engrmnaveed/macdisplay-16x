@@ -79,8 +79,10 @@ guard missing.isEmpty else {
     exit(1)
 }
 
-typealias InitDescriptor = @convention(c) (AnyObject, Selector, AnyObject) -> Unmanaged<AnyObject>?
-typealias InitMode = @convention(c) (AnyObject, Selector, UInt32, UInt32, Double) -> Unmanaged<AnyObject>?
+// An init method consumes its receiver and returns a retained object, so the receiver is
+// passed with one reference of its own and the result is taken as retained.
+typealias InitDescriptor = @convention(c) (UnsafeMutableRawPointer, Selector, AnyObject) -> UnsafeMutableRawPointer?
+typealias InitMode = @convention(c) (UnsafeMutableRawPointer, Selector, UInt32, UInt32, Double) -> UnsafeMutableRawPointer?
 typealias Apply = @convention(c) (AnyObject, Selector, AnyObject) -> Bool
 
 func make(_ className: String) -> NSObject {
@@ -88,9 +90,15 @@ func make(_ className: String) -> NSObject {
     return type.init()
 }
 
-func allocate(_ className: String) -> AnyObject {
+/// A fresh instance with one reference for the init method to consume.
+func allocate(_ className: String) -> UnsafeMutableRawPointer {
     let type: AnyClass = NSClassFromString(className)!
-    return class_createInstance(type, 0) as AnyObject
+    guard let instance = class_createInstance(type, 0) as AnyObject? else { fatalError("\(className) could not be allocated") }
+    return Unmanaged.passRetained(instance).toOpaque()
+}
+
+func retained(_ pointer: UnsafeMutableRawPointer?) -> AnyObject? {
+    pointer.map { Unmanaged<AnyObject>.fromOpaque($0).takeRetainedValue() }
 }
 
 func implementation<T>(_ className: String, _ selector: Selector, as: T.Type) -> T {
@@ -141,20 +149,24 @@ let termination: @convention(block) (AnyObject?, AnyObject?) -> Void = { _, _ in
 descriptor.setValue(termination, forKey: "terminationHandler")
 
 let initDescriptor = implementation("CGVirtualDisplay", NSSelectorFromString("initWithDescriptor:"), as: InitDescriptor.self)
-var screen: AnyObject? = initDescriptor(allocate("CGVirtualDisplay"), NSSelectorFromString("initWithDescriptor:"), descriptor)?.takeRetainedValue()
-guard let created = screen else {
+var screen: AnyObject? = retained(initDescriptor(allocate("CGVirtualDisplay"), NSSelectorFromString("initWithDescriptor:"), descriptor))
+// No other reference to the screen is kept, so setting `screen` to nil releases it.
+guard screen != nil else {
     print("\(stamp()) the window server refused the descriptor")
     exit(1)
 }
 
 let initMode = implementation("CGVirtualDisplayMode", NSSelectorFromString("initWithWidth:height:refreshRate:"), as: InitMode.self)
-let mode = initMode(allocate("CGVirtualDisplayMode"), NSSelectorFromString("initWithWidth:height:refreshRate:"), width, height, rate)!.takeRetainedValue()
+guard let mode = retained(initMode(allocate("CGVirtualDisplayMode"), NSSelectorFromString("initWithWidth:height:refreshRate:"), width, height, rate)) else {
+    print("\(stamp()) the mode could not be made")
+    exit(1)
+}
 let settings = make("CGVirtualDisplaySettings")
 settings.setValue(NSNumber(value: UInt32(1)), forKey: "hiDPI")
 settings.setValue([mode], forKey: "modes")
 let apply = implementation("CGVirtualDisplay", NSSelectorFromString("applySettings:"), as: Apply.self)
-let applied = apply(created, NSSelectorFromString("applySettings:"), settings)
-let id = ((created as? NSObject)?.value(forKey: "displayID") as? NSNumber)?.uint32Value ?? 0
+let applied = apply(screen!, NSSelectorFromString("applySettings:"), settings)
+let id = ((screen as? NSObject)?.value(forKey: "displayID") as? NSNumber)?.uint32Value ?? 0
 print("\(stamp()) created: display ID \(id), settings applied \(applied)")
 
 RunLoop.main.run(until: Date().addingTimeInterval(2))

@@ -6,6 +6,36 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.3 spikes: macOS 27 reads an override when the display reconnects, and a virtual screen lives only while the app holds it
+
+Apple M5 Pro (Mac17,9), macOS 27.2.1, the LG SDQHD on USB-C (rotated 270°) and the Lenovo P32p-20 on HDMI. Checked with the owner at the desk from 21:44 to 21:51, with three administrator prompts the owner answered. The measurements are in the feasibility notes.
+
+**What macOS does with an override file.**
+
+- **It reads `/Library/Displays/Contents/Resources/Overrides/DisplayVendorID-<hex>/DisplayProductID-<hex>` when the display connects, and not before.** The app's own disconnect and reconnect is enough, about 6 seconds per display. The folder did not exist on this Mac, and the install created the whole chain.
+- **A size is written as the backing store, in the panel's own frame before rotation.** The 8-byte entry (width, height) gives the size at low density where the panel can show it, and its half as HiDPI. The 12-byte entry (width, height, flags 1) gives its half as HiDPI. **The 16-byte entries are ignored**, with flags 1 and with flags 9, although a quarter of the system's own entries have that shape.
+- **macOS leaves out some sizes that are written correctly**, with no message. The LG's full grid as HiDPI (backing 5120 × 5760) was left out twice, while a step inside its range was taken. Nothing the app can read predicts it.
+- **A file carrying the app's own marker key is read like any other**, and deleting the file and reconnecting gives back exactly the list there was before.
+
+**What a virtual screen is.**
+
+- **It exists only while the process that made it holds it.** Releasing it removes it within 3 seconds, and so does the process ending, a crash included. Nothing is left on the system to clean up.
+- **It gets a new display ID every time it is created**, and reports the vendor, product and serial number the app gives it. The running 0.2.0 matched two creations to one record by those numbers.
+- **macOS places it next to the main display and moves other displays out of its way, and remembers that layout for the set of displays that includes it.** When it goes, the others return to the layout of the smaller set.
+- macOS makes a list of 24 modes, at both densities, from the one mode the app gives it. The window server's limit for a virtual screen is 16384 × 16384 pixels, 0.25 to 4 pixels per point, and at least 24 Hz.
+
+**Rules the build adopts from this:**
+
+1. **An override belongs to a model, not a monitor.** Every unit of that vendor and product gets it. The preview lists every known display of the model, remembered ones included.
+2. **HiDPI sizes are written as 12-byte entries, low-density sizes as 8-byte entries, and nothing is written as a 16-byte entry.** The preview says that a low-density size also brings its half as HiDPI.
+3. **What was installed is checked after activation.** The app reconnects the display, reads the list and reports each size as offered or left out by macOS. A size is never shown as available because it was written.
+4. **The main display cannot be reconnected by the app**, because the connection policy refuses it. Its override is activated by a cable replug or a logout, and the app says so.
+5. **When macOS ships its own file for the model, the app's file starts from a copy of it.** Whether a file in `/Library` replaces the system's or adds to it was not tested, because neither test monitor has one. A copy is right in both cases.
+6. **Every file the app writes carries its marker key, and a list of what was written is kept in the app's own folder.** The app, and the command line without the app, find every such file by the marker alone, so a lost list loses nothing. Removal deletes only files with the marker and only empty folders the app created.
+7. **A virtual screen is a saved definition plus a live object.** Quitting removes the screens; starting again recreates the saved ones that were connected, through the gate. Its settings are keyed by its record tag, as for any display, never by its display ID.
+
+**Decision needed:** how the app gets administrator rights. Built: the system's own prompt for each install and removal, through AppleScript's `do shell script … with administrator privileges`, which is public and documented by Apple and works for an ad hoc signed app. The alternative, a privileged helper registered with the system, needs a signing identity the project does not have yet (decision 12) and an approval in System Settings. **Recommendation:** keep the prompt for v0.3, and look at a helper when the project certificate exists.
+
 ## 23 November 2026 · The first release is 0.2.0, ad hoc signed, and every milestone gets a release
 
 **Owner's word, through the planning thread:** "no release available on GitHub yet, please do release the latest version, and keep release cycle updated, every major version should have a release". So 0.1.0 is never published, 0.2.0 is the first release, and each milestone on `main` is released as its version (0.3.0 for v0.3). A release is two steps, prepare in a pull request and tag the merged commit, described in the release runbook.
