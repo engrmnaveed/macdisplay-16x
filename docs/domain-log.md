@@ -22,6 +22,7 @@ Apple M5 Pro (Mac17,9), macOS 27.2.1, the LG SDQHD on USB-C (rotated 270°) and 
 - **It exists only while the process that made it holds it.** Releasing it removes it within 3 seconds, and so does the process ending, a crash included. Nothing is left on the system to clean up.
 - **It gets a new display ID every time it is created**, and reports the vendor, product and serial number the app gives it. The running 0.2.0 matched two creations to one record by those numbers.
 - **macOS places it next to the main display and moves other displays out of its way, and remembers that layout for the set of displays that includes it.** When it goes, the others return to the layout of the smaller set.
+- **macOS makes a color profile for it and keeps it after the screen is gone**, in `/Library/ColorSync/Profiles/Displays`, named after the screen and its system UUID, owned by root. Discarding a virtual screen therefore has a file outside the app's folders to remove, with administrator rights, which is the inventory's "remove generated profile". The check left one such profile on the owner's Mac.
 - macOS makes a list of 24 modes, at both densities, from the one mode the app gives it. The window server's limit for a virtual screen is 16384 × 16384 pixels, 0.25 to 4 pixels per point, and at least 24 Hz.
 
 **Rules the build adopts from this:**
