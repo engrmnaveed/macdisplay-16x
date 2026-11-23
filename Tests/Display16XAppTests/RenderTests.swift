@@ -23,6 +23,8 @@ import Testing
             #expect(!entry.files.isEmpty, "\(entry.id) was not drawn")
         }
         try RenderHarness.writeSheets(for: session)
+        // Every control on every surface reaches VoiceOver with a name, and every slider with a value.
+        #expect(session.accessibilityIssues.isEmpty, "\(session.accessibilityIssues.joined(separator: "; "))")
     }
 
     /// One sheet per group and look, so a whole group can be looked over at once.

@@ -71,6 +71,8 @@ final class RenderSession {
 
     let directory: URL
     private(set) var entries: [Entry] = []
+    /// Controls that would reach VoiceOver without a name or a value, by surface.
+    private(set) var accessibilityIssues: [String] = []
 
     init(directory: URL) throws {
         self.directory = directory
@@ -100,6 +102,7 @@ final class RenderSession {
                 let name = "\(id).ax.txt"
                 try Data(stage.accessibilityDump().utf8).write(to: directory.appendingPathComponent(name))
                 entry.accessibility = name
+                accessibilityIssues.append(contentsOf: stage.accessibilityIssues().map { "\(id): \($0)" })
             }
         }
         entries.append(entry)

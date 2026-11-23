@@ -639,6 +639,40 @@ Not checked, because nothing on this desk offers it or the Mac was unattended:
 - Which cable the LG is on. The owner can say.
 - How a value is known (read back, sent, not known), the other fact built in the same change, has run in unit tests only. Nothing on the desk ran this build.
 
+## 23 November 2026 · Interface pass, checked off screen · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
+
+The rebuilt interface was checked from the render harness, in the test process, on made-up monitors. The app was not started, no display was touched, and the copy in daily use was left alone. Nothing below has been seen on screen yet.
+
+### What VoiceOver is given
+
+Every one of the 47 surfaces and states is drawn with a text file of its accessibility tree, and the render run fails when a control has no name or a slider no value. It passes. A bar speaks its value in words ("53 percent"), each text-size stop is a button named by its size ("3200 by 1800"), the one in use is marked selected, and the pop-ups carry a name and their choice. Not checked, because it needs VoiceOver running: that pressing a pop-up opens its menu, and the order in which the panel is read.
+
+### Contrast
+
+`SkinContrastTests` measures the skin's color pairs in light, dark and both increased-contrast looks, with the luminance formula of the Web Content Accessibility Guidelines. Text on cards, the canvas, quiet buttons and banners is at 7 to 1 or more, secondary text and the accent as text at 4.5 to 1 or more, and with Increase Contrast 10 and 7. One value was short and was changed: the bed of a bar in the dark increased-contrast look.
+
+**macOS hands out its increased-contrast appearance only while Increase Contrast is on in System Settings.** Asked for by name with the setting off, it returns the ordinary appearance. So the harness draws the two contrast looks by telling the skin to answer with its increased-contrast colors, and the system's own controls in those pictures (switches, the settings tabs) stay ordinary. The pictures called "increased contrast" before this was found were the ordinary looks.
+
+### Motion and transparency
+
+The only animations are the countdown ring and line, one linear animation each, started when they appear. With Reduce Motion they stay full and the digits tell the time. The indicator and the notices are opaque with Reduce Transparency. The panel paints an opaque canvas in every case. Read from the code and not seen on screen: a picture cannot show either setting.
+
+### How long the panel takes to build
+
+`DISPLAY16X_MEASURE=1 swift test --filter PanelSpeed` builds the panel's two models, its views and their first layout forty times on the sample desk, off screen.
+
+| Page | Median | Worst |
+| --- | --- | --- |
+| Displays, two cards and three scenes | 18 to 21 ms | 33 ms |
+| One display's page | 25 to 30 ms | 46 ms |
+| Arrange | 18 ms | 36 ms |
+
+Debug and release builds gave the same within a few milliseconds. This is a stand-in for the budget "the panel opens in under 100 ms warm": it leaves out the popover itself and the monitors' own answers, and it is the M5 Pro and not the MacBook Air M1 the budget is written for.
+
+### Still to be measured with the app running
+
+A development build in place of the copy in daily use: the panel's open time on screen, memory with the panel closed (at most 50 MiB), and wakeups when idle. And by eye: the popover's arrow against the skin's canvas, real blur, the feel of the bars, full keyboard access through the panel, VoiceOver, and Increase Contrast, Reduce Motion and Reduce Transparency switched on in System Settings.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:

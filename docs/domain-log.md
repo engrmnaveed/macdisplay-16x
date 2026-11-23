@@ -6,6 +6,15 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · Interface pass, stage 5 off screen: Increase Contrast cannot be asked for by name
+
+Apple M5 Pro (Mac17,9), macOS 27.2.1, from the render harness. Measurements are in the feasibility notes.
+
+- **macOS gives out its increased-contrast appearance only while Increase Contrast is on in System Settings.** Asked for by name with the setting off, it returns the ordinary light or dark appearance. An app cannot preview its increased-contrast look, and a test cannot draw it, without the setting. The skin's colors therefore have a switch for the harness that makes them answer with their increased-contrast values. **Rule: a claim that the app respects Increase Contrast needs the setting switched on once, on screen.** The pictures the review called "increased contrast" in stage 1 were the ordinary looks.
+- **Every control on every surface reaches VoiceOver with a name, and every bar with a value in words.** The render run fails when one does not.
+- **The skin's contrast is measured in all four looks**, and a re-skin that makes text hard to read fails a test.
+- **The panel's content builds in 18 to 30 ms off screen** on this Mac, against a budget of 100 ms for the open panel on a MacBook Air M1. The on-screen figure, memory and idle wakeups need a development build running in place of the copy in daily use, which the owner is asked for once.
+
 ## 23 November 2026 · Interface pass, stages 2 and 3: the direction the owner chose, and what the rebuilt surfaces settle
 
 **The owner chose direction B, "Studio"**: the family's navy and aqua, displays drawn to scale, thick bars, a stepped text-size strip. The accent is the family's teal and aqua as drawn. **The owner also asked that the look stay cheap to change later.** So the look lives in two files, the skin (values) and the pieces (how a bar or a chip is drawn), surfaces only compose them, and a test fails when a surface brings a color, font, radius, distance or symbol of its own.

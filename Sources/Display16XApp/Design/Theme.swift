@@ -215,16 +215,21 @@ enum Skin {
 // MARK: Making colors
 
 extension Theme {
+    /// For drawing the increased-contrast colors on a Mac where Increase Contrast is off.
+    /// macOS hands out its increased-contrast appearance only while the setting is on, so
+    /// the render harness sets this. Nil, the app's normal state, follows the system.
+    nonisolated(unsafe) static var forcedIncreaseContrast: Bool?
+
     /// A color with a value for light, dark and the two increased-contrast looks.
     static func adaptive(light: NSColor, dark: NSColor, lightContrast: NSColor? = nil, darkContrast: NSColor? = nil) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
             let names: [NSAppearance.Name] = [.accessibilityHighContrastDarkAqua, .accessibilityHighContrastAqua, .darkAqua, .aqua]
-            switch appearance.bestMatch(from: names) {
-            case .accessibilityHighContrastDarkAqua: return darkContrast ?? dark
-            case .accessibilityHighContrastAqua: return lightContrast ?? light
-            case .darkAqua: return dark
-            default: return light
-            }
+            let match: NSAppearance.Name? = appearance.bestMatch(from: names)
+            let isDark: Bool = match == .darkAqua || match == .accessibilityHighContrastDarkAqua
+            let systemContrast: Bool = match == .accessibilityHighContrastAqua || match == .accessibilityHighContrastDarkAqua
+            let isContrast: Bool = Theme.forcedIncreaseContrast ?? systemContrast
+            if isDark { return isContrast ? (darkContrast ?? dark) : dark }
+            return isContrast ? (lightContrast ?? light) : light
         })
     }
 
@@ -249,7 +254,7 @@ extension Theme {
             onAccent: adaptive(light: .white, dark: rgb(16, 34, 56), lightContrast: .white, darkContrast: rgb(4, 14, 28)),
             canvas: adaptive(light: rgb(240, 244, 248), dark: rgb(13, 24, 39), lightContrast: rgb(248, 250, 252), darkContrast: rgb(6, 12, 22)),
             surface: adaptive(light: .white, dark: rgb(22, 37, 58), lightContrast: .white, darkContrast: rgb(14, 26, 44)),
-            track: adaptive(light: rgb(225, 232, 239), dark: rgb(36, 54, 79), lightContrast: rgb(208, 217, 227), darkContrast: rgb(48, 70, 100)),
+            track: adaptive(light: rgb(225, 232, 239), dark: rgb(36, 54, 79), lightContrast: rgb(208, 217, 227), darkContrast: rgb(40, 60, 88)),
             hairline: adaptive(light: rgb(214, 222, 231), dark: rgb(44, 63, 90), lightContrast: rgb(90, 106, 124), darkContrast: rgb(150, 172, 200)),
             text: adaptive(light: rgb(16, 26, 38), dark: rgb(236, 243, 250), lightContrast: .black, darkContrast: .white),
             textSecondary: adaptive(light: rgb(86, 99, 114), dark: rgb(152, 170, 192), lightContrast: rgb(46, 56, 68), darkContrast: rgb(206, 220, 236)),

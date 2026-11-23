@@ -1,4 +1,5 @@
 import AppKit
+@testable import Display16XApp
 import SwiftUI
 
 /// The appearances every surface is drawn in.
@@ -20,6 +21,15 @@ enum Look: String, CaseIterable, Sendable {
     }
 
     var isDark: Bool { self == .dark || self == .darkContrast }
+    var isContrast: Bool { self == .lightContrast || self == .darkContrast }
+
+    /// Makes the skin answer with the colors of this look. macOS gives out its
+    /// increased-contrast appearance only while the Mac's own setting is on, so the two
+    /// contrast looks draw the skin's increased-contrast colors on the ordinary
+    /// appearance. The system's own controls stay as they are without the setting.
+    func use() {
+        Theme.forcedIncreaseContrast = isContrast
+    }
 }
 
 /// A view hosted in a window that is never put on screen. Nothing here needs a display:
@@ -28,12 +38,15 @@ enum Look: String, CaseIterable, Sendable {
 final class Stage {
     let window: NSWindow
     let hosting: NSHostingView<AnyView>
+    let look: Look
 
     /// - Parameter active: Draw the controls as in the window that has the keyboard, the
     ///   way the open panel does. The floating windows of the app never take the keyboard,
     ///   so they are drawn inactive, as they are on screen.
     init<Content: View>(_ view: Content, look: Look, active: Bool = true) {
         _ = NSApplication.shared
+        self.look = look
+        look.use()
         hosting = NSHostingView(rootView: AnyView(view))
         // The app's presenters measure a view before it is in a window, and get the size
         // the view asks for. Once in a window, a hosting view also reports the smallest
@@ -83,7 +96,9 @@ final class Stage {
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
         ) else { return nil }
         rep.size = size
+        look.use()
         hosting.cacheDisplay(in: hosting.bounds, to: rep)
+        Theme.forcedIncreaseContrast = nil
         return rep
     }
 
@@ -138,11 +153,27 @@ final class Stage {
             let node = entry.node
             var line = String(repeating: "  ", count: entry.depth) + node.role
             if !node.name.isEmpty { line += " \"\(node.name)\"" }
-            if !node.value.isEmpty { line += " = \(node.value)" }
+            if !node.spokenValue.isEmpty { line += " = \(node.spokenValue)" }
+            if node.isSelected { line += " [selected]" }
             if !node.help.isEmpty { line += " (help: \(node.help))" }
             if node.isDisabled { line += " [disabled]" }
             return line
         }.joined(separator: "\n")
+    }
+
+    /// Controls that reach assistive software without a name. The parts of a scroll bar
+    /// are the system's own and are left out.
+    func accessibilityIssues() -> [String] {
+        let interactive: Set<String> = ["AXButton", "AXMenuButton", "AXPopUpButton", "AXSlider", "AXCheckBox", "AXRadioButton", "AXTextField", "AXDisclosureTriangle", "AXIncrementor"]
+        var issues: [String] = []
+        var scrollBarDepth: Int?
+        for (depth, node) in accessibilityTree() {
+            if let limit = scrollBarDepth, depth > limit { continue }
+            scrollBarDepth = node.role == "AXScrollBar" ? depth : nil
+            if interactive.contains(node.role), node.name.isEmpty { issues.append("\(node.role) has no name") }
+            if node.role == "AXSlider", node.spokenValue.isEmpty { issues.append("\(node.role) \"\(node.name)\" has no value") }
+        }
+        return issues
     }
 }
 
@@ -213,6 +244,21 @@ struct AccessibleNode {
         if let text = value as? String { return text }
         if let number = value as? NSNumber { return number.stringValue }
         return String(describing: value)
+    }
+
+    /// What is said for the value: the description when the control gives one ("53
+    /// percent"), and the bare value otherwise.
+    var spokenValue: String {
+        if let description = call("accessibilityValueDescription") as? String, !description.isEmpty { return description }
+        return value
+    }
+
+    var isSelected: Bool {
+        let selector = NSSelectorFromString("isAccessibilitySelected")
+        guard object.responds(to: selector) else { return false }
+        typealias Function = @convention(c) (AnyObject, Selector) -> Bool
+        let function = unsafeBitCast(object.method(for: selector), to: Function.self)
+        return function(object, selector)
     }
 
     var isDisabled: Bool {
