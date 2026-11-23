@@ -128,6 +128,8 @@ public final class CommandEngine {
             return await mode(command, feature: feature, tag: tag, name: name)
         case .rotation:
             return await rotation(command, tag: tag, name: name)
+        case .restoreAfterWake:
+            return restoreAfterWake(command, tag: tag, name: name)
         case .keepMode:
             return modes.keep(tag)
                 ? DisplayResult(tag: tag, name: name, outcome: .confirmed, actual: modes.currentMode(for: tag).map(ResultValue.mode))
@@ -213,6 +215,28 @@ public final class CommandEngine {
             )
         }
         return entry(result.outcome, requested: requested, actual: result.actual, detail: result.detail)
+    }
+
+    /// A setting of the display record, not a value on the monitor, so it can be read and
+    /// changed for a remembered display too.
+    private func restoreAfterWake(_ command: Command, tag: DisplayTag, name: String) -> DisplayResult {
+        let stored = settings.effective(tag).restoreAfterWake
+        if command.operation == .get {
+            return DisplayResult(tag: tag, name: name, outcome: .confirmed, actual: .flag(stored))
+        }
+        let wanted: Bool
+        if command.operation == .toggle {
+            wanted = !stored
+        } else if case .flag(let value)? = command.value {
+            wanted = value
+        } else {
+            return DisplayResult(tag: tag, name: name, outcome: .failed, detail: "restoreAfterWake needs on or off")
+        }
+        if wanted != stored {
+            settings.updateRecord(tag) { $0.display.restoreAfterWake = wanted }
+            Log.core.info("Putting values back after sleep was switched \(wanted ? "on" : "off") for \(tag) \(name).")
+        }
+        return DisplayResult(tag: tag, name: name, outcome: .confirmed, requested: .flag(wanted), actual: .flag(wanted))
     }
 
     private func mute(_ command: Command, feature: FeatureDescriptor, tag: DisplayTag, name: String) async -> DisplayResult {

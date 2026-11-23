@@ -401,6 +401,40 @@ struct CommandEngineTests {
         #expect(ddc.values[.hardwareBrightness] == 50)
     }
 
+    @Test("Putting values back after sleep is switched per display through the engine, also for a remembered display")
+    func restoreAfterWakeSetting() async {
+        let rig = Rig()
+        let lenovo = rig.plug(Fixture.lenovo())!
+        rig.plug(Fixture.lg())
+        await rig.start()
+        #expect(await rig.run(.get, .restoreAfterWake, on: .tag(1)).entries.first?.actual == .flag(false), "off unless switched on")
+
+        let on = await rig.run(.set, .restoreAfterWake, on: .tag(1), value: .flag(true))
+        #expect(on.entries.first?.outcome == .confirmed)
+        #expect(rig.settings.recordSettings(DisplayTag(1)).display.restoreAfterWake == true)
+        #expect(rig.settings.effective(DisplayTag(2)).restoreAfterWake == false, "the other display is not touched")
+        #expect(await rig.run(.set, .restoreAfterWake, on: .tag(1), value: .absolute(0.5)).succeeded == false, "it needs on or off")
+
+        // It decides what happens at the next wake.
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5))
+        lenovo.values[.hardwareBrightness] = 100
+        rig.sequencer.systemWillSleep()
+        rig.sequencer.systemDidWake()
+        rig.scheduler.advance(by: 3.1)
+        #expect(await eventually { lenovo.values[.hardwareBrightness] == 50 })
+        await rig.idle()
+
+        let toggled = await rig.run(.toggle, .restoreAfterWake, on: .tag(1))
+        #expect(toggled.entries.first?.actual == .flag(false))
+
+        // The setting belongs to the record, so it can be changed while the display is away.
+        rig.unplug(Fixture.lgID)
+        await rig.reconfigure()
+        #expect(await rig.run(.set, .restoreAfterWake, on: .tag(2), value: .flag(true)).succeeded)
+        #expect(rig.settings.effective(DisplayTag(2)).restoreAfterWake == true)
+        #expect(rig.settings.pendingRestores(for: DisplayTag(2)).isEmpty, "a setting is not a value waiting for the monitor")
+    }
+
     @Test("A restore puts hardware brightness back exactly, and lifts only software dimming to the floor")
     func restoreFloor() async {
         let rig = Rig()

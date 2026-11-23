@@ -20,7 +20,7 @@ open "dist/Display 16X.app"
 The app appears as a display icon in the menu bar and has no Dock icon. Click the icon for one card per display.
 
 - **Safe mode:** hold Shift while the app starts, or pass `--safe`. Nothing is restored or reapplied automatically in safe mode.
-- **After sleep:** the app does not push its values at a monitor that wakes up. It reads the monitor and follows it, so a change made with the monitor's buttons or another tool stays. If a monitor forgets its brightness or volume while asleep, switch on "Put my values back after sleep" in that display's details.
+- **After sleep:** the app does not push its values at a monitor that wakes up. It reads the monitor and follows it, so a change made with the monitor's buttons or another tool stays. If a monitor forgets its brightness or volume while asleep, switch on "Put my values back after sleep" in that display's details, or run `display16x set restoreAfterWake on --tag N`.
 - **Verbose log:** pass `--verbose` to log debug detail and echo the log to standard error.
 - **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild: remove the old Display 16X entry from the Accessibility list and add the new one. To keep the grant across rebuilds, create a code signing certificate in Keychain Access (Certificate Assistant, Create a Certificate, type Code Signing) and pass its name: `DISPLAY16X_SIGN_IDENTITY="name" scripts/package-macos.sh`.
 - **Panel snapshot:** `--snapshot-panel FILE` renders the panel to a PNG without showing it and quits, and `--snapshot-details` opens the detail views in it. It is a development aid for checking the layout.
@@ -36,6 +36,7 @@ dist/display16x get brightness --main
 dist/display16x set brightness 60% --tag 1
 dist/display16x step volume -1 --name "LEN P32p-20"
 dist/display16x set resolution 2560x1440 --pointer --try   # asks Keep or Revert, goes back on its own
+dist/display16x set restoreAfterWake on --tag 2            # for a monitor that forgets its values while asleep
 dist/display16x features                   # every feature and its operations
 ```
 

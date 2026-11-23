@@ -277,9 +277,10 @@ final class PanelModel: ObservableObject {
     /// For a monitor that forgets its values in standby. Off, the app reads the monitor
     /// after wake and takes its word.
     func setRestoreAfterWake(_ enabled: Bool, tag: DisplayTag) {
-        Log.app.info("Restore after wake switched \(enabled ? "on" : "off") for \(tag) from the panel.")
-        context.settings.updateRecord(tag) { $0.display.restoreAfterWake = enabled }
-        rebuild()
+        Task { [weak self, context] in
+            _ = await context.send(Command(.set, .restoreAfterWake, on: .tag(tag.rawValue), value: .flag(enabled), origin: .interface))
+            self?.rebuild()
+        }
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {

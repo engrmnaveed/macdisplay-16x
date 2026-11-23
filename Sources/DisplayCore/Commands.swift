@@ -247,6 +247,7 @@ public struct FeatureID: RawRepresentable, Hashable, Codable, Sendable, CustomSt
     public static let rotation = FeatureID(rawValue: "rotation")
     public static let keepMode = FeatureID(rawValue: "keepMode")
     public static let revertMode = FeatureID(rawValue: "revertMode")
+    public static let restoreAfterWake = FeatureID(rawValue: "restoreAfterWake")
     public static let displays = FeatureID(rawValue: "displays")
     public static let status = FeatureID(rawValue: "status")
     public static let log = FeatureID(rawValue: "log")
@@ -398,6 +399,9 @@ public struct FeatureRegistry: Sendable {
                           kind: .action, operations: [.perform]),
         FeatureDescriptor(.revertMode, title: "Revert", summary: "Returns to the mode before the last unconfirmed change.",
                           kind: .action, operations: [.perform]),
+        FeatureDescriptor(.restoreAfterWake, title: "Put values back after sleep",
+                          summary: "For a monitor that forgets its values while asleep. Off: the monitor is read after wake and nothing is written.",
+                          kind: .boolean, operations: [.get, .set, .toggle]),
         FeatureDescriptor(.displays, title: "Displays", summary: "Lists connected and remembered displays.",
                           scope: .global, kind: .report, operations: [.get]),
         FeatureDescriptor(.status, title: "Status", summary: "App state: automation gate, permissions and version.",
