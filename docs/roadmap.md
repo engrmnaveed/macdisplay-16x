@@ -196,6 +196,7 @@ HDR switching, XDR brightness on capable hardware, color profile and color mode 
 | The Accessibility grant is tied to the code signature | Sign every build with a stable identity. Tell the user to remove a stale entry when a grant does not take. |
 | The public mode list hides modes | Use the window server's list, validate it as a whole, and fall back to the public list. |
 | Override-based scaling may behave differently on current macOS | Probe it before building interface for it. Keep mirror-based scaling as the fallback. |
+| CI builds with an older compiler than the development Mac | CI is the judge, and nothing reaches `main` without it. The runner's Swift 6.3.3 gave up on a SwiftUI expression that Swift 6.4.2 accepts: `Double` and `CGFloat` arithmetic mixed in one modifier chain. Keep view bodies small and work out typed values before drawing. Compile time on the development Mac does not predict the failure. |
 | Hardware coverage | Publish a tested-hardware list and accept probe output in issues. |
 | Scope | BetterDisplay is years of full-time work. Ship the core well before starting the next group. |
 | A display the app turned off stays off while the app is not running | The app reconnects what it disconnected when it quits, and at its next start after a crash. It reconnects at once when no display is left in use. A disconnect lasts for the login session only. The automatic turn-off of the built-in panel is the case this does not cover fully, see decision 16. |
