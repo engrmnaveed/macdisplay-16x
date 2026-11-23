@@ -858,6 +858,49 @@ Each needs the owner at the desk, a development build or the build in daily use 
 9. **Idle cost** with a virtual screen connected and with none, against the PRD's budget.
 10. **A full reset with the system's settings.** Not on the owner's Mac in daily use: it makes macOS forget every arrangement it saved. A spare Mac or a test account, with the put-back step afterwards.
 
+## 24 November 2026 · v0.4 HDR and color spikes · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
+
+The Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, rotated 270°. The MacBook's lid is closed, so its XDR panel is out of use. Run at 01:20, with the owner's copy of Display 16X running and other display utilities left as they were.
+
+**What stays unproven** until a writing check runs with the owner: what switching HDR does to the LG (whether it leaves and returns, its headroom in HDR, what happens to the color table), whether a profile assigned through ColorSync takes effect and comes off cleanly, and turning Night Shift off and back. Nothing about the built-in XDR panel can be learned with the lid closed beyond what the registry says, and no reference preset exists on this desk.
+
+### What macOS reports (read-only, `spikes/hdr-color-probe.swift`)
+
+| | Lenovo P32p-20 (HDMI) | LG SDQHD (USB-C) |
+| --- | --- | --- |
+| HDR in the window server | not supported | supported, off |
+| HDR in System Settings' model (`MPDisplay`) | no HDR modes | HDR modes, not preferred |
+| Headroom (EDR): now, potential, reference | 1.0, 1.0, 0.0 | 1.0, 1.0, 0.0 |
+| EDID | nothing about HDR | PQ, static metadata type 1, BT.2020 RGB and YCC, no HLG. Peak 295 nits, minimum 0.3 |
+| Color space in use | wide gamut | not wide gamut |
+| Factory profiles | two: "HDMI HD" (default, the monitor's own) and "HDMI SD" (`SD 170M-A`, a system file) | one: the monitor's own |
+| Custom profile | none | none |
+| Link color modes in the registry | 20 | 18 |
+| Dithering | on | on |
+| Reference presets | none | none |
+
+- **HDR is offered by the window server and by the model System Settings uses, and both agree.** The switch System Settings shows is `setPreferHDRModes:` on `MPDisplay` in MonitorPanel. The Objective-C runtime gives its shape (`v20@0:8B16`, one Boolean, no result), so it can be called without guessing. SkyLight also exports `SLSDisplaySetHDRModeEnabled`, whose arguments no permitted reference documents. The app uses the MonitorPanel switch and reads back through both.
+- **A reference headroom of 0 means "not reported".** Both monitors give 1.0 for the current and potential headroom with HDR off. The value with HDR on is part of the writing check.
+- **Every link color mode the monitor and the Mac agree on is listed in the I/O registry**, under the framebuffer (`IOMobileFramebufferShim`) as `ColorElements`: an ID, depth (8, 10 or 12 bits), pixel encoding (0 is RGB; 2, 3 and 6 are YCbCr variants whose chroma no permitted reference names), range (full or limited), transfer function (0 for SDR, 2 for PQ, which only appears with HDR-capable colorimetry) and colorimetry. Each timing lists the IDs it can carry (`ColorModes`). The LG offers 10-bit RGB with PQ at its own timing. The Lenovo at 3840 × 2160 over HDMI lists 8-bit RGB and no 10-bit RGB: its 10- and 12-bit entries at that timing are YCbCr. At 1920 × 1080 it lists 10-bit RGB. Entries marked "virtual" have no score and are not offered at the preferred timing.
+- **Which link color mode is in use is not in the registry**, and choosing one is not possible with a documented shape. SkyLight exports `SLSGetDisplayOutputModeCount`, `SLSGetDisplayOutputModeLinkDescriptions`, `SLSConfigureDisplayOutputMode` and `SLSSetDisplayOutputMode`, with no Objective-C wrapper and no permitted reference for their arguments. They were looked up and not called.
+- **Every window server mode reports a 30-bit pixel encoding** (`--RRRRRRRRRRGGGGGGGGGGBBBBBBBBBB`) on both monitors, while the depth field reads 8. The public interface reports 8 bits for every mode (v0.1 notes). Depth in the mode list therefore says nothing about the link.
+- **Dithering is reported as on for all five framebuffers**, the three without a display included. Reading it is public IOKit. CoreDisplay exports `CGXDisplayGetDither` and `CGXDisplaySetDither`, again with no documented arguments.
+- **The closed built-in panel's headroom is in the registry:** `EDRPotentialHeadroom` reads 16.0 (16.16 fixed point) on its backlight entries. That is the only fact about the XDR panel this desk gives with the lid closed.
+- **Reference presets** are offered through `MPDisplay` (`hasPresets`, `presets`, `activePreset`, `setActivePreset:`, all typed) and SkyLight's preset functions. Neither monitor has any. They exist on Apple's own displays and XDR panels.
+- **Night Shift and True Tone** are read through CoreBrightness's `CBBlueLightClient` and `CBTrueToneClient`, both typed. At 01:20 Night Shift was active (on its schedule) and not manually enabled. True Tone reads supported and enabled, and not available, because no display that has it is in use.
+- **Installed profiles:** 14 in the system folder (sRGB, Display P3, ITU-709, ITU-2020, AdobeRGB and the generic ones), 7 for all users, 4 in the displays folder (the monitors' own and the one v0.3's probe left), none for this user.
+- No custom profile is assigned anywhere, so the gamma-table backend still reports itself safe.
+
+### The writing checks, as prepared (`spikes/hdr-color-write-probe.swift`)
+
+Each one prints the state, makes one change, logs every reconfiguration callback, prints the state again, holds for 10 seconds, puts back what it recorded and checks it. Ctrl-C puts it back too.
+
+1. `hdr 5 --yes`: HDR on for the LG through the System Settings switch, and off again. Prints the window server's and System Settings' state, the headroom, the color space, the mode and the color table before, during and after.
+2. `profile 5 --yes`: `sRGB Profile.icc` as the LG's custom profile through public ColorSync, then the factory profile back (`kCFNull`, which the header documents as the reset). Prints the custom profiles, the profile in use and the color table.
+3. `nightshift --yes`: Night Shift off if it is on, and back. This is the rule "turn off only what it changed" seen from the system's side.
+
+**A link color mode change was not prepared**: no interface with a known shape can choose one, and a guessed call on the owner's monitor is not a check worth its risk. Reference presets need an Apple display.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:
@@ -881,9 +924,11 @@ swiftc -O spikes/override-probe.swift -o /tmp/override-probe && /tmp/override-pr
 swiftc -O spikes/virtual-display-probe.swift -o /tmp/virtual-display-probe && /tmp/virtual-display-probe
 swiftc -O spikes/override-write-probe.swift -o /tmp/override-write-probe          # writes: see its header
 swiftc -O spikes/virtual-display-write-probe.swift -o /tmp/virtual-display-write-probe  # creates a display: see its header
+swiftc -O spikes/hdr-color-probe.swift -o /tmp/hdr-color-probe && /tmp/hdr-color-probe
+swiftc -O spikes/hdr-color-write-probe.swift -o /tmp/hdr-color-write-probe            # writes: see its header
 ```
 
-The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header. `override-probe` and `virtual-display-probe` are read-only and create nothing. `override-write-probe.swift` writes a file as administrator and `virtual-display-write-probe.swift` creates a display: both are run only with the owner present, see their headers.
+The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header. `override-probe` and `virtual-display-probe` are read-only and create nothing. `override-write-probe.swift` writes a file as administrator and `virtual-display-write-probe.swift` creates a display: both are run only with the owner present, see their headers. `hdr-color-probe` is read-only, calls private interfaces only where their shape is known, and prints no serial number or UUID. `hdr-color-write-probe.swift` switches HDR, a color profile or Night Shift for a few seconds and puts it back: run only with the owner present.
 
 To list the display-related functions a system framework exports on a given macOS version:
 

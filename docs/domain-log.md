@@ -6,6 +6,18 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · v0.4 spikes: how macOS 27 exposes HDR and color, and two inventory rows that can only be read
+
+Read-only, on the M5 Pro (Mac17,9, macOS 27.2.1) with the Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, lid closed. The numbers are in the [feasibility notes](feasibility.md#24-november-2026--v04-hdr-and-color-spikes--apple-m5-pro-mac179--macos-2721-26b131).
+
+- **HDR has one switch, and it is System Settings' own.** The model System Settings uses for a display offers "HDR modes" and a "prefer HDR" switch whose shape the Objective-C runtime reports. The window server's own HDR query agrees with it on both monitors. The app switches HDR through that switch and reads it back through both. Only the LG offers HDR. The Lenovo has no HDR in its EDID.
+- **Headroom is public.** `NSScreen` gives the current, potential and reference headroom. With HDR off both monitors report 1.0, and the reference reads 0, which means "not reported". The built-in panel's registry entry says its potential headroom is 16, also with the lid closed.
+- **The link color modes can be listed and not chosen.** Each display's framebuffer entry in the I/O registry lists every combination of depth, pixel encoding, range and transfer function the link can carry, and which ones each timing allows. The one in use is not listed. SkyLight exports functions to choose an "output mode", and no permitted reference gives their arguments. **The inventory row "Link color mode" is built as a report in v0.4**, with the choice reserved behind a capability that is off. Guessing the arguments of a call that reconfigures the owner's monitor link is not worth the risk.
+- **GPU dithering can be read and not set**, for the same reason: the registry says it is on for every framebuffer, and CoreDisplay's setter has no documented shape. The row "GPU dithering" is built as a report with the switch reserved.
+- **Every window server mode reports a 30-bit pixel encoding**, while the public interface reports 8 bits for all of them. Neither tells what the link carries. A mode's depth stays out of the size strip.
+- **Night Shift and True Tone are global, not per display**, and their state can be read. At 01:20 Night Shift was on by its schedule. "Night Shift off in HDR" therefore has to remember whether it was on because of the schedule or by hand, and give back only what the app took.
+- **Nothing on this desk has reference presets or an XDR panel in use.** Both are built from their typed interfaces and unit-tested, and stay unproven on hardware.
+
 ## 24 November 2026 · Release 0.3.0: releases can be approved out of order, and removing the app leaves v0.3's files behind
 
 **Prepared as the second release, ad hoc signed like 0.2.0**, while 0.2.0's run still waits at Publish for approval. Two things about releases as a process, and one about uninstalling, came out of it.
