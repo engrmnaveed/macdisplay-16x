@@ -351,6 +351,13 @@ struct DetailView: View {
                 get: { card.keyboardControl },
                 set: { model.setKeyboardControl($0, tag: card.tag) }
             ))
+            if card.offersRestoreAfterWake {
+                Toggle("Put my values back after sleep", isOn: Binding(
+                    get: { card.restoreAfterWake },
+                    set: { model.setRestoreAfterWake($0, tag: card.tag) }
+                ))
+                .help("For a monitor that forgets its brightness, contrast or volume while it sleeps. Off: after wake, Display 16X reads the monitor and shows what it has.")
+            }
 
             HStack {
                 Text(card.identity).foregroundStyle(.secondary).textSelection(.enabled)

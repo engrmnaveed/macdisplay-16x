@@ -143,18 +143,25 @@ struct BrightnessTests {
         #expect(both.split(1.4) == both.split(1))
     }
 
-    @Test("Automatic restores stay above the floor, and keys cannot reach black unless allowed")
+    @Test("An automatic restore lifts software dimming to the floor and leaves hardware brightness as it was set")
     func safety() {
         let guarded = BrightnessSafety(restoreFloor: 0.15, allowBlackAtZero: false, zeroIsBlack: true)
-        #expect(guarded.clamp(0.02, origin: .restore) == 0.15)
-        #expect(guarded.clamp(0.02, origin: .startup) == 0.15)
-        #expect(guarded.clamp(0.4, origin: .restore) == 0.4)
+        // Software dimming covers the scale below 0.2 here.
+        #expect(guarded.clamp(0.02, origin: .restore, softwareRange: 0.2) == 0.15)
+        #expect(guarded.clamp(0.02, origin: .startup, softwareRange: 0.2) == 0.15)
+        #expect(guarded.clamp(0.18, origin: .restore, softwareRange: 0.2) == 0.18)
+        #expect(guarded.clamp(0.4, origin: .restore, softwareRange: 0.2) == 0.4)
+        // A floor above the software range lifts no further than the end of that range.
+        #expect(BrightnessSafety(restoreFloor: 0.5, allowBlackAtZero: false, zeroIsBlack: false).clamp(0.05, origin: .restore, softwareRange: 0.2) == 0.2)
+        // Without software dimming the whole scale is the monitor's own brightness.
+        #expect(guarded.clamp(0.02, origin: .restore) == 0.02)
+        #expect(guarded.clamp(0.02, origin: .startup) == 0.02)
         #expect(guarded.clamp(0, origin: .keyboard) == BrightnessSafety.interactiveMinimum)
         #expect(guarded.clamp(0, origin: .interface) > 0)
 
         let allowed = BrightnessSafety(restoreFloor: 0.15, allowBlackAtZero: true, zeroIsBlack: true)
         #expect(allowed.clamp(0, origin: .keyboard) == 0)
-        #expect(allowed.clamp(0, origin: .restore) == 0.15, "a restore never goes below the floor, whatever is allowed by hand")
+        #expect(allowed.clamp(0, origin: .restore, softwareRange: 0.2) == 0.15, "a restore never goes below the floor, whatever is allowed by hand")
 
         let notBlack = BrightnessSafety(restoreFloor: 0.15, allowBlackAtZero: false, zeroIsBlack: false)
         #expect(notBlack.clamp(0, origin: .keyboard) == 0)

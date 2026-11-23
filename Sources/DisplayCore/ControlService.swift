@@ -371,6 +371,81 @@ public final class ControlService {
         }
     }
 
+    // MARK: Asking the device after wake and reconnect
+
+    /// What the device says a control is at, next to what the app believes.
+    public enum DeviceReading: Sendable, Equatable {
+        /// The device holds the tracked value.
+        case same
+        /// The device holds another value, given on the normalized scale.
+        case differs(Double)
+        case unanswered
+    }
+
+    /// True between sleep and the end of the settle delay after wake.
+    public var isInWakeTransition: Bool { sequencer.isInWakeTransition }
+
+    /// Reads a control from the device and compares it with the tracked value, without
+    /// changing anything. A raw value read a moment ago, while the display was being
+    /// checked, stands in for the read.
+    public func compareWithDevice(_ control: ControlID, for tag: DisplayTag, knownRaw: Double? = nil) async -> DeviceReading {
+        guard registry.live[tag] != nil, let owner = owner(of: control, for: tag),
+              owner.capability.readability != .writeOnly else { return .unanswered }
+        let mapping = mapping(for: control, tag: tag, owner: owner)
+        let raw: Double
+        if let knownRaw {
+            raw = knownRaw
+        } else {
+            guard case .success(let reading) = await owner.controller.read(control, access: ControlAccess(codes: mapping.codeOverride)) else {
+                return .unanswered
+            }
+            raw = reading.value
+        }
+        let value: Double
+        if control == .mute {
+            guard let state = mapping.switchState(forRaw: raw) else { return .unanswered }
+            value = state ? 1 : 0
+        } else {
+            value = mapping.normalized(for: raw)
+        }
+        guard let tracked = settings.recordSettings(tag).values[control] else { return .differs(value) }
+        let same = control == .mute ? tracked == value : mapping.isSameRaw(tracked, value)
+        return same ? .same : .differs(value)
+    }
+
+    /// Takes the device's word for a control. The earlier value stops being the user's
+    /// choice, because the device evidently holds something else now.
+    public func adopt(_ control: ControlID, value: Double, for tag: DisplayTag) {
+        track(control, value: value, for: tag, origin: .outsideChange, trusted: true, endsChoice: true)
+    }
+
+    // MARK: The restore floor
+
+    /// The lowest software level an automatic restore leaves a display at. The floor is a
+    /// level on the brightness scale, and below the switchover that scale is the software part.
+    public func softwareRestoreFloor(for tag: DisplayTag) -> Double {
+        let composition = composition(for: tag)
+        guard composition.hasSoftware, composition.switchover > 0 else { return 0 }
+        return (settings.effective(tag).restoreFloor / composition.switchover).clamped(to: 0...1)
+    }
+
+    /// True when software dimming was left darker than an automatic restore may bring back.
+    public func isSoftwareBelowRestoreFloor(_ tag: DisplayTag) -> Bool {
+        guard registry.live[tag] != nil, owner(of: .softwareBrightness, for: tag) != nil,
+              let level = settings.recordSettings(tag).values[.softwareBrightness] else { return false }
+        return level < softwareRestoreFloor(for: tag) - 0.000_5
+    }
+
+    /// Lifts software dimming to the restore floor when the user returns to a display that
+    /// was left below it, so nobody comes back to a picture too dark to read. Returns true
+    /// when the level was raised.
+    @discardableResult
+    public func liftSoftwareToRestoreFloor(for tag: DisplayTag) async -> Bool {
+        guard isSoftwareBelowRestoreFloor(tag) else { return false }
+        let result = await write(.softwareBrightness, value: softwareRestoreFloor(for: tag), for: tag, origin: .restore, verification: .none)
+        return result.outcome != .failed
+    }
+
     // MARK: Composite brightness
 
     private func safety(for tag: DisplayTag, composition: BrightnessComposition) -> BrightnessSafety {
@@ -391,7 +466,8 @@ public final class ControlService {
         guard composition.isAvailable else {
             return .failed(availability(of: .brightness, for: tag).reason ?? ControlFailure.unsupported.reason)
         }
-        let target = safety(for: tag, composition: composition).clamp(composite, origin: origin)
+        let target = safety(for: tag, composition: composition)
+            .clamp(composite, origin: origin, softwareRange: composition.hasSoftware ? composition.switchover : nil)
         let parts = composition.split(target)
         let values = settings.recordSettings(tag).values
         // While dragging or stepping, a part that would not change on the device is not resent.

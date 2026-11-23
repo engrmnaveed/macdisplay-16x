@@ -37,6 +37,9 @@ final class PanelModel: ObservableObject {
         var identity: String = ""
         var notes: [String] = []
         var keyboardControl = true
+        /// Offered only where the monitor has controls of its own to put back.
+        var offersRestoreAfterWake = false
+        var restoreAfterWake = false
 
         var id: DisplayTag { tag }
     }
@@ -89,6 +92,7 @@ final class PanelModel: ObservableObject {
         for card in cards {
             var features: [FeatureID] = []
             if card.brightness.isAvailable { features.append(.brightness) }
+            if card.contrast.isAvailable { features.append(.contrast) }
             if card.volume.isAvailable { features.append(contentsOf: [.volume, .mute]) }
             guard !features.isEmpty else { continue }
             let wanted = features
@@ -160,6 +164,11 @@ final class PanelModel: ObservableObject {
             if case .unavailable(let reason) = context.modes.rotationAvailability(for: tag) { card.rotationReason = reason }
             card.pending = context.modes.pending[tag]
             card.keyboardControl = document.effectiveSettings(for: tag).keyboardControl
+            card.restoreAfterWake = document.effectiveSettings(for: tag).restoreAfterWake
+            card.offersRestoreAfterWake = [ControlID.hardwareBrightness, .contrast, .volume].contains {
+                guard let owner = context.controls.owner(of: $0, for: tag) else { return false }
+                return owner.kind != .softwareGamma
+            }
 
             let composition = context.controls.composition(for: tag)
             if composition.hasSoftware && composition.hasHardware {
@@ -262,6 +271,14 @@ final class PanelModel: ObservableObject {
 
     func setKeyboardControl(_ enabled: Bool, tag: DisplayTag) {
         context.settings.updateRecord(tag) { $0.display.keyboardControl = enabled }
+        rebuild()
+    }
+
+    /// For a monitor that forgets its values in standby. Off, the app reads the monitor
+    /// after wake and takes its word.
+    func setRestoreAfterWake(_ enabled: Bool, tag: DisplayTag) {
+        Log.app.info("Restore after wake switched \(enabled ? "on" : "off") for \(tag) from the panel.")
+        context.settings.updateRecord(tag) { $0.display.restoreAfterWake = enabled }
         rebuild()
     }
 

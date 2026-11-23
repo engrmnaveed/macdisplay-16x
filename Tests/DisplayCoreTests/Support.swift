@@ -101,6 +101,7 @@ final class FakeController: DisplayController, @unchecked Sendable {
     private var _choiceQueries = 0
     private var _deafControls: Set<ControlID> = []
     private var _unanswered: Set<ControlID> = []
+    private var _reads: [ControlID] = []
     private var _onWrite: (@Sendable (ControlID) -> Void)?
 
     /// Called for every write that reaches the device, to check the order of things.
@@ -189,8 +190,14 @@ final class FakeController: DisplayController, @unchecked Sendable {
         }
     }
 
+    /// Every single read that reached the device, in order. A check of the whole display
+    /// does not count.
+    var reads: [ControlID] { lock.withLock { _reads } }
+    func clearReads() { lock.withLock { _reads.removeAll() } }
+
     func read(_ control: ControlID, access: ControlAccess) async -> Result<RawReading, ControlFailure> {
         lock.withLock {
+            _reads.append(control)
             if _failReads { return .failure(.noReply) }
             guard let value = _values[control] else { return .failure(.unsupported) }
             return .success(RawReading(value: value, maximum: _capabilities[control]?.rawMaximum))

@@ -99,16 +99,16 @@ public final class DisplayCoordinator {
             reapplyColorTables(after: "a display reconfiguration")
         case .wakeSettled:
             refreshTopology(trigger: .reconnect)
-            reapplyColorTables(after: "wake")
+            reapplyColorTables(after: "wake", userReturned: true)
             // A monitor that was silent when it was last probed may have been in standby.
-            // Its probe ends with its own restore.
+            // Its probe ends with its own look at the monitor's values.
             redetectStale(trigger: .wake, minimumAge: 0)
             Task { @MainActor [reconciler] in await reconciler.restoreAll(trigger: .wake) }
         case .screenUnlocked:
             // The login window hands the displays back with the system's own color tables.
-            reapplyColorTables(after: "unlock")
+            reapplyColorTables(after: "unlock", userReturned: true)
         case .sessionActive:
-            reapplyColorTables(after: "the session's return")
+            reapplyColorTables(after: "the session's return", userReturned: true)
         default:
             break
         }
@@ -255,6 +255,9 @@ public final class DisplayCoordinator {
         guard let live = registry.live[tag] else { return }
         live.isDetecting = true
         live.needsRedetection = false
+        // What each control's owner reported while being checked. The reconciler compares
+        // these with the tracked values, so the monitor is not asked a second time.
+        var readings: [ControlID: Double] = [:]
         for kind in [ControllerKind.appleNative, .ddc, .softwareGamma] {
             guard let controller = live.controllers[kind] else { continue }
             let detection = await controller.detect()
@@ -290,6 +293,11 @@ public final class DisplayCoordinator {
                 record.controllers[kind] = configuration
             }
             seed(detection, kind: kind, tag: tag, trigger: trigger)
+            if kind != .softwareGamma {
+                for (control, raw) in detection.currentRaw where control != .input && controls.owner(of: control, for: tag)?.kind == kind {
+                    readings[control] = raw
+                }
+            }
             if kind == .ddc {
                 Log.core.info("DDC on \(tag): \(detection.outcome.rawValue), controls \(capabilities.keys.map(\.rawValue).sorted().joined(separator: " "))\(detection.notes.isEmpty ? "" : ", notes: " + detection.notes.joined(separator: "; ")).")
             }
@@ -304,7 +312,7 @@ public final class DisplayCoordinator {
         bus.publish(.controllersReady(tag))
         await learnInputs(tag, live: live)
         await modes.recoverUnconfirmed(tag)
-        await reconciler.displayReady(tag, trigger: trigger)
+        await reconciler.displayReady(tag, trigger: trigger, readings: readings)
     }
 
     /// Asks a monitor once which inputs it has, and builds its input list from the answer.
@@ -376,12 +384,27 @@ public final class DisplayCoordinator {
     /// The system resets color tables on reconfiguration, wake and unlock, so ours are
     /// written again, blindly, because a reset cannot be read back. This is an automatic
     /// write and passes the gate.
-    private func reapplyColorTables(after occasion: String, followUps: Bool = true) {
+    ///
+    /// `userReturned` marks the moments someone comes back to the screen: wake, unlock and
+    /// the return of their session. Software dimming left below the restore floor is lifted
+    /// to it then. A rewrite during a session writes the table as it was.
+    private func reapplyColorTables(after occasion: String, followUps: Bool = true, userReturned: Bool = false) {
         guard gate.check(.restore) == .allowed else { return }
         var written: [DisplayTag] = []
         for tag in registry.live.keys.sorted() {
             guard let live = registry.live[tag], let pipeline = live.pipeline else { continue }
             pipeline.rebind(to: live.systemID)
+            if userReturned, controls.isSoftwareBelowRestoreFloor(tag) {
+                // Writing the lifted level is also the rewrite, so the darker table is not
+                // put back first.
+                written.append(tag)
+                Task { @MainActor [controls] in
+                    if await controls.liftSoftwareToRestoreFloor(for: tag) {
+                        Log.core.info("Software dimming on \(tag) was below the restore floor and was lifted to it after \(occasion).")
+                    }
+                }
+                continue
+            }
             switch pipeline.reapply() {
             case .nothingToWrite:
                 break

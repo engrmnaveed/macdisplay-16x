@@ -16,6 +16,9 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
     public var restoreFloor: Double?
     public var restorePolicy: RestorePolicy?
     public var wakeRestoreDelay: Double?
+    /// For a monitor that forgets its values in standby. After wake and on reconnect the
+    /// app then puts back a value the user chose and the monitor no longer has.
+    public var restoreAfterWake: Bool?
     // Keys and indicator
     public var keyboardControl: Bool?
     public var showIndicator: Bool?
@@ -43,6 +46,7 @@ public struct DisplaySettings: Codable, Sendable, Equatable {
         result.restoreFloor = restoreFloor ?? fallback.restoreFloor
         result.restorePolicy = restorePolicy ?? fallback.restorePolicy
         result.wakeRestoreDelay = wakeRestoreDelay ?? fallback.wakeRestoreDelay
+        result.restoreAfterWake = restoreAfterWake ?? fallback.restoreAfterWake
         result.keyboardControl = keyboardControl ?? fallback.keyboardControl
         result.showIndicator = showIndicator ?? fallback.showIndicator
         result.allowDDCOnAppleDisplay = allowDDCOnAppleDisplay ?? fallback.allowDDCOnAppleDisplay
@@ -110,6 +114,8 @@ public enum SettingsDefaults {
     public static let restoreFloor = 0.15
     public static let restorePolicy = RestorePolicy.all
     public static let wakeRestoreDelay = 0.0
+    /// Off: after wake and on reconnect the app reads the monitor and takes its word.
+    public static let restoreAfterWake = false
     public static let keyboardControl = true
     public static let showIndicator = true
     public static let allowDDCOnAppleDisplay = false
@@ -140,6 +146,7 @@ public struct EffectiveDisplaySettings: Sendable, Equatable {
     public var restoreFloor = SettingsDefaults.restoreFloor
     public var restorePolicy = SettingsDefaults.restorePolicy
     public var wakeRestoreDelay = SettingsDefaults.wakeRestoreDelay
+    public var restoreAfterWake = SettingsDefaults.restoreAfterWake
     public var keyboardControl = SettingsDefaults.keyboardControl
     public var showIndicator = SettingsDefaults.showIndicator
     public var allowDDCOnAppleDisplay = SettingsDefaults.allowDDCOnAppleDisplay
@@ -161,6 +168,7 @@ public struct EffectiveDisplaySettings: Sendable, Equatable {
         restoreFloor = layered.restoreFloor ?? SettingsDefaults.restoreFloor
         restorePolicy = layered.restorePolicy ?? SettingsDefaults.restorePolicy
         wakeRestoreDelay = layered.wakeRestoreDelay ?? SettingsDefaults.wakeRestoreDelay
+        restoreAfterWake = layered.restoreAfterWake ?? SettingsDefaults.restoreAfterWake
         keyboardControl = layered.keyboardControl ?? SettingsDefaults.keyboardControl
         showIndicator = (global.showIndicator ?? true) && (layered.showIndicator ?? SettingsDefaults.showIndicator)
         allowDDCOnAppleDisplay = layered.allowDDCOnAppleDisplay ?? SettingsDefaults.allowDDCOnAppleDisplay

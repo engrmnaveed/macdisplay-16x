@@ -445,7 +445,8 @@ public enum StartupPolicy: String, Codable, Sendable, CaseIterable {
     case readDevice
 }
 
-/// What is restored automatically at start, after wake and on reconnect.
+/// Which values an automatic restore may write, at start and where restore after wake is
+/// switched on. Reading the monitor and taking its word is not a restore and always happens.
 public enum RestorePolicy: String, Codable, Sendable, CaseIterable {
     case all
     case allButBrightness

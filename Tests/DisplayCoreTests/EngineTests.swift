@@ -401,16 +401,24 @@ struct CommandEngineTests {
         #expect(ddc.values[.hardwareBrightness] == 50)
     }
 
-    @Test("A restore never goes below the floor")
+    @Test("A restore puts hardware brightness back exactly, and lifts only software dimming to the floor")
     func restoreFloor() async {
         let rig = Rig()
         let ddc = rig.plug(Fixture.lenovo())!
         await rig.start()
         let result = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.02), origin: .restore)
-        #expect(result.entries.first?.actual == .number(0.15))
-        #expect(ddc.values[.hardwareBrightness] == 15)
-        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.02), origin: .interface)
-        #expect(ddc.values[.hardwareBrightness] == 2)
+        #expect(result.entries.first?.actual == .number(0.02))
+        #expect(ddc.values[.hardwareBrightness] == 2, "the monitor's own low level is still a readable picture")
+
+        let dimming = Rig { $0.global.colorTablesEnabled = true }
+        let monitor = dimming.plug(Fixture.lenovo())!
+        await dimming.start()
+        let lifted = await dimming.run(.set, .brightness, on: .tag(1), value: .absolute(0.02), origin: .restore)
+        #expect(lifted.entries.first?.actual == .number(0.15))
+        #expect(monitor.values[.hardwareBrightness] == 0)
+        #expect(dimming.controls.trackedValue(.softwareBrightness, for: DisplayTag(1))?.isClose(to: 0.75) == true)
+        _ = await dimming.run(.set, .brightness, on: .tag(1), value: .absolute(0.02), origin: .interface)
+        #expect(dimming.controls.trackedValue(.softwareBrightness, for: DisplayTag(1))?.isClose(to: 0.1) == true, "by hand the whole range is there")
     }
 
     @Test("A value set on a remembered display is queued and applied when it returns")

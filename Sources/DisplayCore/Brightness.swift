@@ -69,7 +69,8 @@ public struct BrightnessComposition: Sendable, Equatable {
 
 /// Floors that keep a display usable whatever asked for the change.
 public struct BrightnessSafety: Sendable, Equatable {
-    /// Automatic restores never go below this composite level.
+    /// An automatic restore never takes software dimming below this level on the composite
+    /// scale. Hardware brightness is restored exactly as it was set.
     public var restoreFloor: Double
     /// Whether zero may turn the image fully black.
     public var allowBlackAtZero: Bool
@@ -85,11 +86,16 @@ public struct BrightnessSafety: Sendable, Equatable {
     /// The smallest step above black that keys can land on.
     public static let interactiveMinimum = 1.0 / 64.0
 
-    public func clamp(_ composite: Double, origin: ChangeOrigin) -> Double {
+    /// `softwareRange` is where software dimming ends on the composite scale, or nil for a
+    /// display without it.
+    public func clamp(_ composite: Double, origin: ChangeOrigin, softwareRange: Double? = nil) -> Double {
         let value = composite.clamped(to: 0...1)
         switch origin {
         case .restore, .startup, .sync:
-            return max(value, restoreFloor)
+            // Only software dimming can leave a picture too dark to read, and only that
+            // part is lifted. A monitor's own lowest brightness is still a readable picture.
+            guard let softwareRange, value < softwareRange else { return value }
+            return max(value, min(restoreFloor, softwareRange))
         case .keyboard:
             return zeroIsBlack && !allowBlackAtZero ? max(value, BrightnessSafety.interactiveMinimum) : value
         case .interface, .command, .outsideChange:
