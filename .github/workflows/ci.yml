@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The release workflow runs the same checks before it signs anything.
+  workflow_call:
 
 permissions:
   contents: read
@@ -19,7 +21,9 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Toolchain
         run: |
@@ -43,8 +47,42 @@ jobs:
         timeout-minutes: 3
         run: scripts/smoke-test.sh
 
+      - name: One version everywhere
+        run: scripts/check-version.sh
+
+      # Notarization needs the hardened runtime. Looks at no display.
+      - name: Private interfaces under the hardened runtime
+        timeout-minutes: 3
+        run: scripts/check-hardened-runtime.sh
+
       # What a Mac with no monitor of its own reports. Read-only, and useful when a
       # macOS release changes an interface the app resolves at run time.
       - name: Hardware report on the runner
         timeout-minutes: 3
         run: dist/display16x probe
+
+      - name: Release archive
+        run: |
+          archive="$(scripts/archive-macos.sh)"
+          (cd dist && shasum -a 256 -c "$(basename "$archive").sha256")
+          # Homebrew unpacks with unzip. The signature has to survive that.
+          unpacked="$(mktemp -d "$RUNNER_TEMP/display16x-unzip.XXXXXX")"
+          unzip -qq "$archive" -d "$unpacked"
+          codesign --verify --strict --verbose=2 "$unpacked/Display 16X.app"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      - name: Homebrew cask
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_ANALYTICS: '1'
+          HOMEBREW_NO_ENV_HINTS: '1'
+        run: |
+          read -r digest _ < "$ARCHIVE.sha256"
+          brew tap-new --no-git local/display16x-ci
+          tap="$(brew --repository local/display16x-ci)"
+          mkdir -p "$tap/Casks"
+          for signing in developer-id certificate adhoc; do
+            echo "Cask for a release signed with: $signing"
+            scripts/render-cask "$(cat scripts/release-version)" "$digest" "$signing" > "$tap/Casks/display16x.rb"
+            brew style local/display16x-ci/display16x
+          done

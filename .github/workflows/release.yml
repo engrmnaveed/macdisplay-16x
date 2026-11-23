@@ -1,0 +1,294 @@
+name: Release
+
+# Pushing a tag vX.Y.Z that matches scripts/release-version builds, signs and publishes
+# that version. docs/release.md is the runbook.
+
+on:
+  push:
+    tags: ['v[0-9]*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Tag matches scripts/release-version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The tag, the version file and the changelog agree
+        run: |
+          version="$(cat scripts/release-version)"
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::The tag $GITHUB_REF_NAME does not match scripts/release-version ($version). Tag v$version instead."
+            exit 1
+          fi
+          if ! grep -qx "## $version" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section."
+            exit 1
+          fi
+
+  checks:
+    name: Same checks as CI
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Package, sign and archive
+    needs: checks
+    runs-on: macos-latest
+    timeout-minutes: 45
+    # Holds the signing secrets. The level follows from which secrets exist, see
+    # docs/release.md: Developer ID with notarization, the project certificate, or ad hoc.
+    environment: release-signing
+    outputs:
+      signing: ${{ steps.sign.outputs.signing }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The build number is the commit count, so the whole history is needed.
+          fetch-depth: 0
+
+      - name: Full history for the build number
+        run: |
+          if [[ "$(git rev-parse --is-shallow-repository)" != false ]]; then
+            echo "::error::The checkout is shallow, so the build number would be wrong."
+            exit 1
+          fi
+          echo "Build number: $(git rev-list --count HEAD)"
+
+      - name: Package, sign and archive
+        id: sign
+        env:
+          MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [[ -z "$MACOS_CERTIFICATE_BASE64" ]]; then
+            if [[ -n "$APPLE_API_KEY_BASE64" ]]; then
+              echo "::error::The notary key is set but there is no certificate to sign with. Set MACOS_CERTIFICATE_BASE64, or remove APPLE_API_KEY_BASE64."
+              exit 1
+            fi
+            signing=adhoc
+          elif [[ -n "$APPLE_API_KEY_BASE64" ]]; then
+            signing=developer-id
+          else
+            signing=certificate
+          fi
+          echo "Signing level: $signing"
+
+          umask 077
+          signing_dir="$(mktemp -d "$RUNNER_TEMP/display16x-signing.XXXXXX")"
+          keychain="$signing_dir/release.keychain-db"
+          cleanup() {
+            security delete-keychain "$keychain" 2>/dev/null || true
+            rm -rf "$signing_dir"
+          }
+          trap cleanup EXIT
+
+          if [[ "$signing" != adhoc ]]; then
+            : "${MACOS_CERTIFICATE_PASSWORD:?Missing MACOS_CERTIFICATE_PASSWORD for the certificate.}"
+            : "${MACOS_SIGN_IDENTITY:?Missing MACOS_SIGN_IDENTITY, the certificate identity to sign with.}"
+            certificate="$signing_dir/certificate.p12"
+            printf '%s' "$MACOS_CERTIFICATE_BASE64" | base64 --decode > "$certificate"
+            keychain_password="$(openssl rand -hex 32)"
+            security create-keychain -p "$keychain_password" "$keychain"
+            security set-keychain-settings -lut 3600 "$keychain"
+            security unlock-keychain -p "$keychain_password" "$keychain"
+            security import "$certificate" -P "$MACOS_CERTIFICATE_PASSWORD" \
+              -T /usr/bin/codesign -f pkcs12 -k "$keychain"
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+            security list-keychains -d user -s "$keychain"
+            rm -f "$certificate"
+          fi
+          unset MACOS_CERTIFICATE_BASE64 MACOS_CERTIFICATE_PASSWORD
+
+          case "$signing" in
+            developer-id)
+              if [[ "$MACOS_SIGN_IDENTITY" != "Developer ID Application: "* ]]; then
+                echo "::error::Notarization needs a Developer ID Application identity in MACOS_SIGN_IDENTITY. For a project certificate, remove the APPLE_API_KEY secrets."
+                exit 1
+              fi
+              : "${APPLE_API_KEY_ID:?Missing APPLE_API_KEY_ID.}"
+              : "${APPLE_API_ISSUER:?Missing APPLE_API_ISSUER.}"
+              export APPLE_API_KEY_PATH="$signing_dir/AuthKey_$APPLE_API_KEY_ID.p8"
+              printf '%s' "$APPLE_API_KEY_BASE64" | base64 --decode > "$APPLE_API_KEY_PATH"
+              unset APPLE_API_KEY_BASE64
+              scripts/package-macos.sh
+              # Signs a copy with the hardened runtime, checks the private interfaces
+              # still resolve, notarizes, staples and archives it.
+              archive="$(scripts/notarize-macos.sh)"
+              ;;
+            certificate)
+              DISPLAY16X_SIGN_IDENTITY="$MACOS_SIGN_IDENTITY" DISPLAY16X_SIGN_KEYCHAIN="$keychain" \
+                scripts/package-macos.sh
+              archive="$(scripts/archive-macos.sh)"
+              ;;
+            adhoc)
+              echo "::warning::No signing certificate is set, so this release is ad hoc signed. Users will have to grant Accessibility again after the update."
+              scripts/package-macos.sh
+              archive="$(scripts/archive-macos.sh)"
+              ;;
+          esac
+          (cd dist && shasum -a 256 -c "$(basename "$archive").sha256")
+          echo "signing=$signing" >> "$GITHUB_OUTPUT"
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+          echo "SIGNING=$signing" >> "$GITHUB_ENV"
+
+      - name: Check the archive as Homebrew unpacks it
+        run: |
+          unpacked="$(mktemp -d "$RUNNER_TEMP/display16x-unzip.XXXXXX")"
+          unzip -qq "$ARCHIVE" -d "$unpacked"
+          app="$unpacked/Display 16X.app"
+          codesign --verify --strict --verbose=2 "$app"
+          scripts/check-version.sh "$app"
+          if [[ "$SIGNING" == developer-id ]]; then
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose "$app"
+          fi
+          requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => //p')"
+          echo "REQUIREMENT=$requirement" >> "$GITHUB_ENV"
+          echo "UNPACKED_APP=$app" >> "$GITHUB_ENV"
+          {
+            echo "### Display 16X $GITHUB_REF_NAME"
+            echo
+            echo "- Signing level: \`$SIGNING\`"
+            echo "- Designated requirement: \`$requirement\`"
+            echo "- SHA-256: \`$(cut -d ' ' -f 1 "$ARCHIVE.sha256")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The Accessibility grant and Homebrew's first-launch approval both follow the
+      # designated requirement. Say so before publishing when this release breaks them.
+      - name: Same signer as the last release
+        run: |
+          previous="$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')"
+          if [[ -z "$previous" || "$previous" == "$GITHUB_REF_NAME" ]]; then
+            echo "No earlier release to compare with."
+            exit 0
+          fi
+          old="$(mktemp -d "$RUNNER_TEMP/display16x-previous.XXXXXX")"
+          gh release download "$previous" --pattern 'display16x-*-macos-arm64.zip' --dir "$old"
+          unzip -qq "$old"/display16x-*-macos-arm64.zip -d "$old/app"
+          old_requirement="$(codesign -d -r- "$old/app/Display 16X.app" 2>&1 | sed -n 's/^designated => //p')"
+          if [[ "$old_requirement" == cdhash* ]]; then
+            echo "$previous was ad hoc signed, so its users grant Accessibility again with this update in any case."
+          elif codesign --verify -R="$old_requirement" "$UNPACKED_APP"; then
+            echo "This release satisfies the designated requirement of $previous. The Accessibility grant and Homebrew's approval carry over."
+          else
+            message="This release does not satisfy the designated requirement of $previous ($old_requirement). Users will have to grant Accessibility again, and Homebrew will not carry their first-launch approval over."
+            echo "::warning::$message"
+            echo "- **Signer changed:** $message" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: display16x-macos-arm64
+          path: |
+            dist/display16x-*-macos-arm64.zip
+            dist/display16x-*-macos-arm64.zip.sha256
+            dist/macos-notary-log.json
+          if-no-files-found: error
+
+  publish:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Give this environment a required reviewer, so a tag push alone cannot publish. The
+    # signed archive can be downloaded from this run before approving.
+    environment: release
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SIGNING: ${{ needs.build.outputs.signing }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Collect and verify the signed archive
+        run: |
+          if [[ -z "$SIGNING" ]]; then
+            echo "::error::The build job did not say how it signed the app."
+            exit 1
+          fi
+          version="$(cat scripts/release-version)"
+          app="display16x-$version-macos-arm64.zip"
+          downloads="$RUNNER_TEMP/display16x-build"
+          release="$RUNNER_TEMP/display16x-release"
+          mkdir -p "$release"
+          gh run download "$GITHUB_RUN_ID" --repo "$GH_REPO" --name display16x-macos-arm64 --dir "$downloads"
+          (cd "$downloads" && sha256sum -c "$app.sha256")
+          cp "$downloads/$app" "$downloads/$app.sha256" "$release/"
+          read -r app_digest _ < "$release/$app.sha256"
+          scripts/render-cask "$version" "$app_digest" "$SIGNING" > "$release/display16x.rb"
+          # The version's CHANGELOG.md section, then the text every release carries.
+          scripts/release-notes "$version" "$SIGNING" > "$RUNNER_TEMP/release-notes.md"
+          echo "RELEASE_DIR=$release" >> "$GITHUB_ENV"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ env.RELEASE_DIR }}/display16x-*-macos-arm64.zip
+
+      - name: Publish the release
+        run: |
+          cd "$RELEASE_DIR"
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "Display 16X $GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
+            display16x-*-macos-arm64.zip display16x-*-macos-arm64.zip.sha256 \
+            display16x.rb
+
+      - name: Update the Homebrew tap
+        env:
+          # A write deploy key for the tap repository only. Without it, publish display16x.rb by hand.
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          TAP_REPO: engrmnaveed/homebrew-tap
+        run: |
+          if [[ -z "$HOMEBREW_TAP_DEPLOY_KEY" ]]; then
+            echo "::notice::HOMEBREW_TAP_DEPLOY_KEY is not set. Commit display16x.rb from the release to $TAP_REPO/Casks by hand."
+            exit 0
+          fi
+          umask 077
+          ssh_dir="$(mktemp -d "$RUNNER_TEMP/display16x-tap-ssh.XXXXXX")"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" > "$ssh_dir/key"
+          unset HOMEBREW_TAP_DEPLOY_KEY
+          # GitHub's published Ed25519 host key.
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
+
+          tap="$ssh_dir/tap"
+          git clone --depth 1 "git@github.com:$TAP_REPO.git" "$tap"
+          mkdir -p "$tap/Casks"
+          cp "$RELEASE_DIR/display16x.rb" "$tap/Casks/display16x.rb"
+          cd "$tap"
+          git add Casks/display16x.rb
+          if git diff --cached --quiet; then
+            echo "The tap already has this cask."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898283+github-actions[bot]@users.noreply.github.com' \
+            commit -m "display16x ${GITHUB_REF_NAME#v}"
+          git push origin HEAD
