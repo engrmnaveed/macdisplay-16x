@@ -57,7 +57,12 @@ func classify(_ reply: [UInt8], status: IOReturn, code: UInt8) -> Reply {
     return reply[3] == 0x01 ? .unsupported : .answer
 }
 
+/// Replies that named another code than the one asked for: which query, and which code.
+nonisolated(unsafe) var strays: [String] = []
+nonisolated(unsafe) var queryIndex = 0
+
 func query(_ av: CFTypeRef, code: UInt8, repeats: Int) -> Reply {
+    queryIndex += 1
     var request: [UInt8] = [0x82, 0x01, code, 0]
     request[3] = 0x6E ^ 0x51 ^ request[0] ^ request[1] ^ request[2]
     var status: IOReturn = 0
@@ -69,7 +74,11 @@ func query(_ av: CFTypeRef, code: UInt8, repeats: Int) -> Reply {
     usleep(40_000)
     var reply = [UInt8](repeating: 0, count: 11)
     let readStatus = avRead(av, 0x37, 0x51, &reply, UInt32(reply.count))
-    return classify(reply, status: readStatus, code: code)
+    let kind = classify(reply, status: readStatus, code: code)
+    if kind == .otherCode {
+        strays.append("query \(queryIndex) asked 0x\(String(code, radix: 16)), reply names 0x\(String(reply[4], radix: 16))")
+    }
+    return kind
 }
 
 func summary(_ counts: [Reply: Int]) -> String {
@@ -88,6 +97,8 @@ while case let service = IOIteratorNext(iterator), service != 0 {
     guard avEDID(av, &data) == 0, let edid = data.map({ [UInt8]($0.takeRetainedValue() as Data) }), edid.count >= 128 else { continue }
     let name = monitorName(edid)
     let started = DispatchTime.now().uptimeNanoseconds
+    strays = []
+    queryIndex = 0
 
     var single: [Reply: Int] = [:]
     for _ in 0..<perPass {
@@ -117,4 +128,5 @@ while case let service = IOIteratorNext(iterator), service != 0 {
     for entry in codes {
         print("    \(entry.name): \(summary(perCode[entry.name] ?? [:]))")
     }
+    for stray in strays { print("  \(stray)") }
 }

@@ -95,6 +95,26 @@ Capabilities strings, read with `display16x probe --capabilities`:
 
 What the DDC code does with this: every query is sent twice, the null message and uniform filler count as "no reply" and are retried, and a reply with a garbled header is accepted when its checksum matches the standard frame. A reply whose checksum cannot be made to match is read twice and has to agree with itself. All of the captures above are unit-test fixtures.
 
+### With and without other display utilities (09:31 to 09:37)
+
+Every DDC number above was taken with BetterDisplay running. For this check the owner quit BetterDisplay and the earlier prototype. `spikes/ddc-reliability-probe.swift` is read-only and sends each monitor 120 queries: brightness 40 times with a single query, 40 times with the query sent twice, and the five codes the app uses in turn, 40 queries, each sent twice.
+
+| Who else was running | Lenovo P32p-20 | LG SDQHD |
+| --- | --- | --- |
+| BetterDisplay, the prototype and Display 16X (one run) | Single 40 of 40. Twice 40 of 40. Five codes 40 of 40 | Single 0 of 40, all null messages. Twice 40 of 40. Five codes 40 of 40 |
+| Display 16X alone (one run) | Single 36 of 40, and 4 replies that named another question. Twice 40 of 40. Five codes 40 of 40 | Single 0 of 40. Twice 40 of 40. Five codes 40 of 40 |
+| Nothing else at all (two runs) | Single 80 of 80. Twice 80 of 80. Five codes 80 of 80 | Single 0 of 80. Twice 80 of 80. Five codes 80 of 80 |
+
+On the Lenovo, "answered" for the mute code means the proper "unsupported" reply, 8 of 8 in every run.
+
+- **The LG refusing a single query is the monitor's own behavior.** It did so 160 times out of 160 with nothing else on the channel. Sending the query twice is needed for this monitor whoever else is running.
+- **With the query sent twice, no reply was lost in any run**: 320 queries per monitor, with and without the other utilities.
+- **Other utilities sitting idle cost nothing.** The run with both of them running is identical to the runs with nothing running. So the numbers taken earlier with BetterDisplay running stand.
+- **A program that is reading at that moment does cost replies.** The only strays in these runs came while Display 16X itself was running: 4 single-query replies on the Lenovo named another question. The app does not log its reads, and the probe did not yet say which question, so the source is not proven. The panel being opened during the run would explain it.
+- **Reading all five codes takes about half a second per monitor** on the quiet channel, through `display16x probe`: 507 ms for the Lenovo, 461 ms for the LG.
+
+Display 16X was quit for the two runs with nothing else running, and started again afterwards from the same build. At that start both monitors were read, every value matched, and nothing was written. The Accessibility grant was still in place.
+
 ### DDC writes
 
 `spikes/ddc-write-probe.swift` sweeps brightness 8 to 10 steps away and back, reads the value at the far end and at the end, and restores the original.
@@ -387,7 +407,7 @@ Three things the toolchain does not do on its own, each worked around in the rep
 
 ### Where v0.1 Core stands at the end of 23 November
 
-Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, one rotation with the revert on its own, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
+Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, one rotation with the revert on its own, DDC replies with and without other display utilities, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
 
 Built and unit-tested, and not run on hardware:
 
@@ -400,7 +420,6 @@ Not measured:
 
 - A full system sleep, as opposed to a display sleep.
 - Unplugging a cable and moving a monitor to another port, to see whether the system UUID stays.
-- DDC with no other display utility running. Every number here was taken with one running.
 - Any Mac other than the M5 Pro, in particular the MacBook Air M1 the PRD sets the budgets for.
 
 ## Running the probes
@@ -419,6 +438,7 @@ swiftc -O spikes/ddc-probe.swift -o /tmp/ddc-probe && /tmp/ddc-probe
 swiftc -O spikes/ddc-wake-probe.swift -o /tmp/ddc-wake-probe && /tmp/ddc-wake-probe
 swiftc -O spikes/gamma-table-write-probe.swift -o /tmp/gamma-probe && /tmp/gamma-probe
 swiftc -O spikes/ddc-write-probe.swift -o /tmp/ddc-write-probe && /tmp/ddc-write-probe "P32p"
+swiftc -O spikes/ddc-reliability-probe.swift -o /tmp/ddc-reliability-probe && /tmp/ddc-reliability-probe
 ```
 
 The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back.
