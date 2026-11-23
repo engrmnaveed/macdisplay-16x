@@ -453,6 +453,12 @@ struct CommandEngineTests {
         #expect(dimming.controls.trackedValue(.softwareBrightness, for: DisplayTag(1))?.isClose(to: 0.75) == true)
         _ = await dimming.run(.set, .brightness, on: .tag(1), value: .absolute(0.02), origin: .interface)
         #expect(dimming.controls.trackedValue(.softwareBrightness, for: DisplayTag(1))?.isClose(to: 0.1) == true, "by hand the whole range is there")
+
+        // The floor is for someone coming back. Well into a session a restore writes the
+        // level as it was set.
+        dimming.scheduler.advance(by: 120)
+        let later = await dimming.run(.set, .brightness, on: .tag(1), value: .absolute(0.02), origin: .restore)
+        #expect(later.entries.first?.actual == .number(0.02))
     }
 
     @Test("A value set on a remembered display is queued and applied when it returns")
@@ -499,8 +505,10 @@ struct CommandEngineTests {
         await second.start()
         #expect(second.tag(SystemDisplayID(11)) == lgTag)
         #expect(second.registry.record(for: lgTag)?.displayName == "Side")
-        #expect(second.controls.trackedValue(.brightness, for: lgTag) == 0.4, "the stored value is trusted at startup")
+        #expect(second.controls.trackedValue(.brightness, for: lgTag) == 0.9, "at start the app takes the monitor's word, as after wake")
+        #expect(!second.controls.isChosen(.brightness, for: lgTag))
         #expect(lg.writes.isEmpty, "nothing is written at startup by default")
+        #expect(lg.reads.isEmpty, "and nothing is asked twice: the check of the display read the values")
         #expect(second.registry.records.count == 2)
     }
 

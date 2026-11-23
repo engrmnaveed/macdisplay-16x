@@ -72,6 +72,9 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
     public var defaultMatchRule: MatchRule?
     public var reconfigurationSettleDelay: Double?
     public var wakeSettleDelay: Double?
+    /// How long the displays must have been off or the screen locked before coming back
+    /// counts as the user returning, in seconds.
+    public var awayThreshold: Double?
     public var retentionDays: Int?
     public var modeRevertSeconds: Double?
     /// Global permission to write color tables at all.
@@ -92,6 +95,7 @@ public struct GlobalSettings: Codable, Sendable, Equatable {
         defaultMatchRule = try container.decodeIfPresent(MatchRule.self, forKey: .defaultMatchRule)
         reconfigurationSettleDelay = try container.decodeIfPresent(Double.self, forKey: .reconfigurationSettleDelay)
         wakeSettleDelay = try container.decodeIfPresent(Double.self, forKey: .wakeSettleDelay)
+        awayThreshold = try container.decodeIfPresent(Double.self, forKey: .awayThreshold)
         retentionDays = try container.decodeIfPresent(Int.self, forKey: .retentionDays)
         modeRevertSeconds = try container.decodeIfPresent(Double.self, forKey: .modeRevertSeconds)
         colorTablesEnabled = try container.decodeIfPresent(Bool.self, forKey: .colorTablesEnabled)
@@ -125,6 +129,8 @@ public enum SettingsDefaults {
     public static let defaultMatchRule = MatchRule.automatic
     public static let reconfigurationSettleDelay = 1.0
     public static let wakeSettleDelay = 3.0
+    /// Half an hour. A shorter blank is somebody still at the screen.
+    public static let awayThreshold = 1800.0
     public static let retentionDays = 90
     public static let modeRevertSeconds = 15.0
     /// Off until the gamma-table spike proves the backend safe on the machine at hand.
@@ -370,6 +376,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
 
     public var reconfigurationSettleDelay: Double { global.reconfigurationSettleDelay ?? SettingsDefaults.reconfigurationSettleDelay }
     public var wakeSettleDelay: Double { global.wakeSettleDelay ?? SettingsDefaults.wakeSettleDelay }
+    public var awayThreshold: Double { global.awayThreshold ?? SettingsDefaults.awayThreshold }
     public var retentionDays: Int { global.retentionDays ?? SettingsDefaults.retentionDays }
     public var modeRevertSeconds: Double { global.modeRevertSeconds ?? SettingsDefaults.modeRevertSeconds }
     public var defaultMatchRule: MatchRule { global.defaultMatchRule ?? SettingsDefaults.defaultMatchRule }

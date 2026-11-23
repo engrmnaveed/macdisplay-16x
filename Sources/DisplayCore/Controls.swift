@@ -439,9 +439,12 @@ public struct InputEntry: Codable, Sendable, Equatable, Identifiable {
 
 /// What a controller does with stored values when the app starts.
 public enum StartupPolicy: String, Codable, Sendable, CaseIterable {
-    /// Assume the device still holds the stored value. Nothing is sent or read.
+    /// Assume the device still holds the stored value. It is not compared and not written.
     case trustStored
+    /// Write the stored value the user chose. The default for software dimming, which
+    /// nothing holds across a restart.
     case writeStored
+    /// Take what the device reports, the same rule as after wake. The default for a monitor.
     case readDevice
 }
 

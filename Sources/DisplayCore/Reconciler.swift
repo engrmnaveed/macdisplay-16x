@@ -137,43 +137,12 @@ public final class Reconciler {
         feature.id == .mute ? .mute : feature.requiredControl
     }
 
+    /// What a controller does with stored values when the app starts. A monitor is read and
+    /// its word taken, the same as after wake. Software dimming lives in this process, so
+    /// nothing holds it across a restart and it is written from the stored level.
     private func startupPolicy(of kind: ControllerKind, tag: DisplayTag) -> StartupPolicy {
         if let chosen = settings.recordSettings(tag).controllers[kind]?.startupPolicy { return chosen }
-        // Software dimming lives in this process, so nothing holds it across a restart.
-        return kind == .softwareGamma ? .writeStored : .trustStored
-    }
-
-    /// What is written when the app starts. Hardware values are trusted as stored unless the
-    /// controller's startup policy says to write them. Software dimming lives in this
-    /// process, so nothing holds it across a restart and it is written from the stored level.
-    func startupPlan(for tag: DisplayTag) -> [(feature: FeatureID, value: Double)] {
-        let effective = settings.effective(tag)
-        let values = settings.recordSettings(tag).values
-        var plan: [(feature: FeatureID, value: Double)] = []
-        guard effective.restorePolicy != .nothing else { return plan }
-        for feature in engine.features.restorable {
-            guard let control = trackedControl(of: feature) else { continue }
-            // Only a value the user set through the app is written to a monitor.
-            let chosen = controls.isChosen(control, for: tag)
-            if feature.id == .brightness {
-                if effective.restorePolicy == .allButBrightness { continue }
-                let hardware = controls.owner(of: .hardwareBrightness, for: tag)
-                if chosen, let hardware, startupPolicy(of: hardware.kind, tag: tag) == .writeStored, let value = controls.trackedValue(.brightness, for: tag) {
-                    plan.append((.brightness, value))
-                } else if let software = controls.owner(of: .softwareBrightness, for: tag),
-                          startupPolicy(of: software.kind, tag: tag) == .writeStored,
-                          let level = values[.softwareBrightness], level < 1 {
-                    // A software level only ever comes from this app, so it needs no such
-                    // proof. Nobody should start into a picture too dark to read.
-                    plan.append((.softwareBrightness, max(level, controls.softwareRestoreFloor(for: tag))))
-                }
-            } else if chosen, let owner = controls.owner(of: control, for: tag),
-                      startupPolicy(of: owner.kind, tag: tag) == .writeStored,
-                      let value = values[control] {
-                plan.append((feature.id, value))
-            }
-        }
-        return plan
+        return kind == .softwareGamma ? .writeStored : .readDevice
     }
 
     /// The part of a restorable feature that lives on the device and can be asked.
@@ -182,11 +151,14 @@ public final class Reconciler {
         return control == .brightness ? .hardwareBrightness : control
     }
 
-    /// After wake and on reconnect: asks the monitor what it holds, once per control with
-    /// a tracked value. By default the tracked value takes what the monitor reports and
-    /// nothing is written. With restore after wake switched on for the display, a value the
-    /// user chose and the monitor no longer has is returned for writing instead. A control
-    /// that does not answer keeps its tracked value.
+    /// At start, after wake and when a display returns: asks the monitor what it holds,
+    /// once per control with a tracked value. By default the tracked value takes what the
+    /// monitor reports and nothing is written. With restore after wake switched on for the
+    /// display, a value the user chose and the monitor no longer has is returned for
+    /// writing instead. A control that does not answer keeps its tracked value.
+    ///
+    /// At start a controller's startup policy can say otherwise: trust the stored value
+    /// without asking, or write it.
     func reconcile(_ tag: DisplayTag, trigger: RestoreTrigger, readings: [ControlID: Double] = [:]) async -> [(feature: FeatureID, value: Double)] {
         let effective = settings.effective(tag)
         let restores = effective.restoreAfterWake && effective.restorePolicy != .nothing
@@ -203,15 +175,28 @@ public final class Reconciler {
                   let tracked = trackedControl(of: feature), let control = deviceControl(of: feature),
                   let owner = controls.owner(of: control, for: tag), owner.kind != .softwareGamma,
                   settings.recordSettings(tag).values[control] != nil else { continue }
+            let mayWrite = controls.isChosen(tracked, for: tag)
+                && !(feature.id == .brightness && effective.restorePolicy == .allButBrightness)
+            if trigger == .startup {
+                switch startupPolicy(of: owner.kind, tag: tag) {
+                case .readDevice:
+                    break
+                case .trustStored:
+                    continue
+                case .writeStored:
+                    if mayWrite, effective.restorePolicy != .nothing, let value = controls.trackedValue(tracked, for: tag) {
+                        plan.append((feature.id, value))
+                    }
+                    continue
+                }
+            }
             switch await controls.compareWithDevice(control, for: tag, knownRaw: readings[control]) {
             case .same:
                 unchanged.append(feature.id.rawValue)
             case .unanswered:
                 unanswered.append(feature.id.rawValue)
             case .differs(let reported):
-                let mayWrite = restores && controls.isChosen(tracked, for: tag)
-                    && !(feature.id == .brightness && effective.restorePolicy == .allButBrightness)
-                if mayWrite, let value = controls.trackedValue(tracked, for: tag) {
+                if restores, mayWrite, let value = controls.trackedValue(tracked, for: tag) {
                     plan.append((feature.id, value))
                 } else {
                     controls.adopt(control, value: reported, for: tag)
@@ -233,14 +218,17 @@ public final class Reconciler {
         }
 
         // Software dimming is outside the rule above. It lives in this process and is
-        // always written again. A display that stayed connected still has its table, which
-        // is rewritten elsewhere. One that left and came back starts without it.
+        // always written again where its table is not on screen: at start, and on a
+        // display that left and came back. A display that stayed connected still has its
+        // table, which is rewritten elsewhere. The floor applies when the user is coming
+        // back after being away, not otherwise.
         let values = settings.recordSettings(tag).values
-        if !queued.contains(FeatureID.brightness.rawValue),
-           controls.owner(of: .softwareBrightness, for: tag) != nil,
+        if !queued.contains(FeatureID.brightness.rawValue), !plan.contains(where: { $0.feature == .brightness }),
+           let software = controls.owner(of: .softwareBrightness, for: tag),
+           trigger != .startup || startupPolicy(of: software.kind, tag: tag) == .writeStored,
            let level = values[.softwareBrightness], level < 1,
            registry.live[tag]?.pipeline?.isNeutral == true {
-            plan.append((.softwareBrightness, max(level, controls.softwareRestoreFloor(for: tag))))
+            plan.append((.softwareBrightness, controls.restoredSoftwareLevel(level, for: tag)))
         }
         return plan
     }
@@ -263,19 +251,16 @@ public final class Reconciler {
             Log.core.info("Restore for \(tag) skipped: \(reason).")
             return
         }
-        var plan: [(feature: FeatureID, value: Double)]
-        switch trigger {
-        case .startup:
-            plan = startupPlan(for: tag)
-        case .reconnect where controls.isInWakeTransition:
+        if trigger == .reconnect, controls.isInWakeTransition {
             // The pass that follows the wake covers every connected display, this one too.
             Log.core.debug("\(tag) returned while the Mac was waking. It is looked at once the wake has settled.")
             return
-        case .reconnect, .wake:
+        }
+        if trigger != .startup {
             // Some monitors need extra time after wake or reconnect before they answer.
             await pause(settings.effective(tag).wakeRestoreDelay)
-            plan = await reconcile(tag, trigger: trigger, readings: readings)
         }
+        var plan = await reconcile(tag, trigger: trigger, readings: readings)
         // A value set while the display was away is a command that could not be carried
         // out then, not a restore. It goes out whatever the settings say.
         for entry in settings.pendingRestores(for: tag) {

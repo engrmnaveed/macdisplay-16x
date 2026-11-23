@@ -86,8 +86,8 @@ public struct BrightnessSafety: Sendable, Equatable {
     /// The smallest step above black that keys can land on.
     public static let interactiveMinimum = 1.0 / 64.0
 
-    /// `softwareRange` is where software dimming ends on the composite scale, or nil for a
-    /// display without it.
+    /// `softwareRange` is where software dimming ends on the composite scale. Nil for a
+    /// display without it, and when the floor does not apply at this moment.
     public func clamp(_ composite: Double, origin: ChangeOrigin, softwareRange: Double? = nil) -> Double {
         let value = composite.clamped(to: 0...1)
         switch origin {

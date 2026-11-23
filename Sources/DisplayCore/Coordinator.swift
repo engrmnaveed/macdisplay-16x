@@ -338,10 +338,9 @@ public final class DisplayCoordinator {
         bus.publish(.controllersReady(tag))
     }
 
-    /// Values read during detection become the tracked values on first sight, or always
-    /// when the controller's startup policy says to read the device.
+    /// Values read during detection become the tracked values on first sight. For a
+    /// display seen before, the reconciler compares them with what is tracked and decides.
     private func seed(_ detection: ControllerDetection, kind: ControllerKind, tag: DisplayTag, trigger: RestoreTrigger) {
-        let policy = settings.recordSettings(tag).controllers[kind]?.startupPolicy
         for (control, raw) in detection.currentRaw.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
             if control == .input {
                 // An input is a choice, not a level. It is matched to the list later.
@@ -360,8 +359,6 @@ public final class DisplayCoordinator {
             let known = settings.recordSettings(tag).values[control]
             if known == nil {
                 controls.track(control, value: value, for: tag, origin: .startup)
-            } else if policy == .readDevice, trigger == .startup, kind != .softwareGamma {
-                controls.track(control, value: value, for: tag, origin: .outsideChange, trusted: true, endsChoice: true)
             }
         }
     }
@@ -385,16 +382,17 @@ public final class DisplayCoordinator {
     /// written again, blindly, because a reset cannot be read back. This is an automatic
     /// write and passes the gate.
     ///
-    /// `userReturned` marks the moments someone comes back to the screen: wake, unlock and
-    /// the return of their session. Software dimming left below the restore floor is lifted
-    /// to it then. A rewrite during a session writes the table as it was.
+    /// `userReturned` marks the moments someone may be coming back to the screen: wake,
+    /// unlock and the return of their session. When they were away long enough, software
+    /// dimming left below the restore floor is lifted to it. After a short blank, and in a
+    /// rewrite during a session, the table is written as it was.
     private func reapplyColorTables(after occasion: String, followUps: Bool = true, userReturned: Bool = false) {
         guard gate.check(.restore) == .allowed else { return }
         var written: [DisplayTag] = []
         for tag in registry.live.keys.sorted() {
             guard let live = registry.live[tag], let pipeline = live.pipeline else { continue }
             pipeline.rebind(to: live.systemID)
-            if userReturned, controls.isSoftwareBelowRestoreFloor(tag) {
+            if userReturned, controls.restoreFloorApplies, controls.isSoftwareBelowRestoreFloor(tag) {
                 // Writing the lifted level is also the rewrite, so the darker table is not
                 // put back first.
                 written.append(tag)

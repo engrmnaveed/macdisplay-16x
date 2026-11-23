@@ -429,6 +429,16 @@ public final class ControlService {
         return (settings.effective(tag).restoreFloor / composition.switchover).clamped(to: 0...1)
     }
 
+    /// The floor is for someone coming back to the screen: at the start of the app, and
+    /// after the displays were off or the screen was locked for a long time. A short blank
+    /// and a rewrite during a session leave a level that was set on purpose alone.
+    public var restoreFloorApplies: Bool { sequencer.isReturnFromLongAbsence }
+
+    /// The software level an automatic restore writes for a stored level.
+    public func restoredSoftwareLevel(_ level: Double, for tag: DisplayTag) -> Double {
+        restoreFloorApplies ? max(level, softwareRestoreFloor(for: tag)) : level
+    }
+
     /// True when software dimming was left darker than an automatic restore may bring back.
     public func isSoftwareBelowRestoreFloor(_ tag: DisplayTag) -> Bool {
         guard registry.live[tag] != nil, owner(of: .softwareBrightness, for: tag) != nil,
@@ -467,7 +477,7 @@ public final class ControlService {
             return .failed(availability(of: .brightness, for: tag).reason ?? ControlFailure.unsupported.reason)
         }
         let target = safety(for: tag, composition: composition)
-            .clamp(composite, origin: origin, softwareRange: composition.hasSoftware ? composition.switchover : nil)
+            .clamp(composite, origin: origin, softwareRange: composition.hasSoftware && restoreFloorApplies ? composition.switchover : nil)
         let parts = composition.split(target)
         let values = settings.recordSettings(tag).values
         // While dragging or stepping, a part that would not change on the device is not resent.

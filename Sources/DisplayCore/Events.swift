@@ -179,10 +179,25 @@ public final class EventSequencer {
     public private(set) var isReconfiguring = false
     public private(set) var isAsleep = false
 
+    /// Why nobody counts as being at the screen.
+    private enum Absence: Hashable { case starting, displaysOff, locked, otherSession }
+    private var absences: Set<Absence> = [.starting]
+    /// When the current absence began. Before the app ran nobody was looking at what it
+    /// shows, so its start counts as coming back from a long absence.
+    private var awaySince: Date? = .distantPast
+    private var longReturnAt: Date?
+    private var absenceSubscription: EventBus.Subscription?
+    /// A display that comes back this soon after the user did belongs to the same return.
+    /// Some monitors drop off at wake and return a few seconds later.
+    public var returnWindow: TimeInterval = 60
+
     public init(bus: EventBus, scheduler: any Scheduler, settings: SettingsStore) {
         self.bus = bus
         self.scheduler = scheduler
         self.settings = settings
+        absenceSubscription = bus.subscribe { [weak self] event in
+            self?.noteAbsence(event)
+        }
     }
 
     /// Call for every display reconfiguration callback from the system.
@@ -223,6 +238,51 @@ public final class EventSequencer {
     /// True between sleep and the end of the settle delay after wake, when values read from
     /// the system are not trusted.
     public var isInWakeTransition: Bool { isAsleep || wakeWork != nil }
+
+    // MARK: Time away
+
+    /// The clock is read when the displays go off, the screen locks or another session
+    /// takes over, and again when that ends. Nothing runs in between.
+    private func noteAbsence(_ event: DisplayEvent) {
+        switch event {
+        case .appLaunched: ended(.starting)
+        case .willSleep: began(.displaysOff)
+        case .wakeSettled: ended(.displaysOff)
+        case .screenLocked: began(.locked)
+        case .screenUnlocked: ended(.locked)
+        case .sessionInactive: began(.otherSession)
+        case .sessionActive: ended(.otherSession)
+        default: break
+        }
+    }
+
+    private func began(_ absence: Absence) {
+        if absences.isEmpty {
+            awaySince = scheduler.now
+            longReturnAt = nil
+        }
+        absences.insert(absence)
+    }
+
+    private func ended(_ absence: Absence) {
+        guard absences.remove(absence) != nil else { return }
+        let now = scheduler.now
+        if let awaySince, now.timeIntervalSince(awaySince) >= settings.document.awayThreshold {
+            longReturnAt = now
+        }
+        if absences.isEmpty { awaySince = nil }
+    }
+
+    /// True while the user is coming back after the displays were off or the screen was
+    /// locked for the away threshold or longer, and at the start of the app. A short idle
+    /// blank is not a return. The answer does not depend on whether this object or the
+    /// one asking heard about the wake or the unlock first.
+    public var isReturnFromLongAbsence: Bool {
+        let now = scheduler.now
+        if let awaySince, now.timeIntervalSince(awaySince) >= settings.document.awayThreshold { return true }
+        if let longReturnAt, now.timeIntervalSince(longReturnAt) <= returnWindow { return true }
+        return false
+    }
 }
 
 // MARK: Automation gate
