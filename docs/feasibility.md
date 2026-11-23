@@ -157,7 +157,7 @@ The new build was started 1 hour 52 minutes into a display sleep, with nobody at
 
 - The Lenovo answered DDC while asleep and its controls were available at once. The LG did not answer, and the app kept what it had learned about it earlier, with the remembered brightness shown as a stored value.
 - Nothing was written to either monitor: both restores were skipped with "automatic changes are paused: the Mac is asleep".
-- The read-only wake probe is waiting for the wake from this sleep, the first long one measured. **Result pending.**
+- The wake from this sleep was measured at 08:09. See [a display sleep of five and a half hours](#a-display-sleep-of-five-and-a-half-hours-measured-0809).
 
 #### A 75 second display sleep, measured (01:54)
 
@@ -207,7 +207,7 @@ A refresh-rate change was chosen because it does not move windows. Size changes 
 - The displays woke at 00:05. The app saw the LG leave and return four seconds later. The Lenovo stayed connected.
 - Display IDs (4 and 5) and system UUIDs were the same before the display sleep, during it and after the wake, including across the LG's reconnect.
 - The first version of the wake probe was a bare command-line process, which never receives sleep or wake notifications, so it missed that wake. The app's own probe one second after the LG returned got no answer, and that proves nothing, because it sent its query once and the LG never answers a single query. The fixed probe caught the next wake, below.
-- Not tested: wake from a long standby with the fixed probe, full system sleep, unplugging a cable, and moving a monitor to another port.
+- Not tested: full system sleep, unplugging a cable, and moving a monitor to another port. The wake from a long standby was measured later, below.
 
 #### A short display sleep, measured (01:38)
 
@@ -235,6 +235,39 @@ The app during the same wake, from its log:
 | Afterwards | Both monitors read back the stored brightness (0.688 and 0.562). The gate was open and nothing was left pending |
 
 This is the first run of restore after wake on hardware. It shows the path works: wake, settle, gate, write, read back. It does not show a lost value being repaired, because the monitors had lost nothing, so all four writes put back what was already there.
+
+#### A display sleep of five and a half hours, measured (08:09)
+
+The displays slept from 02:43:47 to 08:09:57, with nobody at the Mac. The probe, started at 04:37, saw no system sleep, so this was a display sleep with the Mac awake. BetterDisplay, the earlier prototype and Display 16X were running, and the read-only probe asked each monitor for its brightness four times a second for 20 seconds after the wake. Times are seconds after the "screens did wake" notification.
+
+| | Lenovo P32p-20 (HDMI) | LG SDQHD (DisplayPort) |
+| --- | --- | --- |
+| Stayed in the system | Yes | No. Reported removed at 0.22 s and added again at 3.55 s |
+| First usable DDC answer | 1.09 s | 2.90 s, which is 0.65 s before the system announced its return |
+| Brightness before the sleep and at the first answer | 53 and 53 | 68 and 68 |
+| Queries answered in 20 s | 40 of 45 | 26 of 37 |
+| Queries without a usable reply | 0.1 s and 1.5 s (all zeros) | The "not ready" null message at 4.5, 5.4, 7.7, 11.8, 15.5 and 19.2 s. Replies to other questions at 4.9 s (contrast) and 7.2 s (mute) |
+
+- **A long standby is different from a short blank.** After 1.4 and 75 seconds neither monitor left the system. After five and a half hours the LG did, for 3.3 seconds, as it had at the 00:05 wake. The Lenovo stayed. Display IDs and UUIDs were the same afterwards.
+- **Both monitors kept their brightness through the standby.** The probe read the old values before the app wrote anything.
+- **The reconfiguration flags tell the story.** At the wake both displays got a callback with no flags. At 0.22 s the LG got "removed, disabled, desktop shape" and the Lenovo "mode, desktop shape". At 3.55 s the LG got "added, enabled, mode, moved, desktop shape" and the Lenovo "mode, desktop shape" again. One second after the first pair the system listed one display, and one second after the second pair it listed two.
+- **The LG answers DDC before macOS says it is back**, and it is not dependable for some time after. Null messages kept arriving until the end of the 20 second window, about 3.7 seconds apart from 11.8 s on. The app was idle by then and never reads on a timer, so another program was probably asking on the same channel. The two replies to other questions were answers to this app's own check of the LG, taken by the probe.
+
+The app during the same wake, from its log:
+
+| Seconds after the wake | What the app did |
+| --- | --- |
+| 0.0 | Saw the reconfiguration begin |
+| 1.2 | Reconfiguration settled. "Display #2 disconnected" |
+| 3.1 | Wake settled. Brightness 53% written to the Lenovo, accepted on the first attempt |
+| 4.5 | Second reconfiguration settled. "Display #2 connected: LG SDQHD" |
+| 4.5 to 7.7 | Checked what the LG supports. Five questions took 3.2 seconds, and two of them (contrast and mute) got no usable reply |
+| 7.8 to 8.0 | "After the display returned": brightness 68% and volume 44% written to the LG, each accepted on the first attempt |
+
+- **The restore did not repair anything**, for the third time. Every value it wrote was the value the monitor already had.
+- **The check of the LG lost two controls.** Contrast and mute had answered at every earlier check. This time their questions went unanswered while the probe, the app and at least one other program were on the channel, and the app took "no reply" as "not offered". The LG's contrast slider and its own mute disappeared from the panel, and the contrast the owner had chosen was not put back. The probe made this far more likely than it would be in normal use, because it asks four times a second. The mistake in the app was real all the same: a control that answered before is now kept when a later check gets no reply for it, and only the monitor saying it lacks a control removes it. There is a unit test with the captured null message.
+- **The wake delay held for the Lenovo.** Its first usable answer came at 1.09 s and the app wrote at 3.1 s.
+- Not measured: a full system sleep, and a wake with no other program on the DDC channel.
 
 Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 

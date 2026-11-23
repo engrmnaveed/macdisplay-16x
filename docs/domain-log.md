@@ -6,6 +6,34 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · After a long display sleep the LG leaves the system, and both monitors still have their values
+
+Mac17,9, macOS 27.2.1, Lenovo P32p-20 on HDMI, LG SDQHD on DisplayPort. The displays slept for five and a half hours with nobody at the Mac. BetterDisplay and the earlier prototype were running. Timings are in the feasibility notes.
+
+What happened at the wake:
+
+- The LG (DisplayPort) was reported removed 0.2 seconds after the wake and added again 3.3 seconds later, with the same display ID and UUID. The Lenovo (HDMI) stayed. The same happened at an earlier long sleep. After sleeps of 1.4 and 75 seconds neither monitor left.
+- Both monitors still had the brightness they went to sleep with. This is the third wake measured, and in none of them had a monitor lost a value. Every write the restore made put back what was already there.
+- The LG answered DDC 0.65 seconds before macOS announced it, and then gave "not ready" replies on and off for at least 16 more seconds.
+
+What it means for the product:
+
+- One wake can be two different events for two monitors on the same Mac: "after wake" for the one that stayed and "the display returned" for the one that left. Any rule for wake has to hold for both paths. The decision recorded today (read and adopt, restore only as a setting per display) is written that way.
+- These two monitors do not need a restore after wake at all. Whether any common monitor does is still unknown from this desk.
+- "Is the monitor ready" cannot be read from the system's display list. The LG was answering before it was listed and unreliable after.
+
+## 23 November 2026 · No reply is not the same as no control
+
+Same wake as the entry above. Right after the LG returned, the app asked it which controls it has. Contrast and mute got no usable reply, and the app dropped both from the panel. They had answered at every check before. The contrast the owner had chosen was not put back either, because the control was gone.
+
+Three programs and a probe were on the LG's DDC channel in those seconds: this app, the read-only wake probe asking four times a second, BetterDisplay and the earlier prototype. The probe received the answers to two of the app's questions. So the probe caused a good part of this, and it would be rarer in normal use. It can still happen whenever another display utility is running, and in the seconds after a wake when the monitor itself sends "not ready".
+
+The rule the product should follow, now built: a control that has answered before stays until the monitor itself says it does not have it. A missing reply keeps what was learned. A control that has never answered is still left out, because some monitors stay silent about controls they lack and the app cannot tell the two apart on first sight.
+
+Still open, small: a control lost on the very first check stays missing until the next start, a reconnect, or "Check Again" in the panel. No evidence yet that this happens without a probe running.
+
+Other utilities may have interfered with this result, as the rules ask to be noted: BetterDisplay and the prototype were running and were not inspected.
+
 ## 23 November 2026 · Software dimming is lost when the screen is unlocked, and the app cannot see it
 
 Mac17,9, macOS 27.2.1, LG SDQHD on DisplayPort, checked twice by the owner. Details and timings are in the feasibility notes.
