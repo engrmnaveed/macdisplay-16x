@@ -837,6 +837,27 @@ What this shows:
 Not checked: a virtual screen mirrored onto a panel (stage 5, mirror-based HiDPI), sleep and wake with a screen present, a screen of more than 8K, and the `SLVirtualDisplay` family.
 
 
+### Where v0.3 stands at the end of 23 November
+
+Built at unit-test level on top of what the writing checks proved: overrides staged, previewed, written in one administrator step through `osascript`, activated by the app's own reconnect, read back size by size, undone and removed, the list of what was written kept in the app's folder and every file found by its marker, also from the command line without the app; virtual screens saved, made through the `CGVirtualDisplay` classes, restored at launch and after wake, linked to a display, discarded with their color profile; mirror-based HiDPI behind its own switch. 440 unit tests pass. **The app itself has not written an override or made a virtual screen on hardware yet**: only the probes above did.
+
+Left on the owner's Mac by the checks: the color profile `/Library/ColorSync/Profiles/Displays/Display 16X probe-<system UUID>.icc` (removing it needs an administrator password: `sudo rm` on that file), and record #3 "Display 16X probe" in the 0.2.0 copy's settings, which costs nothing and goes with the retention period or Forget.
+
+#### The checks for a later round, in order
+
+Each needs the owner at the desk, a development build or the build in daily use with this branch, and the layout recorded first.
+
+1. **The app's own override, end to end, on the LG.** Turn on Scaling through overrides, Add Fine Steps on the LG's page, open the preview, Write as Administrator, and let the app reconnect the LG. Check that the page then shows each size as offered or left out, that the list matches the 23 November check (1792 × 2016 and 1664 × 1872 HiDPI offered, 2560 × 2880 HiDPI left out), and that a new size works from the strip with Keep and Revert. Then Remove… and reconnect: 42 sizes, as before.
+2. **Removal without the app.** Write an override, quit the app, run `display16x override list` and `display16x override delete all --confirm`, and check that the folders the app made are gone.
+3. **The main display.** An override for the Lenovo (for example 2880 × 1620 HiDPI): the app must not reconnect it. Replug the HDMI cable and check that macOS reads the file then. Remove it.
+4. **A virtual screen from the app.** Create, connect, disconnect, connect again (a new display ID, the same tag), with the arrangement put back after it appears. Check that the card shows it as a display, that the policy refuses to take the Lenovo out while only the screen and the Lenovo are in use, and that Discard removes the profile macOS made, through the administrator prompt.
+5. **A virtual screen across sleep.** A display sleep of ten minutes or more and a full system sleep with a screen connected: whether macOS ends it, and whether the app makes it again after the wake.
+6. **Restore at launch.** Quit and start the app with a screen that was connected.
+7. **Mirror-based HiDPI on the LG.** A matched screen, 2880 × 2560 HiDPI, linked with mirroring: how the picture looks, the GPU's load and the app's own CPU with it running (Activity Monitor's GPU history, or `sudo powermetrics --samplers gpu_power`), then the switch off and the LG back in its own mode.
+8. **The other override keys.** Panel size, the size macOS picks first, the name macOS shows and the television flag were never written on hardware. Their effect is not known.
+9. **Idle cost** with a virtual screen connected and with none, against the PRD's budget.
+10. **A full reset with the system's settings.** Not on the owner's Mac in daily use: it makes macOS forget every arrangement it saved. A spare Mac or a test account, with the put-back step afterwards.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:
@@ -858,6 +879,8 @@ swiftc -O spikes/layout-probe.swift -o /tmp/layout-probe && /tmp/layout-probe   
 swiftc -O spikes/connection-probe.swift -o /tmp/connection-probe && /tmp/connection-probe
 swiftc -O spikes/override-probe.swift -o /tmp/override-probe && /tmp/override-probe
 swiftc -O spikes/virtual-display-probe.swift -o /tmp/virtual-display-probe && /tmp/virtual-display-probe
+swiftc -O spikes/override-write-probe.swift -o /tmp/override-write-probe          # writes: see its header
+swiftc -O spikes/virtual-display-write-probe.swift -o /tmp/virtual-display-write-probe  # creates a display: see its header
 ```
 
 The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header. `override-probe` and `virtual-display-probe` are read-only and create nothing. `override-write-probe.swift` writes a file as administrator and `virtual-display-write-probe.swift` creates a display: both are run only with the owner present, see their headers.

@@ -58,6 +58,8 @@ final class FakeVirtualScreenSystem: VirtualScreenSystem {
     weak var inventory: FakeInventory?
     weak var layoutSystem: FakeLayoutSystem?
     var onChange: (@MainActor () -> Void)?
+    /// Places a new screen the way macOS did on the desk, instead of beside the main display.
+    var place: (@MainActor (SystemDisplayID, PointSize) -> Void)?
 
     func create(_ specification: VirtualScreenSpecification) -> Result<SystemDisplayID, VirtualScreenError> {
         if let refuseNext {
@@ -78,6 +80,7 @@ final class FakeVirtualScreenSystem: VirtualScreenSystem {
         // macOS puts a new screen beside the main display.
         let largest = specification.modes.first?.size ?? PointSize(width: 1920, height: 1080)
         layoutSystem?.frames[id] = DisplayFrame(x: 3200, y: 0, width: largest.width, height: largest.height)
+        place?(id, largest)
         onChange?()
         return .success(id)
     }

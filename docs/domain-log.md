@@ -6,6 +6,24 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.3 built at unit-test level: decisions for the maintainer, and what the app has not done on hardware
+
+All five stages are built on the branch, with 440 unit tests passing. The writing checks proved macOS's side with probes. **The app's own override write, its virtual screens and mirror-based HiDPI have not run on hardware.** The checks for a later round are listed in order in the feasibility notes.
+
+**Decisions needed:**
+
+1. **Administrator rights** (raised with the spikes): the system's prompt through AppleScript, each time, as built; or a privileged helper once the project certificate exists. Recommendation: the prompt for 0.3.0.
+2. **Mirror-based HiDPI at launch.** As built, a screen the user linked with mirroring comes back with its mirror at launch and after wake, through the gate, so the GPU cost resumes without a click. Safe mode skips it. The alternative is to bring the screen back and wait for a click before mirroring. Recommendation: keep it as built, because the user set it up on purpose and the status line says while it runs. Revisit if the check on the desk shows trouble.
+3. **The made-up vendor number for virtual screens.** Screens report vendor `0x1616`, which read as a manufacturer code is the letters "EPV". Nothing is known to use it. A screen's identity can be set per screen. Recommendation: keep it, and note it in the user guide.
+4. **Full reset on a Mac in use.** It is built to move the system's saved display arrangements aside and to put them back. It has never run, and running it makes macOS forget every arrangement it saved. Recommendation: ship it behind its preview as built, and run its check on a spare Mac or a test account, never on the owner's.
+5. **For the interface session:** the v0.3 surfaces and the four optional entry points in its files (see the entry on v0.3 surfaces below). It may want to place or word them differently. Nothing it built draws differently when they are absent.
+
+**Rules adopted in the last stages:**
+
+- **A display showing a virtual screen gets its own picture back before the screen goes**, so it returns to its own mode and place the way v0.2 ends a mirror. The switch off ends every such mirror and leaves the screens.
+- **The status report says while mirror-based HiDPI runs**, and on which display, because that is the one Advanced feature that costs while idle.
+- **A screen copies a display's shape as it is seen**, turned with the display, so a screen made for the turned LG is 2880 × 2560 and not its panel's 2560 × 2880.
+
 ## 23 November 2026 · v0.3 surfaces: where they plug into the interface pass's surfaces, and what they say
 
 **For the interface session, through the planning thread.** The v0.3 surfaces are new files built from the skin's values and pieces only (`SkinBoundaryTests` passes): "More sizes" on a display's page, the preview of what will be written as a window of its own, and an Advanced tab in Settings. To reach them, four existing files got one optional entry point each, defaulting to nothing, so the panel and the settings window are drawn exactly as before when it is absent: `PanelView` and `DisplayDetail` take an optional advanced model, `SettingsView` has an `advanced` tab, and the render harness's sample desk carries sample stand-ins for the administrator step and virtual screens. The interface session may want to place or word these differently. Every picture is in the render harness, groups "scaling", "preview" and "settings".

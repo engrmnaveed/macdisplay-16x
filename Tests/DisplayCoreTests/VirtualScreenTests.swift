@@ -202,6 +202,24 @@ import Testing
         #expect(advanced.virtualScreens.definition(named: "Twin")?.wantsConnected == false, "an automatic change is nobody's choice")
     }
 
+    @Test("macOS pushes the other displays aside for a new screen. They go back, and the screen sits beside them")
+    @MainActor func restoreLayout() async {
+        let advanced = await ready()
+        let frames = advanced.layoutRig.layoutSystem
+        // As measured: the screen left of the main display, the LG pushed further left.
+        advanced.virtualSystem.place = { id, size in
+            frames.frames[id] = DisplayFrame(x: -size.width, y: 0, width: size.width, height: size.height)
+            frames.frames[Fixture.lgID] = DisplayFrame(x: -size.width - 2304, y: -248, width: 2304, height: 2048)
+        }
+        _ = await advanced.run(.set, .virtualCreate, value: .choice("Studio;16:9 1920x1080 connect"))
+        let screen = advanced.virtualScreens.live.values.first!
+        #expect(frames.frames[Fixture.lgID] == Fixture.lgFrame, "the LG is back where it was")
+        #expect(frames.frames[Fixture.lenovoID] == Fixture.lenovoFrame)
+        #expect(frames.frames[screen]?.x == 3200, "the screen sits to the right of the others")
+        _ = await advanced.run(.set, .virtualEdit, value: .choice("Studio;restore-layout=off"))
+        #expect(advanced.virtualScreens.definition(named: "Studio")?.restoreLayout == false)
+    }
+
     @Test("Mirroring onto the linked display waits for mirror-based HiDPI to be switched on")
     @MainActor func mirrorNeedsSwitch() async {
         let advanced = await ready()

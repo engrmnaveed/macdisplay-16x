@@ -112,6 +112,23 @@ dist/display16x help placement                                # values and an ex
 
 Every change to the arrangement, the main display, mirroring or a connection is recorded first, so `display16x revert` (with no display named) puts the last one back. A disconnect lasts for the login session only, and the app reconnects what it disconnected when it quits.
 
+Advanced scaling, from v0.3. Each feature is off until switched on, and anything written outside the app's folder prints its preview and changes nothing until `--confirm` is added:
+
+```sh
+dist/display16x set overridesEnabled on
+dist/display16x override flexible --tag 2                     # fine HiDPI steps for the display's model
+dist/display16x override add 2592x2304 --tag 2                # a size of your own, as the display shows it
+dist/display16x override preview                              # every display it reaches, every byte
+dist/display16x override apply --confirm                      # administrator password, then a reconnect
+dist/display16x override list                                 # every override the app wrote, also without the app
+dist/display16x override delete all --confirm                 # removes them, also without the app
+dist/display16x set virtualScreens on
+dist/display16x virtual create Studio 16:9 2560x1440 hidpi @60 connect
+dist/display16x virtual disconnect Studio                     # the definition is kept
+dist/display16x set mirrorHiDPI on                            # keeps the GPU busy while it runs
+dist/display16x virtual create "LG HiDPI" match mirror=on connect --tag 2
+```
+
 ## What works today
 
 | Area | State |
@@ -128,6 +145,9 @@ Every change to the arrangement, the main display, mirroring or a connection is 
 | Rotation | Ran once on hardware: 90° on one monitor with the countdown, left unanswered, and the app turned it back after 15 seconds with the arrangement unchanged. Keep and the other angles were not run |
 | Launch at login | Built. Not verified |
 | CLI and hardware probe | Working |
+| More sizes through display overrides, with a preview, an administrator prompt and removal | macOS 27 reading and dropping an override was checked on hardware with a probe. The app's own install, check and removal are unit-tested. Off by default |
+| Virtual screens | Created and removed on hardware by a probe. The app's own screens are unit-tested. Off by default |
+| Mirror-based HiDPI | Unit-tested only. Off by default, and it keeps the GPU busy while it runs |
 
 The measurements behind this table are in [docs/feasibility.md](docs/feasibility.md).
 
@@ -164,3 +184,5 @@ Settings are one JSON file in `~/Library/Application Support/com.16xbrains.macdi
 - After wake and on reconnect the app puts back only the values you set through it. A change made with the monitor's own buttons is left alone.
 - Two identical monitors cannot be told apart for DDC with certainty. The probe says so when it applies.
 - DDC changes stay in the monitor after the app quits.
+- A display override is for a model: every unit of that model gets it. macOS reads it only when the display connects, and may leave a size out without saying so. Writing and removing one needs an administrator password.
+- A virtual screen goes away when the app quits. macOS keeps the color profile it made for one until the screen is discarded through the app.
