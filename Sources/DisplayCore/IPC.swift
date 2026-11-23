@@ -9,15 +9,40 @@ public struct AppPaths: Sendable {
 
     public let supportDirectory: URL
 
-    public init(supportDirectory: URL? = nil) {
+    /// For development builds: a folder of their own for settings, the recovery store and
+    /// the command socket, so a build under test never writes the settings of the copy in
+    /// daily use. The app and the command line tool both read it. Unset, nothing changes.
+    public static let developmentDirectoryVariable = "DISPLAY16X_SUPPORT_DIRECTORY"
+
+    public init(supportDirectory: URL? = nil, environment: [String: String] = ProcessInfo.processInfo.environment) {
         if let supportDirectory {
             self.supportDirectory = supportDirectory
+        } else if let override = AppPaths.developmentDirectory(environment) {
+            self.supportDirectory = override
         } else {
-            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-            self.supportDirectory = base.appendingPathComponent(AppPaths.bundleIdentifier, isDirectory: true)
+            self.supportDirectory = AppPaths.standardDirectory
         }
     }
+
+    /// The folder every normal launch uses.
+    public static var standardDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent(AppPaths.bundleIdentifier, isDirectory: true)
+    }
+
+    static func developmentDirectory(_ environment: [String: String]) -> URL? {
+        guard let path = environment[developmentDirectoryVariable]?.trimmingCharacters(in: .whitespaces), !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
+    }
+
+    /// True when a development folder is in use instead of the standard one.
+    public var isDevelopmentDirectory: Bool {
+        supportDirectory.standardizedFileURL.path != AppPaths.standardDirectory.standardizedFileURL.path
+    }
+
+    /// The paths a normal launch uses, whatever the environment says.
+    public static var standard: AppPaths { AppPaths(supportDirectory: standardDirectory) }
 
     public var settingsFile: URL { supportDirectory.appendingPathComponent("settings.json") }
     public var recoveryFile: URL { supportDirectory.appendingPathComponent("recovery.json") }

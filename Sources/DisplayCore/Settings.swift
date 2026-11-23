@@ -264,6 +264,8 @@ public struct RecordSettings: Codable, Sendable, Equatable {
     public var currentInput: String?
     public var favouriteModes: [ModeDescriptor]
     public var previousMode: ModeDescriptor?
+    /// Arrangement, protection and connection settings of this display. Added in v0.2.
+    public var layout: RecordLayoutSettings?
 
     public init() {
         display = DisplaySettings()
@@ -286,6 +288,7 @@ public struct RecordSettings: Codable, Sendable, Equatable {
         currentInput = try container.decodeIfPresent(String.self, forKey: .currentInput)
         favouriteModes = try container.decodeIfPresent([ModeDescriptor].self, forKey: .favouriteModes) ?? []
         previousMode = try container.decodeIfPresent(ModeDescriptor.self, forKey: .previousMode)
+        layout = try container.decodeIfPresent(RecordLayoutSettings.self, forKey: .layout)
     }
 }
 
@@ -331,6 +334,9 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
     public var models: [String: DisplaySettings]
     public var displays: [StoredRecord]
     public var pendingRestores: [PendingRestore]
+    /// Layout, presets, shortcuts and integrations. Added in v0.2. An older version of the
+    /// app ignores the section.
+    public var layout: LayoutSettings
 
     public init() {
         schemaVersion = SettingsDocument.currentSchemaVersion
@@ -339,6 +345,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         models = [:]
         displays = []
         pendingRestores = []
+        layout = LayoutSettings()
     }
 
     public init(from decoder: Decoder) throws {
@@ -349,6 +356,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         models = try container.decodeIfPresent([String: DisplaySettings].self, forKey: .models) ?? [:]
         displays = try container.decodeIfPresent([StoredRecord].self, forKey: .displays) ?? []
         pendingRestores = try container.decodeIfPresent([PendingRestore].self, forKey: .pendingRestores) ?? []
+        layout = try container.decodeIfPresent(LayoutSettings.self, forKey: .layout) ?? LayoutSettings()
         // A tag is never reused, whatever the file says.
         let highest = displays.map(\.record.tag.rawValue).max() ?? 0
         nextTag = max(nextTag, highest + 1)
@@ -557,11 +565,20 @@ public struct RecoveryDocument: Codable, Sendable, Equatable {
     public var unconfirmedModes: [DisplayTag: ModeDescriptor]
     /// A rotation change the user has not confirmed yet, with the angle to return to.
     public var unconfirmedRotations: [DisplayTag: Int]
+    /// The layout before the last change to arrangement, mirroring, the main display or a
+    /// connection, and whether that change still waits for Keep. Added in v0.2.
+    public var layoutBeforeChange: LayoutSnapshot?
+    public var layoutUnconfirmed: Bool
+    /// Displays the app took out of use, with the system display ID that brings each one
+    /// back. They are reconnected at quit, and at the next start after a crash. Added in v0.2.
+    public var disconnectedByApp: [DisplayTag: UInt32]
 
     public init() {
         schemaVersion = 1
         unconfirmedModes = [:]
         unconfirmedRotations = [:]
+        layoutUnconfirmed = false
+        disconnectedByApp = [:]
     }
 
     public init(from decoder: Decoder) throws {
@@ -569,6 +586,9 @@ public struct RecoveryDocument: Codable, Sendable, Equatable {
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         unconfirmedModes = try container.decodeIfPresent([DisplayTag: ModeDescriptor].self, forKey: .unconfirmedModes) ?? [:]
         unconfirmedRotations = try container.decodeIfPresent([DisplayTag: Int].self, forKey: .unconfirmedRotations) ?? [:]
+        layoutBeforeChange = try container.decodeIfPresent(LayoutSnapshot.self, forKey: .layoutBeforeChange)
+        layoutUnconfirmed = try container.decodeIfPresent(Bool.self, forKey: .layoutUnconfirmed) ?? false
+        disconnectedByApp = try container.decodeIfPresent([DisplayTag: UInt32].self, forKey: .disconnectedByApp) ?? [:]
     }
 }
 

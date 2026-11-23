@@ -239,6 +239,25 @@ struct IPCTests {
         return (folder, folder.appendingPathComponent("ipc.sock").path)
     }
 
+    @Test("Every origin travels as its own word, and a command with a word the build does not know cannot be read")
+    func originsOnTheWire() throws {
+        #expect(ChangeOrigin.allCases.map(\.rawValue) == ["interface", "keyboard", "command", "sync", "outsideChange", "restore", "automation", "startup"])
+        for origin in ChangeOrigin.allCases {
+            let command = Command(.set, .brightness, on: .tag(1), value: .absolute(0.5), origin: origin)
+            let encoded = try IPCCodec.encode(IPCRequest(command: command))
+            #expect(String(decoding: encoded, as: UTF8.self).contains("\"origin\":\"\(origin.rawValue)\""))
+            #expect(try IPCCodec.decode(IPCRequest.self, from: encoded).command == command)
+        }
+        // This is what a build from before "automation" does when it meets that word, and
+        // what this build does with an origin added after it: the command is refused as a
+        // whole and nothing is changed. So an origin is never stored in a file for its own
+        // sake. Stored commands carry "command" or "keyboard", and get their origin when
+        // they are run.
+        let known = try IPCCodec.encode(IPCRequest(command: Command(.set, .brightness, on: .tag(1), value: .absolute(0.5), origin: .automation)))
+        let unknown = Data(String(decoding: known, as: UTF8.self).replacingOccurrences(of: "\"automation\"", with: "\"somethingNewer\"").utf8)
+        #expect(throws: DecodingError.self) { try IPCCodec.decode(IPCRequest.self, from: unknown) }
+    }
+
     @Test("A command and its result survive the trip as one JSON line each")
     func codecRoundTrip() throws {
         let command = Command(.set, .resolution, on: .name("LG SDQHD"), value: .mode(ModeRequest(logicalWidth: 2304, logicalHeight: 2048, hiDPI: true)), origin: .command,

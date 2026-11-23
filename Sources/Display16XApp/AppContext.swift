@@ -24,6 +24,16 @@ final class AppContext {
     let indicator: IndicatorCoordinator
     let permissions: PermissionBroker
     let loginItem = LoginItem()
+    // v0.2 Layout
+    let layout: LayoutService
+    let connection: ConnectionService
+    let protection: ConfigurationProtection
+    let presets: PresetService
+    let transfer: SettingsTransferService
+    let layoutCommands: LayoutCommands
+    let shortcuts: ShortcutService
+    let automation: ConnectionAutomation
+    let lid: SystemLid
 
     private let inventory = SystemDisplayInventory()
     private let selectorContext = SystemSelectorContext()
@@ -46,7 +56,7 @@ final class AppContext {
             registry: registry, system: SystemModeController(), rotationSystem: SystemRotation(),
             settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate
         )
-        engine = CommandEngine(registry: registry, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
+        engine = CommandEngine(registry: registry, features: .full, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
         engine.selectorContext = selectorContext
         reconciler = Reconciler(engine: engine, registry: registry, controls: controls, settings: settings, gate: gate, scheduler: scheduler)
         coordinator = DisplayCoordinator(
@@ -58,6 +68,28 @@ final class AppContext {
         keys.selectorContext = selectorContext
         keys.audio = audio
         indicator = IndicatorCoordinator(registry: registry, controls: controls, settings: settings, bus: bus)
+        lid = SystemLid(bus: bus)
+        layout = LayoutService(registry: registry, system: SystemLayout(), settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate)
+        let policy = StandardConnectionPolicy(registry: registry, settings: settings, lid: lid, macModel: HardwareProbe.macModel)
+        connection = ConnectionService(
+            registry: registry, system: SystemConnection(), policy: policy, settings: settings,
+            recovery: recovery, layout: layout, bus: bus, scheduler: scheduler, gate: gate
+        )
+        protection = ConfigurationProtection(registry: registry, settings: settings, modes: modes, layout: layout, sequencer: sequencer, gate: gate, bus: bus, scheduler: scheduler)
+        reconciler.register(protection)
+        presets = PresetService(registry: registry, settings: settings, modes: modes, layout: layout, controls: controls)
+        presets.engine = engine
+        transfer = SettingsTransferService(settings: settings)
+        layoutCommands = LayoutCommands(
+            registry: registry, settings: settings, modes: modes, controls: controls,
+            layout: layout, connection: connection, protection: protection, presets: presets, transfer: transfer
+        )
+        layoutCommands.indicator = indicator
+        shortcuts = ShortcutService(settings: settings, scheduler: scheduler)
+        shortcuts.engine = engine
+        layoutCommands.shortcuts = shortcuts
+        engine.extensions = [layoutCommands]
+        automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
         eventSource = SystemEventSource(sequencer: sequencer, bus: bus)
         permissionProbe = SystemPermissionProbe(loginItem: loginItem)
         permissions = PermissionBroker(probe: permissionProbe, bus: bus, settings: settings)
@@ -79,13 +111,26 @@ final class AppContext {
         case .newerVersion(let version): Log.app.error("Settings come from a newer version (\(version)) and were left alone.")
         case .fresh, .loaded: break
         }
+        transfer.afterReplace = { [coordinator] in
+            coordinator.refreshTopology()
+            coordinator.reattachAll()
+        }
         eventSource.start()
+        lid.start()
         coordinator.start()
-        Log.app.info("Display 16X \(AppPaths.version) started\(gate.isSafeMode ? " in safe mode" : "").")
+        // Displays the last run left disconnected come back first, then an unconfirmed
+        // layout change is undone. Both pass the gate.
+        Task { @MainActor [connection, layout] in
+            await connection.reconnectAtStartup()
+            await layout.recoverUnconfirmed()
+        }
+        Log.app.info("Display 16X \(AppPaths.version) started\(gate.isSafeMode ? " in safe mode" : "")\(paths.isDevelopmentDirectory ? ", with its files in \(paths.supportDirectory.path)" : "").")
     }
 
     func shutdown() {
         server?.stop()
+        connection.reconnectAtQuit()
+        lid.stop()
         eventSource.stop()
         coordinator.shutdown()
     }
@@ -105,9 +150,12 @@ final class AppContext {
 
     // MARK: IPC
 
-    /// True when another copy of the app already answers on the socket.
+    /// True when another copy of the app already answers on the socket. A development
+    /// build with a folder of its own also stops when the copy in daily use is running,
+    /// because both would drive the same monitors.
     var isAnotherInstanceRunning: Bool {
-        UnixSocketClient(path: paths.socketPath).isServerAlive
+        if UnixSocketClient(path: paths.socketPath).isServerAlive { return true }
+        return paths.isDevelopmentDirectory && UnixSocketClient(path: AppPaths.standard.socketPath).isServerAlive
     }
 
     func startServer() {
@@ -132,7 +180,12 @@ final class AppContext {
                 var command = decoded.command
                 // Whatever arrives on the socket is a command from outside, never a restore.
                 command.origin = .command
-                result = await engine.execute(command)
+                let allowed = settings.document.layout.commandLineAccess ?? LayoutDefaults.commandLineAccess
+                if allowed || (command.operation == .get && command.feature == .status) {
+                    result = await engine.execute(command)
+                } else {
+                    result = .failure("command line access is turned off in Display 16X. Turn it on in the panel")
+                }
             }
         } catch {
             result = .failure("the request could not be read")

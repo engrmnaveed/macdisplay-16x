@@ -10,13 +10,19 @@ public enum ChangeOrigin: String, Codable, Sendable, CaseIterable {
     case command
     case sync
     case outsideChange
+    /// The app puts back what was there before: values after wake, a mode or layout that
+    /// was not kept, displays it had disconnected.
     case restore
+    /// The app acts on its own, on a rule the user set up: layout protection, connection
+    /// automation and whatever follows them. Added in v0.2. Nothing arriving from outside
+    /// can claim it: the socket and links always run as `command`.
+    case automation
     case startup
 
-    /// Automatic writes must pass the automation gate.
+    /// Automatic writes must pass the automation gate, which safe mode keeps closed.
     public var isAutomatic: Bool {
         switch self {
-        case .sync, .restore, .startup: true
+        case .sync, .restore, .automation, .startup: true
         case .interface, .keyboard, .command, .outsideChange: false
         }
     }
@@ -83,6 +89,9 @@ public enum DisplayEvent: Sendable, Equatable {
     case valueChanged(ValueChange)
     /// A mode change started or stopped waiting for Keep or Revert.
     case modeConfirmationChanged(DisplayTag)
+    /// A change to arrangement, mirroring, the main display or a connection started or
+    /// stopped waiting for Keep or Revert. Added in v0.2.
+    case layoutConfirmationChanged
     case gateChanged
     case permissionsChanged
     case settingsChanged

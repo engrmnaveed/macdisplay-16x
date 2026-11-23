@@ -92,15 +92,25 @@ public struct BrightnessSafety: Sendable, Equatable {
         let value = composite.clamped(to: 0...1)
         switch origin {
         case .restore, .startup, .sync:
-            // Only software dimming can leave a picture too dark to read, and only that
-            // part is lifted. A monitor's own lowest brightness is still a readable picture.
-            guard let softwareRange, value < softwareRange else { return value }
-            return max(value, min(restoreFloor, softwareRange))
+            return lifted(value, softwareRange: softwareRange)
+        case .automation:
+            // A restore puts back a value that passed this check when it was chosen. A
+            // rule's value did not, and nobody is watching it arrive. So it gets the floor
+            // of a restore and, like a command, never lands on black unasked.
+            let visible = zeroIsBlack && !allowBlackAtZero ? max(value, BrightnessSafety.interactiveMinimum / 4) : value
+            return lifted(visible, softwareRange: softwareRange)
         case .keyboard:
             return zeroIsBlack && !allowBlackAtZero ? max(value, BrightnessSafety.interactiveMinimum) : value
         case .interface, .command, .outsideChange:
             return zeroIsBlack && !allowBlackAtZero ? max(value, BrightnessSafety.interactiveMinimum / 4) : value
         }
+    }
+
+    /// Only software dimming can leave a picture too dark to read, and only that part is
+    /// lifted. A monitor's own lowest brightness is still a readable picture.
+    private func lifted(_ value: Double, softwareRange: Double?) -> Double {
+        guard let softwareRange, value < softwareRange else { return value }
+        return max(value, min(restoreFloor, softwareRange))
     }
 }
 

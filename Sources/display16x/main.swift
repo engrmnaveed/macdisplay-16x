@@ -33,17 +33,32 @@ display16x \(AppPaths.version) — command line for Display 16X
   display16x status                       App state
   display16x features                     Every feature and what can be done with it
 
-  display16x get <feature> <display> [--stored]
+  display16x help [<feature>]             Help for one feature, with values and an example
+
+  display16x get <feature> [<value>] <display> [--stored]
   display16x set <feature> <value> <display> [--confirm] [--no-verify] [--exact] [--try]
   display16x step <feature> <+N|-N> <display> [--fine]
-  display16x toggle <feature> <display>
-  display16x keep <display>               Keep a mode change that is waiting
-  display16x revert <display>             Go back to the mode before it
+  display16x toggle <feature> [<value>] <display>
+  display16x perform <feature> [<value>] [<display>]
+  display16x keep [<display>]             Keep a mode change that is waiting, or without a
+                                          display, a layout or connection change
+  display16x revert [<display>]           Go back to the mode, or the layout, before it
+
+  display16x arrangement                  Where every display is
+  display16x disconnect <display> [--try]  Take a display out of use without unplugging it
+  display16x reconnect <display> | --all  Bring back displays the app disconnected
+  display16x preset list | apply NAME | save NAME [modes,rotation,layout,brightness] | delete NAME
+  display16x shortcut list | remove KEYS | add KEYS <set|step|toggle|perform> <feature> [<value>] [<display>]
+  display16x settings export [FILE] | import FILE --confirm | reset --confirm
 
   <display>   --tag N | --name "NAME" | --uuid UUID | --main | --pointer | --focused | --all
-  <value>     0 to 1, or a percentage such as 60%. A leading + or - makes it an offset.
-              on or off for switches. WIDTHxHEIGHT for resolution, Hz for refreshRate,
-              degrees for rotation, an input name for input.
+  <other>     --of-tag N | --of-name "NAME" | --of-uuid UUID | --of-main | --of-pointer
+              The other display, for placement and mirroring
+  <value>     0 to 1, or a percentage such as 60%, min or max. A leading + or - makes it
+              an offset. on or off for switches. WIDTHxHEIGHT, default, native or previous
+              for resolution, Hz for refreshRate, degrees for rotation, an input name for
+              input, X,Y for position, left:end and the like for placement.
+  KEYS        Modifiers and a key joined by +, for example ctrl+opt+1 or cmd+shift+f13
 
   --try                              For resolution, refreshRate and rotation: ask Keep or
                                      Revert on screen, and go back on its own after a few
@@ -63,7 +78,7 @@ struct Arguments {
     var flags: Set<String> = []
     var values: [String: String] = [:]
 
-    static let valueOptions: Set<String> = ["--tag", "--name", "--uuid", "--timeout", "--controller"]
+    static let valueOptions: Set<String> = ["--tag", "--name", "--uuid", "--timeout", "--controller", "--of-tag", "--of-name", "--of-uuid"]
 
     init(_ raw: [String]) {
         var index = 0
@@ -99,6 +114,21 @@ struct Arguments {
         return found.first
     }
 
+    /// The other display of a command between two displays.
+    var secondSelector: DisplaySelector? {
+        var found: [DisplaySelector] = []
+        if let tag = values["--of-tag"] {
+            guard let number = Int(tag) else { fail("--of-tag needs a number", .usage) }
+            found.append(.tag(number))
+        }
+        if let name = values["--of-name"] { found.append(.name(name)) }
+        if let uuid = values["--of-uuid"] { found.append(.uuid(uuid)) }
+        if flags.contains("--of-main") { found.append(.main) }
+        if flags.contains("--of-pointer") { found.append(.underPointer) }
+        if found.count > 1 { fail("name one other display: use only one of --of-tag, --of-name, --of-uuid, --of-main, --of-pointer", .usage) }
+        return found.first
+    }
+
     var timeout: TimeInterval {
         guard let text = values["--timeout"] else { return 10 }
         guard let seconds = TimeInterval(text), seconds > 0 else { fail("--timeout needs a number of seconds", .usage) }
@@ -117,35 +147,16 @@ struct Arguments {
 }
 
 func parseValue(_ text: String, for feature: FeatureDescriptor) -> CommandValue {
-    switch feature.valueKind {
-    case .ranged:
-        let isOffset = text.hasPrefix("+") || text.hasPrefix("-")
-        let isPercent = text.hasSuffix("%")
-        let digits = text.replacingOccurrences(of: "%", with: "").replacingOccurrences(of: ",", with: ".")
-        guard var number = Double(digits) else { fail("\"\(text)\" is not a value. Use 0 to 1, or a percentage such as 60%", .usage) }
-        if isPercent {
-            number /= 100
-        } else if abs(number) > 1 {
-            fail("\"\(text)\" is outside 0 to 1. Add % for a percentage", .usage)
-        }
-        return isOffset ? .offset(number) : .absolute(number)
-    case .boolean, .toggleOnly:
-        switch text.lowercased() {
-        case "on", "true", "yes", "1": return .flag(true)
-        case "off", "false", "no", "0": return .flag(false)
-        default: fail("\"\(text)\" is not on or off", .usage)
-        }
-    case .choice:
-        return .choice(text)
-    case .action, .report:
-        fail("\(feature.id) cannot be set", .usage)
+    switch CommandValueParser.parse(text, for: feature) {
+    case .success(let value): return value
+    case .failure(let refusal): fail(refusal.reason, .usage)
     }
 }
 
 // MARK: Sending
 
 func send(_ command: Command, arguments: Arguments) -> Never {
-    if let problem = FeatureRegistry.standard.validate(command) { fail(problem, .usage) }
+    if let problem = FeatureRegistry.full.validate(command) { fail(problem, .usage) }
     let client = UnixSocketClient(path: AppPaths().socketPath)
     let result: CommandResult
     do {
@@ -171,7 +182,7 @@ func send(_ command: Command, arguments: Arguments) -> Never {
 
 func feature(named name: String?) -> FeatureDescriptor {
     guard let name else { fail("name a feature. Run \"display16x features\" for the list", .usage) }
-    let registry = FeatureRegistry.standard
+    let registry = FeatureRegistry.full
     guard let match = registry.ordered.first(where: { $0.id.rawValue.lowercased() == name.lowercased() }) else {
         fail("unknown feature \"\(name)\". Run \"display16x features\" for the list", .usage)
     }
@@ -192,12 +203,27 @@ if arguments.flags.contains("--help") {
 var options = CommandOptions()
 options.controller = arguments.controller
 
+/// A command with the second display filled in from --of-… flags.
+func command(_ operation: CommandOperation, _ feature: FeatureID, value: CommandValue? = nil, options: CommandOptions = CommandOptions()) -> Command {
+    var built = Command(operation, feature, on: arguments.selector, value: value, origin: .command, options: options)
+    built.secondSelector = arguments.secondSelector
+    return built
+}
+
+/// The positional words after the verb and the feature.
+var rest: [String] { Array(arguments.positional.dropFirst(2)) }
+
 switch verb {
 case "help":
-    print(usage)
+    if let name = arguments.positional.dropFirst().first {
+        let target = feature(named: name)
+        print(FeatureRegistry.full.help(for: target.id) ?? usage)
+    } else {
+        print(usage)
+    }
 
 case "features":
-    print("Features\n" + FeatureRegistry.standard.help())
+    print("Features\n" + FeatureRegistry.full.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
 
 case "probe":
     var probeOptions = ProbeOptions()
@@ -223,11 +249,15 @@ case "list":
 case "status":
     send(Command(.get, .status, origin: .command), arguments: arguments)
 
+case "arrangement":
+    send(Command(.get, .arrangement, origin: .command), arguments: arguments)
+
 case "get":
     let target = feature(named: arguments.positional.dropFirst().first)
     // Reading means asking the device, unless the stored value is asked for.
     options.refresh = !arguments.flags.contains("--stored")
-    send(Command(.get, target.id, on: arguments.selector, origin: .command, options: options), arguments: arguments)
+    let value = rest.first.map { CommandValue.choice($0) }
+    send(command(.get, target.id, value: value, options: options), arguments: arguments)
 
 case "set":
     let target = feature(named: arguments.positional.dropFirst().first)
@@ -237,24 +267,140 @@ case "set":
     options.matching = arguments.flags.contains("--exact") ? .exact : .nearest
     options.timedRevert = arguments.flags.contains("--try")
     let value = parseValue(arguments.positional[2], for: target)
-    send(Command(.set, target.id, on: arguments.selector, value: value, origin: .command, options: options), arguments: arguments)
+    send(command(.set, target.id, value: value, options: options), arguments: arguments)
 
 case "step":
     let target = feature(named: arguments.positional.dropFirst().first)
     guard arguments.positional.count >= 3, let steps = Int(arguments.positional[2].replacingOccurrences(of: "+", with: "")), steps != 0 else {
         fail("step needs a number of steps, for example: display16x step brightness +1 --main", .usage)
     }
-    send(Command(.step, target.id, on: arguments.selector, value: .steps(steps, fine: arguments.flags.contains("--fine")), origin: .command, options: options), arguments: arguments)
+    options.timedRevert = arguments.flags.contains("--try")
+    send(command(.step, target.id, value: .steps(steps, fine: arguments.flags.contains("--fine")), options: options), arguments: arguments)
 
 case "toggle":
     let target = feature(named: arguments.positional.dropFirst().first)
-    send(Command(.toggle, target.id, on: arguments.selector, origin: .command, options: options), arguments: arguments)
+    options.timedRevert = arguments.flags.contains("--try")
+    send(command(.toggle, target.id, value: rest.first.map { CommandValue.choice($0) }, options: options), arguments: arguments)
+
+case "perform":
+    let target = feature(named: arguments.positional.dropFirst().first)
+    options.confirmed = arguments.flags.contains("--confirm")
+    options.timedRevert = arguments.flags.contains("--try")
+    send(command(.perform, target.id, value: rest.first.map { CommandValue.choice($0) }, options: options), arguments: arguments)
 
 case "keep":
+    if arguments.selector == nil {
+        send(Command(.perform, .keepLayout, origin: .command), arguments: arguments)
+    }
     send(Command(.perform, .keepMode, on: arguments.selector, origin: .command), arguments: arguments)
 
 case "revert":
+    if arguments.selector == nil {
+        send(Command(.perform, .revertLayout, origin: .command), arguments: arguments)
+    }
     send(Command(.perform, .revertMode, on: arguments.selector, origin: .command), arguments: arguments)
+
+case "disconnect":
+    options.timedRevert = arguments.flags.contains("--try")
+    send(command(.set, .connected, value: .flag(false), options: options), arguments: arguments)
+
+case "reconnect":
+    if arguments.flags.contains("--all") {
+        send(Command(.perform, .reconnectAll, origin: .command), arguments: arguments)
+    }
+    send(command(.set, .connected, value: .flag(true)), arguments: arguments)
+
+case "preset":
+    let action = arguments.positional.dropFirst().first ?? "list"
+    let name = rest.first
+    switch action {
+    case "list":
+        send(Command(.get, .preset, origin: .command), arguments: arguments)
+    case "apply":
+        guard let name else { fail("name the preset to apply", .usage) }
+        options.timedRevert = arguments.flags.contains("--try")
+        send(Command(.set, .preset, value: .choice(name), origin: .command, options: options), arguments: arguments)
+    case "save":
+        guard let name else { fail("name the preset to save", .usage) }
+        let contents = rest.dropFirst().first.map { ":" + $0 } ?? ""
+        send(Command(.set, .savePreset, value: .choice(name + contents), origin: .command), arguments: arguments)
+    case "delete":
+        guard let name else { fail("name the preset to delete", .usage) }
+        send(Command(.set, .deletePreset, value: .choice(name), origin: .command), arguments: arguments)
+    default:
+        fail("preset takes list, apply, save or delete", .usage)
+    }
+
+case "shortcut":
+    let action = arguments.positional.dropFirst().first ?? "list"
+    switch action {
+    case "list":
+        send(Command(.get, .shortcuts, origin: .command), arguments: arguments)
+    case "remove":
+        guard let keys = rest.first else { fail("name the keys, for example ctrl+opt+1", .usage) }
+        send(Command(.set, .removeShortcut, value: .choice(keys), origin: .command), arguments: arguments)
+    case "add":
+        // shortcut add KEYS VERB FEATURE [VALUE] [display flags]
+        guard rest.count >= 3, let combo = KeyNames.combo(parsing: rest[0]) else {
+            fail("shortcut add needs keys, a verb and a feature, for example: display16x shortcut add ctrl+opt+1 set preset Desk", .usage)
+        }
+        guard let operation = CommandOperation(rawValue: rest[1]), operation != .get else { fail("the shortcut's verb is set, step, toggle or perform", .usage) }
+        let target = feature(named: rest[2])
+        var value: CommandValue?
+        if rest.count >= 4 {
+            if operation == .step {
+                guard let steps = Int(rest[3].replacingOccurrences(of: "+", with: "")), steps != 0 else { fail("step needs a number of steps", .usage) }
+                value = .steps(steps, fine: arguments.flags.contains("--fine"))
+            } else if operation == .set {
+                value = parseValue(rest[3], for: target)
+            } else {
+                value = .choice(rest[3])
+            }
+        }
+        var bound = command(operation, target.id, value: value)
+        bound.origin = .keyboard
+        bound.options.confirmed = arguments.flags.contains("--confirm")
+        if let problem = FeatureRegistry.full.validate(bound) { fail(problem, .usage) }
+        let binding = ShortcutBinding(combo: combo, command: bound)
+        guard let data = try? JSONEncoder().encode(binding) else { fail("the shortcut could not be encoded", .failed) }
+        send(Command(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)), origin: .command), arguments: arguments)
+    default:
+        fail("shortcut takes list, add or remove", .usage)
+    }
+
+case "settings":
+    let action = arguments.positional.dropFirst().first ?? ""
+    switch action {
+    case "export":
+        let client = UnixSocketClient(path: AppPaths().socketPath)
+        let result: CommandResult
+        do {
+            result = try client.execute(Command(.get, .settingsExport, origin: .command), timeout: arguments.timeout)
+        } catch {
+            fail(error.message, error == .appNotRunning ? .appNotRunning : .failed)
+        }
+        guard let text = result.report else { fail(result.error ?? "the app sent no settings", .failed) }
+        if let path = rest.first, path != "-" {
+            do {
+                try Data(text.utf8).write(to: URL(fileURLWithPath: path), options: .atomic)
+                print("Settings written to \(path).")
+            } catch {
+                fail("the file could not be written: \(error.localizedDescription)", .failed)
+            }
+        } else {
+            print(text)
+        }
+    case "import":
+        guard let path = rest.first else { fail("name the file to import", .usage) }
+        guard let data = FileManager.default.contents(atPath: path) else { fail("the file could not be read", .failed) }
+        options.confirmed = arguments.flags.contains("--confirm")
+        send(Command(.set, .settingsImport, value: .choice(String(decoding: data, as: UTF8.self)), origin: .command, options: options), arguments: arguments)
+    case "reset":
+        options.confirmed = arguments.flags.contains("--confirm")
+        send(Command(.perform, .settingsReset, origin: .command, options: options), arguments: arguments)
+    default:
+        fail("settings takes export, import or reset", .usage)
+    }
 
 default:
     fail("unknown command \"\(verb)\". Run \"display16x help\"", .usage)

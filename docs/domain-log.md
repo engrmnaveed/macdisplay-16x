@@ -6,6 +6,113 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.2 Layout closed by the owner with three things left for a later version
+
+The owner ended the v0.2 build session after the hardware checks. Left open, to be picked up and verified by a later version's improvements:
+
+1. Check 11: the saved layout across a display sleep of ten minutes or more, with layout protection on. A long sleep with protection off wrote nothing.
+2. The offer of decision 13, built and unit-tested, not yet seen on screen.
+3. The built-in panel coming back when the last external display goes away, unit-tested only, and the owner's decision on turning it off automatically at all (entry below).
+
+## 23 November 2026 · A change origin for automation, and what comes with it
+
+Asked for by the planning thread, built by the core session on a branch cut from the v0.2 line. Unit tests only, nothing was run on hardware.
+
+Until now the app's own rule-driven writes (layout protection, turning the built-in panel off) called themselves a restore. They now have an origin of their own, **automation**. A restore puts back what was there before. Automation acts on a rule the user set up.
+
+- **It is automatic.** It passes the automation gate exactly as a restore does: closed while the app starts, while the Mac sleeps, in another user's session, and for the whole run in safe mode.
+- **Nothing from outside can claim it.** Commands from the command line tool and from links always run as commands, and shortcuts as keys.
+- **Everywhere else it behaves as a restore does,** with one exception below: no Keep or Revert countdown, no on-screen indicator, a muted monitor stays muted, and a write the monitor ignores is not counted as evidence against the control.
+- **The exception: an automatic brightness change never lands on black unasked.** A restore puts back a value that was checked when the user chose it. A rule's value was not, and nobody is watching it arrive. So it gets the restore floor and, like a command, stops just above black unless the user allowed black at zero. No rule writes brightness yet, so this changes nothing today. **Decision needed:** confirm, or say that automation should match a restore here too.
+- **A value a rule wrote is tracked and is nobody's choice,** and it leaves an earlier choice standing, as a restore does. One consequence to settle before the first rule writes a value: with "Put my values back after sleep" on, what is put back is the last value written, so the rule's value and not the one the user chose by hand.
+
+**What an older build does with the new word.** No file holds an origin for its own sake. The recovery store has none and the log is text. The released 0.1.0 can meet an origin only in a request on the command socket, where an unknown word makes it refuse the whole request ("the request could not be read") and change nothing. No build sends automation there.
+
+From v0.2 on the settings file holds commands, in presets and shortcuts, and each carries an origin. The app stores only "command" and "keyboard" there and replaces the origin when the command is run, so the new word never reaches the file. **Rule: keep it that way.** **Decision needed:** one stored command a build cannot read, whether for an origin, an operation or a value added later, makes that build set the whole settings file aside and start from defaults. It should cost that one preset or shortcut. This is worth closing before v0.2 ships, because afterwards v0.2 builds are the older builds.
+
+**The gate is checked before each automatic write, not once per pass.** Restored values do this already, because each one goes through the command engine. Layout protection checks once and then changes the mode of each display in turn, waiting for the system to settle each time, so a write can go out after the Mac has begun to sleep. Reported to the planning thread for the v0.2 session.
+
+
+Update, 23 November, on the v0.2 line: the rule-driven writes now use it. Layout protection (mode, rotation and the saved arrangement) and turning the built-in panel off and back on write as `automation`. Undoing an unconfirmed layout change after a crash, reconnecting at start and at quit, a built-in panel's reconnect that waited for the lid, and reconnecting when no display is left in use stay `restore`: each puts back the app's own change and follows no rule the user set. The gate is checked before each protection write, and presets and shortcuts are read entry by entry, so one stored command a build cannot read costs only its own entry.
+## 23 November 2026 · The owner checks: what macOS does when a layout changes, and two bugs they found
+
+Mac17,9, macOS 27.2.1, the Lenovo P32p-20 on HDMI and the LG SDQHD on DisplayPort, with the owner at the desk. Every result is in the feasibility notes. What matters for the product:
+
+- **macOS keeps a configuration per set of displays and applies it by itself.** Seen three ways now: at a wake when the LG is briefly away, when the app disconnects the LG, and when the built-in panel joins. In each case the remaining monitors change mode (the Lenovo to 1920 × 1080) and change back when the set does. The app must treat these as macOS's own, not as outside changes.
+- **A display that mirrors reports its source's size,** and gets its own mode back when it stops. Undoing a mirror with the size it had while mirroring looked like an overlap and was refused. Fixed.
+- **Never turn the built-in panel on while the lid is closed.** It lights up behind the lid, becomes the main display, takes the menu bar, and macOS switches the external monitors to the three-display configuration. Fixed: it waits for the lid to open, at quit too.
+- **An empty configuration transaction is silent,** so the app could even apply a no-op safely. It skips them anyway.
+- **Shortcuts work without the Accessibility permission,** as system hot keys.
+
+**Decision needed, raised by the owner:** turning the built-in panel off automatically leaves it dark until something brings it back, and when the app is not running only logging out does. The owner's view is that the internal display should not be left dark. It is off by default and comes back when the last external display goes away (unit-tested, not yet tried on hardware). The options: keep it as built, drop the feature, or limit it, for example to a panel that is turned off only while the app runs and is turned back on at quit whatever the lid does.
+
+## 23 November 2026 · A development build gets a settings folder of its own
+
+A build under test shared the settings folder, the recovery store and the command socket of the copy in daily use, and a v0.2 build writes a settings document that a v0.1 copy drops parts of. The paths belong to the core, so this is said here: `AppPaths` now reads `DISPLAY16X_SUPPORT_DIRECTORY`. When it is set, the app and the command line tool keep settings, the recovery store and the socket in that folder. Unset, every path is what it was. A build with its own folder also refuses to start while the copy in daily use answers on the standard socket, because both would drive the same monitors and color tables. The socket path must stay under about 100 characters, so a short folder such as `~/d16x-dev` is the one to use.
+
+A side benefit: the smoke test can now run its "the app is not running" branch on a Mac where the app is in use, with the variable pointing at a folder no app uses. It passed on the M5 Pro.
+
+## 23 November 2026 · v0.2: links need one line in the packaging script
+
+The `display16x://` handler is built: it runs behind its own switch, off by default, checks a token the panel shows, goes through the engine and opens x-callback-url callbacks. macOS only routes a scheme to an app whose `Info.plist` declares it under `CFBundleURLTypes`. The plist is written by `scripts/package-macos.sh`, which v0.2 was asked to leave alone until the release branch has merged. **Change needed after that merge:** add a `CFBundleURLTypes` entry with the scheme `display16x` to the generated `Info.plist`. Until then links do nothing, and the URL scheme row of the feature inventory is built but not reachable.
+
+Update, 23 November, after main took the release branch: done. The generated `Info.plist` declares the scheme, and the packaged bundle passes `plutil` and the version check. Links have not been opened on hardware yet.
+
+## 23 November 2026 · At a wake, macOS runs the remaining monitor in another mode while the LG is away
+
+Mac17,9, macOS 27.2.1, Lenovo P32p-20 on HDMI, LG SDQHD on DisplayPort, a display sleep of at least 27 minutes, seen by the read-only layout watch. The LG left 0.17 seconds after the wake and returned 3.6 seconds after it, as before. New: while it was away, the Lenovo ran at 1920 × 1080, its default size, instead of the 3200 × 1800 it had before and after. When the LG returned, macOS put both monitors back as they were, size and arrangement included. Details in the feasibility notes.
+
+What it means for the product:
+
+- macOS keeps a configuration per set of connected displays and applies it by itself. A monitor that is away for a few seconds changes the set, and the others change with it. These transient modes are not outside changes and must not be "corrected".
+- Anything that restores a mode, rotation or arrangement has to wait until the set of displays has stopped changing, not only until the wake has settled. The wake settles at 3 seconds and the LG returned at 3.6. v0.2 protection waits for 5 seconds without a display arriving or leaving. A fixed value in the code for now.
+- If it had acted at once, it would have written 3200 × 1800 into macOS's configuration for the Lenovo alone, which changes what the user sees the next time the LG is unplugged.
+- The value restore of v0.1 is not affected: it does not touch modes.
+
+## 23 November 2026 · v0.2 core: what it adds to the v0.1 core, and the rules it adopted
+
+**Where v0.2 touches the v0.1 core.** No existing behavior changed: every v0.1 test passes unchanged. Five additions, each a hook the architecture reserved or the smallest step that leaves v0.1 alone:
+
+1. `CommandEngine.extensions`: handlers that see a command after validation and the automation gate, and may answer it. Every v0.2 feature, and the new size steps, named sizes and rotation steps, go through it. A command no extension claims runs exactly as before.
+2. `DisplayRegistry.stateOverride`: lets connection management report `disconnectedByApp` and `disconnectedBySystem`, the two states v0.1 reserved.
+3. One event, `layoutConfirmationChanged`, for Keep and Revert on a layout or connection change.
+4. Optional `layout` sections in the settings document and in each record's settings, and three fields in the recovery store (the layout before a change, whether it waits for Keep, and the displays the app disconnected). The settings version stays 1. A v0.1 build reads the file and ignores the new keys, and a higher version would make it set the whole file aside. The cost: a v0.1 build that saves the file drops the v0.2 sections. That only happens when two builds share one settings folder, as during development on this Mac.
+5. The v0.1 test rig takes the feature registry as a parameter.
+
+**A change for the session that owns the core, not needed now:** automatic layout, protection and connection writes carry the origin `restore`. A distinct origin such as `automation` would read better in logs and let a later consumer tell a restore from an automatic disconnect. Adding one touches three exhaustive switches in v0.1 code, so v0.2 did not.
+
+**Rules adopted where the documents left room:**
+
+- **Configuration restore acts only on a target the user asked to protect.** Mode and rotation protection are switches per display, and the arrangement, main display and mirroring are protected together by one switch with a saved layout. All are off by default. The target follows every change made through the app. This follows the v0.1 rule that only what the user set through the app is desired state, and macOS already put the arrangement back by itself after every cable test on this desk. **Decision needed:** whether layout protection should switch itself on once the user arranges displays through the app, which the PRD's "Layout: on" could be read to mean. *Decided as decision 13 and built: protection stays off by default, and after Keep on an arrangement, main display or mirroring change made through the app, the app offers it once. "Not now" stops the offers until the app starts again. On the command line the offer is one line in the result of `keep`, once per run.*
+- **Protection stops after three attempts within two minutes for one target** and says so on screen. It starts again when the target changes. A mode the display no longer offers is skipped and said once.
+- **Presets apply without Keep and Revert,** as the architecture says for presets. A click in the panel counts as a command inside a preset, so one preset does not open one countdown per display. `--try` on the command that applies it gives the countdown.
+- **A disconnect lasts for the session only,** so logging out brings the display back even if the app is gone. Displays the app disconnected are reconnected at quit without waiting for the gate, the same as color tables are cleared at quit, because that undoes the app's own change. At the next start after a crash they are reconnected through the gate.
+- **When the last display in use goes away by itself** and the app holds others disconnected, they are reconnected, through the gate. **Decision needed:** in safe mode the gate stays closed, so a Mac could be left with no picture until logout. The options are to let this one reconnect pass the gate, or to leave it as built and rely on the session-only disconnect. *Decided as decision 14 and built: in exactly this case the displays come back at once, in safe mode too, logged with the reason, like the reconnect at quit. The gate is unchanged. While the Mac sleeps it waits for the wake to settle, and a built-in panel behind a closed lid waits for the lid.*
+- **Reset keeps the displays known under their tags.** Names and every setting go back to defaults, so a script that names a tag keeps working. Export leaves out the link token and values waiting for a display.
+- **The model safeguard list is empty.** Nothing is known about a Mac where turning the built-in panel off is risky. The rule and its override switch exist, and a hardware report adds a model.
+- **Turning the built-in panel off automatically pauses after the user brings it back by hand,** until an external display is attached or detached.
+
+## 23 November 2026 · v0.2: Shortcuts actions are left out, because the Command Line Tools cannot build them
+
+**Decision, as the brief asked.** An App Intent compiles and links with the Command Line Tools. The step that turns the intents into the metadata Shortcuts reads, `appintentsmetadataprocessor`, ships with Xcode only. An app bundle without that metadata offers Shortcuts nothing. The project builds with the Command Line Tools alone, so v0.2 has no Shortcuts actions. Measured in the feasibility notes.
+
+What a Shortcuts user has instead, without any new code: the "Run Shell Script" action calling `display16x`, which reaches every feature, and once the URL scheme is registered, the "Open URLs" action with a `display16x://` link.
+
+What would bring them back, for the maintainer: build the release with Xcode on CI (the runner has it), which gives up "builds with the Command Line Tools alone" for releases only, or wait for Apple to ship the tool with the Command Line Tools.
+
+## 23 November 2026 · This Mac has a built-in panel: it is a laptop with the lid closed
+
+The planning notes describe the test Mac as having no built-in panel. The power management root of Mac17,9 reports `AppleClamshellState` 1 and `AppleClamshellCausesSleep` 1, so it is a laptop running closed with two external monitors. macOS keeps the built-in panel out of the display list while the lid is closed.
+
+What it means for v0.2:
+
+- The built-in panel rules (turning it off when an external display is attached, the exceptions, the pause after a manual override) can be tried on this desk, but only by opening the lid. Opening it brings the panel into the layout, so it is a connection change and needs the owner at the desk.
+- Lid events can be observed here by opening and closing the lid, with the same caution.
+- The connection policy must treat a closed lid as "the built-in panel is already out of use", not as a display the app can take away. It is reported as disconnected by the system, never counted as an eligible display, and never offered for disconnect.
+
+## 23 November 2026 · v0.2: asking macOS to look for displays again is left out
+
+SkyLight exports `SLSDetectDisplays` on macOS 27.2.1. None of the permitted references documents what it takes, and calling a private function with a guessed signature can corrupt the caller's state or crash it. The feature "Redetect displays" is therefore not built. The button the system once had for this is a reasonable thing to send users to instead. It can be added later in `DisplayPrivate` if an MIT, BSD or Apache project or Apple documentation describes the call.
 ## 23 November 2026 · Releases: one certificate keeps the same signing requirement across builds, and Homebrew now rewards that too
 
 The release mechanism is built on its own branch (runbook: [release.md](release.md)). Checked on the Mac17,9 with macOS 27.2.1, the Command Line Tools with Swift 6.4.2, and Homebrew 7.0.15. No tag, release, secret or GitHub setting was created.

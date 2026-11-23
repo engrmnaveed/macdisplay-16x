@@ -36,6 +36,7 @@ The app appears as a display icon in the menu bar and has no Dock icon. Click th
 - **Verbose log:** pass `--verbose` to log debug detail and echo the log to standard error.
 - **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild: remove the old Display 16X entry from the Accessibility list and add the new one. To keep the grant across rebuilds, create a code signing certificate in Keychain Access (Certificate Assistant, Create a Certificate, type Code Signing) and pass its name: `DISPLAY16X_SIGN_IDENTITY="name" scripts/package-macos.sh`.
 - **Panel snapshot:** `--snapshot-panel FILE` renders the panel to a PNG without showing it and quits, and `--snapshot-details` opens the detail views in it. It is a development aid for checking the layout.
+- **A build under test next to the copy you use:** set `DISPLAY16X_SUPPORT_DIRECTORY=~/d16x-dev` for the app and for `display16x`, and the build keeps its settings, recovery values and socket in that folder instead of the usual one. Such a build does not start while the normal copy is running, because both would drive the same monitors.
 
 ## Checks
 
@@ -72,6 +73,24 @@ dist/display16x features                   # every feature and its operations
 ```
 
 `probe` is read-only and runs on its own, which makes it the thing to attach to a bug report. Every other command is sent to the running app over a socket only your user can open, with a timeout and a clear message when the app is not running. Each display gets one line: `confirmed` (read back from the device), `accepted` (sent or stored, not proven) or `failed` with the reason.
+
+Layout, from v0.2. Fourteen of fifteen hardware checks ran on the two test monitors; a saved layout across a long display sleep with protection on, and the built-in panel coming back when the last external display goes away, are unit-tested only (see the [feasibility notes](docs/feasibility.md#the-owner-checks-23-november-1217-to-1309-the-owner-at-the-desk)):
+
+```sh
+dist/display16x arrangement                                   # where every display is
+dist/display16x set main on --tag 2 --try                     # asks Keep or Revert
+dist/display16x set placement left:end --tag 2 --of-tag 1     # next to another display
+dist/display16x set mirror on --tag 2 --of-tag 1
+dist/display16x disconnect --tag 2 --try                      # out of use without unplugging
+dist/display16x reconnect --all
+dist/display16x preset save Desk && dist/display16x preset apply Desk
+dist/display16x shortcut add ctrl+opt+1 set preset Desk       # a global shortcut
+dist/display16x set protectLayout on                          # put the saved layout back after wake
+dist/display16x settings export backup.json
+dist/display16x help placement                                # values and an example for any feature
+```
+
+Every change to the arrangement, the main display, mirroring or a connection is recorded first, so `display16x revert` (with no display named) puts the last one back. A disconnect lasts for the login session only, and the app reconnects what it disconnected when it quits.
 
 ## What works today
 

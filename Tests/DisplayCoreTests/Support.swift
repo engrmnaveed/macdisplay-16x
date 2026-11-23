@@ -439,7 +439,7 @@ final class Rig {
     let coordinator: DisplayCoordinator
     var events: [DisplayEvent] = []
 
-    init(safeMode: Bool = false, persistence: MemoryPersistence = MemoryPersistence(), recoveryPersistence: MemoryPersistence = MemoryPersistence(), configure: ((inout SettingsDocument) -> Void)? = nil) {
+    init(safeMode: Bool = false, persistence: MemoryPersistence = MemoryPersistence(), recoveryPersistence: MemoryPersistence = MemoryPersistence(), features: FeatureRegistry = .standard, configure: ((inout SettingsDocument) -> Void)? = nil) {
         self.persistence = persistence
         self.recoveryPersistence = recoveryPersistence
         settings = SettingsStore(persistence: persistence, scheduler: scheduler)
@@ -450,7 +450,7 @@ final class Rig {
         registry = DisplayRegistry(settings: settings, scheduler: scheduler)
         controls = ControlService(registry: registry, settings: settings, bus: bus, sequencer: sequencer)
         modes = ModeService(registry: registry, system: modeSystem, rotationSystem: rotationSystem, settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate)
-        engine = CommandEngine(registry: registry, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
+        engine = CommandEngine(registry: registry, features: features, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
         engine.selectorContext = context
         reconciler = Reconciler(engine: engine, registry: registry, controls: controls, settings: settings, gate: gate, scheduler: scheduler)
         coordinator = DisplayCoordinator(
