@@ -2,19 +2,30 @@
 
 A release is a tag. Pushing `vX.Y.Z` that matches [scripts/release-version](../scripts/release-version) runs **Release** ([release.yml](../.github/workflows/release.yml)), which builds, signs and archives the app, waits for the owner's approval, publishes the GitHub Release and updates the Homebrew cask. It works the same way as Space 16X, so the steps below are the same for both projects.
 
-## Before a release
+**Every milestone is a release.** When a milestone is merged into `main`, its version is released: 0.2.0 for v0.2, 0.3.0 for v0.3, and so on. A fix between milestones is a patch version, such as 0.2.1. A release takes two steps: [prepare](#1-prepare-the-version) the version in a pull request, then [tag](#2-tag-the-merged-version) the merged commit.
 
-1. Merge the work into `main` and wait for CI to pass there.
-2. Set the version in `scripts/release-version`. It is the only place the version is written: the packaging script reads it for the bundle, and the ReleaseVersion build plugin writes it into the app and the `display16x` tool. Use three numbers, such as `0.1.1`.
-3. Give the version its section in [CHANGELOG.md](../CHANGELOG.md), headed `## X.Y.Z`. Write what changed for someone who uses the app. Collect changes under `## Unreleased` between releases and rename the heading when you set the version.
-4. Preview the release notes. They are the changelog section followed by the standard text about the assets and how the app is signed:
+0.2.0 is the first release and is ad hoc signed, because the project certificate does not exist yet. See [Signing](#signing) for what that costs users and what changes the next release.
+
+## 1. Prepare the version
+
+1. Wait until the milestone is merged into `main` and CI has passed there. Cut a branch from it, such as `release/0.3.0`, in a clean checkout.
+2. Run the prepare step:
 
    ```sh
-   scripts/release-notes 0.1.1
+   scripts/prepare-release 0.3.0
    ```
 
-   An optional second argument names the signing level: `certificate` (the default), `developer-id` or `adhoc`. The workflow passes the level it read back from the signed app.
-5. Run the checks CI runs, from a clean checkout of `main`:
+   It writes the version to `scripts/release-version`, renames the `## Unreleased` section of [CHANGELOG.md](../CHANGELOG.md) to `## 0.3.0` with a new, empty `## Unreleased` above it, and moves the version in the examples of the [installation guide](install.md). It refuses a version that is not later than the current one, a dirty working tree, an empty `## Unreleased` section, and a version that is tagged already. `scripts/release-version` is the only place the version is written: the packaging script reads it for the bundle, and the ReleaseVersion build plugin writes it into the app and the `display16x` tool.
+3. Edit the new section for someone who uses the app: one section per release, what changed, and plainly what was checked on hardware and what was not. Between releases, every change adds its entry under `## Unreleased`.
+4. If the signing level changes with this release, such as the first release signed with the project certificate, update the signing paragraphs at the top of the [installation guide](install.md) and in the Install section of the [README](../README.md).
+5. Preview the release notes. They are the changelog section followed by the standard text about the assets and how the app is signed:
+
+   ```sh
+   scripts/release-notes 0.3.0 certificate
+   ```
+
+   The second argument is the signing level: `certificate` (the default), `developer-id` or `adhoc`. A third, the tag of the last release, adds the sentence for users whose Accessibility permission does not carry over because the signer changed. The workflow passes both: the level it read back from the signed app, and the last release's tag when the new app does not satisfy its signing requirement.
+6. Run the checks CI runs:
 
    ```sh
    scripts/check-identifiers.sh
@@ -27,20 +38,22 @@ A release is a tag. Pushing `vX.Y.Z` that matches [scripts/release-version](../s
    scripts/archive-macos.sh
    ```
 
-   `check-version.sh` fails when the bundle, the tool and the version file disagree, or when the changelog has no section for the version. `check-hardened-runtime.sh` fails when the private interfaces resolve differently under the hardened runtime, which notarization needs. Neither changes a display.
-6. Update the version in the examples of the [installation guide](install.md) if they name one.
-7. Commit the version, the changelog and the guide to `main` through a pull request.
+   `check-version.sh` fails when the bundle, the tool and the version file disagree, or when the changelog has no section for the version. `check-hardened-runtime.sh` fails when the private interfaces resolve differently under the hardened runtime, which notarization needs. Neither changes a display. `smoke-test.sh` and `display16x probe` read every connected monitor over DDC; on a Mac where a copy of Display 16X is in use, leave them to CI.
+7. Commit, open a pull request into `main`, and merge it once CI passes.
+
+## 2. Tag the merged version
+
+Once the pull request is merged, tag the tip of `main`:
+
+```sh
+scripts/tag-release 0.3.0 --push
+```
+
+It fetches `origin/main` and tags its tip only when that commit holds the version in `scripts/release-version`, a `## 0.3.0` section in the changelog, and a passing **Build, test and package** check, and when the tag does not exist yet. Without `--push` it makes the tag and prints the command that pushes it. It changes nothing in the working tree, so it can run from any checkout. The tag ruleset lets only the repository's administrators create a `v*` tag. With `tag.gpgSign` set in git, the tag is signed.
 
 ## How a tag becomes a release
 
-Tag the reviewed commit on `main` and push the tag:
-
-```sh
-git tag -s v0.1.1 -m "Display 16X 0.1.1"
-git push origin v0.1.1
-```
-
-Use `git tag -a` if you do not sign tags. The workflow then runs these jobs:
+The pushed tag runs these jobs:
 
 1. **Tag matches scripts/release-version.** Fails unless the tag is `v` followed by the content of `scripts/release-version`, and `CHANGELOG.md` has a section for it.
 2. **Same checks as CI.** Runs [ci.yml](../.github/workflows/ci.yml) unchanged: identifiers, build, unit tests, packaging, smoke test, version check, hardened runtime check, the archive, and `brew style` on the cask.
@@ -48,16 +61,18 @@ Use `git tag -a` if you do not sign tags. The workflow then runs these jobs:
 4. **Publish**, in the `release` environment. It waits here for a required reviewer. Before you approve, read the run summary and, if you like, download the artifact and try it. After approval it:
    - checks the archive's digest again, renders the cask with `scripts/render-cask` and the notes with `scripts/release-notes`,
    - attests build provenance for the ZIP,
-   - runs `gh release create --verify-tag` with the ZIP, its `.sha256` file and `display16x.rb`, titled "Display 16X vX.Y.Z", with the notes,
-   - commits `Casks/display16x.rb` to [engrmnaveed/homebrew-tap](https://github.com/engrmnaveed/homebrew-tap) with the deploy key, or leaves a notice when `HOMEBREW_TAP_DEPLOY_KEY` is not set.
+   - runs `gh release create --verify-tag` with the ZIP, its `.sha256` file and `display16x.rb`, titled "Display 16X vX.Y.Z", with the notes. With immutable releases on, its assets and its tag cannot be changed afterwards; its title and notes can still be edited,
+   - commits `Casks/display16x.rb` to [engrmnaveed/homebrew-tap](https://github.com/engrmnaveed/homebrew-tap) with the deploy key. Without `HOMEBREW_TAP_DEPLOY_KEY` it leaves a warning and a line in the run summary instead, and `brew install` does not find the new version until you [commit the cask by hand](#homebrew-tap).
 
-If a job fails before **Publish**, nothing is published. Fix the cause on `main`, delete the tag if your rules allow it, and tag again, or move on to the next patch version.
+**What the reviewer sees and clicks.** GitHub sends the reviewer a notification that a deployment to `release` waits for review. In the run (**Actions → Release →** the run for the tag), the summary lists the signing level, the designated requirement and the archive's SHA-256, and the artifact `display16x-macos-arm64` can be downloaded. An ad hoc build also shows the warning that it is not signed with the project certificate. Click **Review deployments**, tick **release**, and click **Approve and deploy**. **Reject** stops the run with nothing published. A pending review expires after 30 days.
 
-After the release, install it with Homebrew on a Mac and open it once. With the first two releases signed with the project certificate, also do the [check across an update](#check-the-first-two-releases).
+If a job fails before **Publish**, nothing is published. Fix the cause on `main`, delete the tag if your rules allow it, and tag again, or move on to the next patch version. Once **Publish** has created the release, the version is used up: fix forward with the next patch version.
+
+After the release, install it with Homebrew on a Mac where no other copy of Display 16X is running, and open it once. Two copies must not run at once, because they share the settings folder and the command socket. With the first two releases signed with the project certificate, also do the [check across an update](#check-the-first-two-releases).
 
 ## Check the first two releases
 
-The checks above prove that the signing requirement stays the same from release to release. They cannot prove what macOS and Homebrew do with it at a real update: that the Accessibility permission stays granted, and that the first launch is not blocked again. Check it once, with the first two releases signed with the project certificate, such as 0.1.0 and 0.1.1, on your own Mac.
+The checks above prove that the signing requirement stays the same from release to release. They cannot prove what macOS and Homebrew do with it at a real update: that the Accessibility permission stays granted, and that the first launch is not blocked again. Check it once, with the first two releases signed with the project certificate, on your own Mac. 0.2.0 is ad hoc signed and does not count: if the certificate is in place before 0.3.0, those are 0.3.0 and 0.4.0, or 0.3.0 and a patch release such as 0.3.1.
 
 **Before the first release:**
 
@@ -106,6 +121,8 @@ These live on GitHub, not in the repository. Set them before the first tag.
 The Accessibility permission for the brightness and volume keys belongs to the app's code signature, more exactly to its designated requirement. Homebrew uses the same requirement to decide whether an upgrade keeps the user's first-launch approval. So the signing level decides what users go through at every update.
 
 Releases are signed with one project certificate ([decision 12](roadmap.md#5-open-decisions), 23 November 2026). A Developer ID with notarization replaces it once the Apple Developer Program membership is there. Ad hoc remains as the fallback the workflow uses when `release-signing` holds no certificate, with a warning.
+
+**Where it stands:** the certificate has not been made yet, so 0.2.0 is ad hoc signed. For the next release to be signed with it, the owner does the seven [project certificate](#project-certificate) steps before tagging. The first release signed with it costs 0.2.0's users their Accessibility grant and first-launch approval once more, and its release notes say so on their own. From then on both carry over.
 
 | Level | Chosen when `release-signing` holds | First launch | After an update |
 | --- | --- | --- | --- |
@@ -243,7 +260,13 @@ Once, on a Mac with the GitHub CLI:
 
 **Each release:** the publish job commits `Casks/display16x.rb` to the tap after creating the release.
 
-**Without the secret:** the job skips the tap and logs a notice. Download `display16x.rb` from the release and commit it to `Casks/display16x.rb` in the tap by hand.
+**Without the secret:** the job skips the tap and says so in a warning and in the run summary. Until the cask is in the tap, `brew install --cask engrmnaveed/tap/display16x` does not find the new version. Commit the release's `display16x.rb` to the tap by hand, here for 0.2.0:
+
+```sh
+gh repo clone engrmnaveed/homebrew-tap && cd homebrew-tap
+gh release download v0.2.0 --repo engrmnaveed/macdisplay-16x --pattern display16x.rb --output Casks/display16x.rb --clobber
+git add Casks/display16x.rb && git commit -m "display16x 0.2.0" && git push
+```
 
 ## Sign and notarize on a Mac
 

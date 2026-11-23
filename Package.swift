@@ -42,5 +42,8 @@ let package = Package(
         .testTarget(name: "DisplayCoreTests", dependencies: ["DisplayCore"], swiftSettings: testSettings),
         .testTarget(name: "DDCTests", dependencies: ["DDC"], swiftSettings: testSettings),
         .testTarget(name: "DisplaySystemTests", dependencies: ["DisplaySystem", "DisplayCore", "DDC", "DisplayPrivate"], swiftSettings: testSettings),
+        // The app's own tests, and the render harness that draws every surface from sample
+        // data. A test target is never part of the packaged app.
+        .testTarget(name: "Display16XAppTests", dependencies: ["Display16XApp", "DisplayCore"], swiftSettings: testSettings),
     ]
 )

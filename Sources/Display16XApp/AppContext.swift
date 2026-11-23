@@ -3,12 +3,75 @@ import DisplayCore
 import DisplaySystem
 import Foundation
 
+/// What the app takes from macOS: one adapter for each protocol the core defines. The app
+/// runs on `SystemAdapters.live`. The render harness in the tests passes sample ones, so
+/// every surface can be drawn from made-up displays with nothing on the desk touched.
+@MainActor
+struct SystemAdapters {
+    var paths: AppPaths
+    var settingsPersistence: any DocumentPersistence
+    var recoveryPersistence: any DocumentPersistence
+    var scheduler: any Scheduler
+    var modeSystem: any ModeSystem
+    var rotationSystem: any RotationSystem
+    var inventory: any DisplayInventory
+    var provider: any ControllerProviding
+    var colorBackend: any ColorBackend
+    var selectorContext: any SelectorContext
+    var audio: any AudioOutputProviding
+    var layoutSystem: (any LayoutSystem)?
+    var connectionSystem: (any ConnectionSystem)?
+    var lid: any LidSensor
+    var permissionProbe: any PermissionProbe
+    var macModel: String?
+    /// What listens to the system once the app starts, in starting order: sleep, wake and
+    /// reconfiguration, then the lid.
+    var listeners: (EventSequencer) -> [any SystemListener]
+
+    /// The real ones. Nothing here differs from what the app was built with in v0.1 and v0.2.
+    static func live(bus: EventBus, loginItem: LoginItem) -> SystemAdapters {
+        let paths = AppPaths()
+        try? paths.ensureDirectory()
+        let inventory = SystemDisplayInventory()
+        let lid = SystemLid(bus: bus)
+        return SystemAdapters(
+            paths: paths,
+            settingsPersistence: FilePersistence(url: paths.settingsFile),
+            recoveryPersistence: FilePersistence(url: paths.recoveryFile),
+            scheduler: DispatchScheduler(),
+            modeSystem: SystemModeController(),
+            rotationSystem: SystemRotation(),
+            inventory: inventory,
+            provider: SystemControllerProvider(inventory: inventory),
+            colorBackend: GammaTableBackend(),
+            selectorContext: SystemSelectorContext(),
+            audio: SystemAudioOutput(),
+            layoutSystem: SystemLayout(),
+            connectionSystem: SystemConnection(),
+            lid: lid,
+            permissionProbe: SystemPermissionProbe(loginItem: loginItem),
+            macModel: HardwareProbe.macModel,
+            listeners: { sequencer in [SystemEventSource(sequencer: sequencer, bus: bus), lid] }
+        )
+    }
+}
+
+/// Something that listens to the system between the app's start and its end.
+@MainActor
+protocol SystemListener: AnyObject {
+    func start()
+    func stop()
+}
+
+extension SystemEventSource: SystemListener {}
+extension SystemLid: SystemListener {}
+
 /// The composition root: the core wired to the system adapters. Nothing in the interface
 /// reaches past the command engine.
 @MainActor
 final class AppContext {
     let paths: AppPaths
-    let scheduler = DispatchScheduler()
+    let scheduler: any Scheduler
     let bus = EventBus()
     let settings: SettingsStore
     let recovery: RecoveryStore
@@ -33,46 +96,43 @@ final class AppContext {
     let layoutCommands: LayoutCommands
     let shortcuts: ShortcutService
     let automation: ConnectionAutomation
-    let lid: SystemLid
+    let lid: any LidSensor
 
-    private let inventory = SystemDisplayInventory()
-    private let selectorContext = SystemSelectorContext()
-    private let audio = SystemAudioOutput()
-    private let colorBackend = GammaTableBackend()
-    private let eventSource: SystemEventSource
-    private let permissionProbe: SystemPermissionProbe
+    private let listeners: [any SystemListener]
     private var server: UnixSocketServer?
 
-    init(safeMode: Bool) {
-        paths = AppPaths()
-        try? paths.ensureDirectory()
-        settings = SettingsStore(persistence: FilePersistence(url: paths.settingsFile), scheduler: scheduler)
-        recovery = RecoveryStore(persistence: FilePersistence(url: paths.recoveryFile))
+    init(safeMode: Bool, adapters: SystemAdapters? = nil) {
+        let adapters = adapters ?? .live(bus: bus, loginItem: loginItem)
+        let colorBackend = adapters.colorBackend
+        paths = adapters.paths
+        scheduler = adapters.scheduler
+        settings = SettingsStore(persistence: adapters.settingsPersistence, scheduler: scheduler)
+        recovery = RecoveryStore(persistence: adapters.recoveryPersistence)
         gate = AutomationGate(bus: bus, safeMode: safeMode)
         sequencer = EventSequencer(bus: bus, scheduler: scheduler, settings: settings)
         registry = DisplayRegistry(settings: settings, scheduler: scheduler)
         controls = ControlService(registry: registry, settings: settings, bus: bus, sequencer: sequencer)
         modes = ModeService(
-            registry: registry, system: SystemModeController(), rotationSystem: SystemRotation(),
+            registry: registry, system: adapters.modeSystem, rotationSystem: adapters.rotationSystem,
             settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate
         )
         engine = CommandEngine(registry: registry, features: .full, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
-        engine.selectorContext = selectorContext
+        engine.selectorContext = adapters.selectorContext
         reconciler = Reconciler(engine: engine, registry: registry, controls: controls, settings: settings, gate: gate, scheduler: scheduler)
         coordinator = DisplayCoordinator(
-            registry: registry, settings: settings, bus: bus, gate: gate, inventory: inventory,
-            provider: SystemControllerProvider(inventory: inventory), colorBackend: colorBackend,
+            registry: registry, settings: settings, bus: bus, gate: gate, inventory: adapters.inventory,
+            provider: adapters.provider, colorBackend: colorBackend,
             controls: controls, modes: modes, reconciler: reconciler, scheduler: scheduler
         )
         keys = KeyCoordinator(registry: registry, controls: controls, settings: settings, engine: engine)
-        keys.selectorContext = selectorContext
-        keys.audio = audio
+        keys.selectorContext = adapters.selectorContext
+        keys.audio = adapters.audio
         indicator = IndicatorCoordinator(registry: registry, controls: controls, settings: settings, bus: bus)
-        lid = SystemLid(bus: bus)
-        layout = LayoutService(registry: registry, system: SystemLayout(), settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate)
-        let policy = StandardConnectionPolicy(registry: registry, settings: settings, lid: lid, macModel: HardwareProbe.macModel)
+        lid = adapters.lid
+        layout = LayoutService(registry: registry, system: adapters.layoutSystem, settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate)
+        let policy = StandardConnectionPolicy(registry: registry, settings: settings, lid: lid, macModel: adapters.macModel)
         connection = ConnectionService(
-            registry: registry, system: SystemConnection(), policy: policy, settings: settings,
+            registry: registry, system: adapters.connectionSystem, policy: policy, settings: settings,
             recovery: recovery, layout: layout, bus: bus, scheduler: scheduler, gate: gate
         )
         protection = ConfigurationProtection(registry: registry, settings: settings, modes: modes, layout: layout, sequencer: sequencer, gate: gate, bus: bus, scheduler: scheduler)
@@ -90,9 +150,8 @@ final class AppContext {
         layoutCommands.shortcuts = shortcuts
         engine.extensions = [layoutCommands]
         automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
-        eventSource = SystemEventSource(sequencer: sequencer, bus: bus)
-        permissionProbe = SystemPermissionProbe(loginItem: loginItem)
-        permissions = PermissionBroker(probe: permissionProbe, bus: bus, settings: settings)
+        listeners = adapters.listeners(sequencer)
+        permissions = PermissionBroker(probe: adapters.permissionProbe, bus: bus, settings: settings)
         engine.statusProvider = { [permissions, colorBackend, loginItem] in
             var lines = ["version: \(AppPaths.version)"]
             lines.append(contentsOf: permissions.statusLines)
@@ -115,8 +174,7 @@ final class AppContext {
             coordinator.refreshTopology()
             coordinator.reattachAll()
         }
-        eventSource.start()
-        lid.start()
+        for listener in listeners { listener.start() }
         coordinator.start()
         // Displays the last run left disconnected come back first, then an unconfirmed
         // layout change is undone. Both pass the gate.
@@ -130,8 +188,7 @@ final class AppContext {
     func shutdown() {
         server?.stop()
         connection.reconnectAtQuit()
-        lid.stop()
-        eventSource.stop()
+        for listener in listeners.reversed() { listener.stop() }
         coordinator.shutdown()
     }
 

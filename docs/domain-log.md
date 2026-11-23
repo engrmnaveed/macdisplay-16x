@@ -6,6 +6,103 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · The first release is 0.2.0, ad hoc signed, and every milestone gets a release
+
+**Owner's word, through the planning thread:** "no release available on GitHub yet, please do release the latest version, and keep release cycle updated, every major version should have a release". So 0.1.0 is never published, 0.2.0 is the first release, and each milestone on `main` is released as its version (0.3.0 for v0.3). A release is two steps, prepare in a pull request and tag the merged commit, described in the release runbook.
+
+- **0.2.0 is ad hoc signed, because the project certificate (decision 12) has not been made.** Its users allow the first launch and give the Accessibility permission again after every update, and Homebrew warns that the signer changed. That cost lasts until the first release signed with the certificate, which still asks for both once more, because its signature differs from the ad hoc one. Its release notes say so on their own: the release workflow now names the last release in them when the new app does not satisfy that release's signing requirement. **Decision needed from the owner:** make the certificate before v0.3 is released, or 0.3.0 is ad hoc signed as well and its users pay the same cost once more.
+- **The cask reaches the tap only with the deploy key.** Without `HOMEBREW_TAP_DEPLOY_KEY` the release is published but `brew install --cask engrmnaveed/tap/display16x` does not find it until the owner commits the cask to the tap by hand. The run now says so in a warning and in its summary, not only in a notice.
+- **GitHub was found set up as the runbook asks**, read only: the `release` environment with the owner as required reviewer and `v*` tags only, `release-signing` with `v*` tags only and no secrets, immutable releases on, and rulesets protecting `main` and `v*` tags. With immutable releases, a published version cannot get its assets replaced, so a fault found after **Publish** is fixed with the next patch version.
+- **The release has never run.** The first tag push is the first real run of the workflow. The ad hoc path, the archive check, the signer comparison with no earlier release and the notes were run on the developer's Mac; the upload of the build, the attestation and the release itself have not run in this repository. Space 16X publishes the same way, so the step that hands the build to the publish job has worked there.
+
+## 23 November 2026 · The app icon is chosen
+
+**Decision made by the owner, in the interface session:** the icon is the code-drawn candidate A, a display with its menu bar line standing on a foot, in aqua on the family's navy. It is the mark the app already draws in its panel and in the menu bar, and it is drawn by a script in the repository, as Space 16X's icon is, so it can be changed and made again.
+
+- **No candidate was made with Gemini.** Gemini in the built-in browser showed "Sign in" both times it was opened, so by the owner's rule the work stopped there and nothing was sent or downloaded. The three candidates shown were drawn in code and offered as extras. The owner chose from those.
+- **The icon is in the bundle from the next package on.** The copy in daily use is `897c40f`, from before the icon, and has to be replaced once more. The planning thread arranges that with the owner. An ad hoc signed bundle is a new signature each time, so the Accessibility entry has to be added again after the replacement.
+
+## 23 November 2026 · The budgets on screen, and the owner's word on them
+
+Apple M5 Pro (Mac17,9), macOS 27.2.1, the Lenovo P32p-20 and the LG SDQHD. This branch at `897c40f` has been the owner's copy in daily use since 19:59. Figures are in the feasibility notes.
+
+- **Decision made by the owner, in the interface session:** "don't try to over-engineer, we can extend the budget by 10% if needs to be, just have a quick look if anything in hindsight is there to improve else increase budget a little bit." **For the planning thread:** the PRD's memory line needs it, 50 MiB to 55 MiB: the app is at 53 MB with the panel closed after use (41 MB for v0.1, 47 MB for v0.2). The open-time line can stay at 100 ms if the change below holds on screen, and would otherwise go to 110 ms.
+- **Asking macOS whether a display can be rotated is slow: 22 ms for one monitor, 4 ms for the other, every time.** The panel asked for every display on every build. It asks now when a display's page opens, once. **Rule: nothing that is only shown one level down is asked for when the panel opens.** For the core session, if it wants it: the answer could be kept per connected display.
+- **Listing the connected displays takes 17 ms** since the port descriptions are read for the connection. It runs when the set of displays changes and not when the panel opens, so it costs nothing in daily use. For the core session to know.
+- **Warm panel opens were 77 to 109 ms** before that change, of which 33 to 51 ms were the models and 36 to 61 ms showing the popover. **Idle is inside its budget:** 0.033% of a core over ten minutes with the key capture on and the owner typing, and no idle wakeup.
+
+## 23 November 2026 · Interface pass, stage 5 off screen: Increase Contrast cannot be asked for by name
+
+Apple M5 Pro (Mac17,9), macOS 27.2.1, from the render harness. Measurements are in the feasibility notes.
+
+- **macOS gives out its increased-contrast appearance only while Increase Contrast is on in System Settings.** Asked for by name with the setting off, it returns the ordinary light or dark appearance. An app cannot preview its increased-contrast look, and a test cannot draw it, without the setting. The skin's colors therefore have a switch for the harness that makes them answer with their increased-contrast values. **Rule: a claim that the app respects Increase Contrast needs the setting switched on once, on screen.** The pictures the review called "increased contrast" in stage 1 were the ordinary looks.
+- **Every control on every surface reaches VoiceOver with a name, and every bar with a value in words.** The render run fails when one does not.
+- **The skin's contrast is measured in all four looks**, and a re-skin that makes text hard to read fails a test.
+- **The panel's content builds in 18 to 30 ms off screen** on this Mac, against a budget of 100 ms for the open panel on a MacBook Air M1. The on-screen figure, memory and idle wakeups need a development build running in place of the copy in daily use, which the owner is asked for once.
+
+## 23 November 2026 · Interface pass, stages 2 and 3: the direction the owner chose, and what the rebuilt surfaces settle
+
+**The owner chose direction B, "Studio"**: the family's navy and aqua, displays drawn to scale, thick bars, a stepped text-size strip. The accent is the family's teal and aqua as drawn. **The owner also asked that the look stay cheap to change later.** So the look lives in two files, the skin (values) and the pieces (how a bar or a chip is drawn), surfaces only compose them, and a test fails when a surface brings a color, font, radius, distance or symbol of its own.
+
+Every surface is rebuilt on that and drawn from sample data. The owner has not approved the surfaces yet. What this settles and what it leaves:
+
+- **The panel is three pages in one column**: the displays, one display's page, and Arrange. A page takes the panel's place, and the panel scrolls inside 86% of the height of the screen it hangs from. Settings are a window of their own.
+- **Saved setups are called scenes in the interface**, the PRD's word. The command line and the settings file keep `preset`. **Decision needed** only if one word should be used everywhere.
+- **Confirmed or sent is shown, from what the panel already gets.** A brightness with a software share is marked sent. So is a value whose last change the display accepted without reading it back. Everything else was read from the display. The request to the core from stage 1 shrinks to this: a flag kept with the tracked value is only needed if a surface that never sent a command, such as the indicator, should say it too.
+- **The card says the display's size in inches**, from the size its EDID gives, where the PRD says "connection". How a display is connected is still not available to the interface.
+- **The greeting on first run shows in the first run only**: while the settings file did not exist when the app started. No setting was added for it.
+- **A protection notice is shown as a sentence**, with a capital first. The core's text is unchanged.
+- **Where a control moved.** Each display's mirroring, disconnect, protection switches and shortcuts are on its page. Scenes are on top of the panel and in Settings. Shortcuts, command line access, links and the settings file are in Settings. Displays that are disconnected, behind a closed lid or unplugged are listed under Arrange, and "Forget" is there.
+- **Placing a display without the pointer** uses the placement command that the command line already has. It was not reachable from the panel before.
+- **Not changed, and still open:** the floating Keep windows do not take the keyboard (decision asked for in the entry below). Whether the switch for turning the built-in display off is shown at all is roadmap decision 16; it is where it was, under Arrange.
+- **To check on screen in stage 5:** the popover's arrow keeps the system's material while the panel has the skin's canvas. VoiceOver pressing the pop-ups, which are the system's menus under a drawn label.
+
+Update, 23 November, after the core's two facts were merged, and after the owner approved the rebuilt surfaces:
+
+- **The owner approved the rebuilt surfaces** from the renders. What renders cannot show (the popover's own frame, real blur, motion, the feel of the bars) is still to be seen on screen.
+- **How a value is known comes from the core now**, and the panel no longer works it out. All three states are shown. A value that was read back is unmarked on a card and has a check on the display's page. "Sent" and "not known" are a small tag on the card, and on the page the row reads "Display 16X sent" or "Remembered, not confirmed since".
+- **The card's line is size, connection, role**: "32-inch · HDMI · Main display". A connection macOS does not report leaves no word. The display's page lists "The Mac's port" and the size.
+- **Protection notices are shown as the core writes them.** The interface's own capitalising is gone.
+
+## 23 November 2026 · Interface pass, stage 1: what every surface shows when it is drawn from sample data
+
+Every surface of the app was drawn off screen from made-up monitors, in light and dark, through the app's own panel models. No display was touched and the copy in daily use was left alone. What the pictures and the accessibility trees show about the product:
+
+- **The panel has no upper limit to its height.** With two monitors and both Details open it is about 1,100 points tall, and with three displays and everything open about 2,170. A display 1,080 points high cannot show it, and nothing scrolls. Rule for the redesign: the panel has a bounded height whatever is connected and whatever is open.
+- **A protection notice longer than two lines does not fit its window.** The window is measured for two lines whatever the text, and the three "stopped" notices are three lines long. Fixed with the notice's redesign.
+- **Protection notices begin with a small letter**, for example "after a change made elsewhere, put the saved arrangement back." The sentence is put together in the core from an occasion that starts in lower case. For the v0.2 session.
+- **Nothing on screen tells a confirmed value from a sent one.** The PRD asks for it. The panel is told a value and never whether the monitor read it back. **Needed from the core:** for each control, whether the value in use was read back from the monitor or only sent.
+- **The panel is not told how a display is connected.** The PRD's card is "name, connection". Today it says "External". **Needed from the core:** HDMI, DisplayPort, USB-C, Thunderbolt or built-in, where macOS reports it.
+- **The floating Keep windows never take the keyboard.** They are shown without becoming the key window, so Return and Escape reach them only after a click. That is what v0.1 and v0.2 built, and it keeps a mode change from stealing the keyboard from the app in use. **Decision needed:** whether Keep and Revert should answer to the keyboard at once, because "every control reachable by keyboard" is part of this milestone's quality bar.
+- **VoiceOver gets no name for three kinds of menu**: each display's Actions, each preset's More, and the input menu. The displays on the arrangement canvas are read as plain text and can only be moved with the pointer. Both are for stage 5 of this milestone.
+- **Scenes are three steps away.** A preset is applied by opening the panel, opening "Arrangement and presets" and pressing Apply. The PRD wants one click.
+
+**The last v0.2 commit changed spacing and nothing else.** The arrangement panels were drawn at the commit that broke up their views for the older compiler and at the one before it. Rows of the display list are 4 points closer together, and the items of the protection group and of the integration group 2 points each, so the panel is 12 to 16 points shorter. Every element, every text and the accessibility tree are the same, and the Keep windows and the protection offer are identical.
+
+## 23 November 2026 · Two facts for the panel: how a value is known, and how a display is connected
+
+Asked for by the planning thread for the interface pass, built by the core session. Unit tests and a read-only look at the I/O registry. Nothing was written to a display and the app was not started.
+
+**How a value is known.** Each control of a connected display now says one of three things about the value in use: read back from the monitor (the PRD's "confirmed"), only sent, or not known. It follows what the app does anyway. No read was added for it.
+
+- **Read back:** the monitor reported the value when the display was checked, in the read that follows a write, in the read after wake, or when the panel asked.
+- **Sent:** the app wrote it and nothing confirmed it: a drag in progress, a monitor that did not answer the read after a write, a control that cannot be read. Software dimming is always sent. A brightness it has a share in is sent at best, and read back again once dimming is back at neutral.
+- **Not known:** no value, or a value remembered from before that the monitor has not confirmed in this connection.
+- **Across sleep:** when the Mac or the displays go to sleep, what was read back stops counting, because a monitor can wake with other values. The read the app makes once the wake has settled renews it: the same value or a new one both count as read back. A monitor that does not answer then stays not known, with its last value still shown, until the panel reads it or the user sets something. A value that was only sent stays sent while asleep, since nothing was claimed for it, and the same read after wake then decides for it too. A control that cannot be read is never asked and stays sent.
+- **Across a reconnect:** a display that leaves takes its facts with it. When it returns, the check it gets anyway reads its controls, and those are read back. A returning monitor that says nothing has values that are not known.
+- **At start:** the same as a returning display. With the startup policy "trust the stored value" nobody asks the monitor, so the value is not known. In safe mode a monitor seen before is not compared either, and stays not known until the panel reads it.
+- **Decision needed:** whether sleep should end "read back" at once, as built, or only when the monitor then fails to answer. Built this way because the facts say what is known now, and between falling asleep and the read after wake nothing is.
+
+**How a display is connected.** macOS describes the Mac's ports and each display link in the I/O registry (measurements in the feasibility notes). What it knows is the Mac's own end: which port, and whether the picture travels inside a Thunderbolt connection. It does not know the far end of the cable.
+
+- **The label names the Mac's own port:** HDMI, USB-C, built-in, or Thunderbolt when the picture is tunneled through a dock, a hub or a Thunderbolt display. "DisplayPort" is kept for a port macOS itself calls that, which no Apple silicon Mac has.
+- **On this desk the Lenovo reads HDMI and the LG reads USB-C.** The planning documents and the feasibility notes call the LG's connection DisplayPort. That is the signal, and by that word the Lenovo is DisplayPort too: the Mac feeds its HDMI port through a converter. The signal does not tell connections apart. The port does.
+- **A USB-C port can end in a monitor's USB-C input, a DisplayPort plug or an HDMI adapter,** and macOS cannot tell which. So a user with a DisplayPort cable sees "USB-C", which is true of the Mac's end and may not be the word they would use.
+- **Decision needed:** keep "USB-C" for a USB-C port that carries the picture directly, or show "DisplayPort" there. The second matches the desk notes and reads wrong with an HDMI adapter. It is one line in the mapping.
+- **Not known is a real answer:** a display with no link entry (AirPlay, Sidecar, a virtual display, a USB graphics adapter, an older macOS), a port type in words this build does not know, and two identical monitors on different kinds of port, where a label would be a guess.
+- **A display sleep does not change it.** The link entry stays while the displays sleep.
+- **Not seen on hardware:** Thunderbolt, an adapter, identical monitors, another Mac. Which cable the LG is on is for the owner to say.
+
 ## 23 November 2026 · v0.2 Layout closed by the owner with three things left for a later version
 
 The owner ended the v0.2 build session after the hardware checks. Left open, to be picked up and verified by a later version's improvements:

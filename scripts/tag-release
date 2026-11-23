@@ -1,0 +1,59 @@
+#!/bin/zsh
+# Tags a release, the second of the two steps in docs/release.md, once the pull request from
+# scripts/prepare-release is merged. It tags the tip of origin/main, and only when that commit
+# holds the version, its changelog section and a passing CI check. Nothing in the working
+# tree is changed, so it can run from any checkout of the repository.
+#
+#   scripts/tag-release X.Y.Z            makes the tag and prints the command that pushes it
+#   scripts/tag-release X.Y.Z --push     also pushes it, which starts the Release workflow
+#
+# It needs the GitHub CLI, signed in, to read the CI check. Pushing a v* tag is limited to
+# the repository's administrators by the tag ruleset.
+set -euo pipefail
+cd "${0:A:h:h}"
+
+fail() {
+    print -u2 "tag-release: $1"
+    exit 1
+}
+
+version="${1:-}"
+push="${2:-}"
+[[ "$version" =~ '^[0-9]+\.[0-9]+\.[0-9]+$' ]] || fail "usage: scripts/tag-release X.Y.Z [--push]"
+[[ $# -eq 1 || ( $# -eq 2 && "$push" == --push ) ]] || fail "usage: scripts/tag-release X.Y.Z [--push]"
+tag="v$version"
+check='Build, test and package'
+
+git fetch --quiet origin main
+commit="$(git rev-parse origin/main)"
+short="$(git log -1 --format='%h %s' "$commit")"
+
+on_main="$(git show "${commit}:scripts/release-version")"
+[[ "$on_main" == "$version" ]] || fail "origin/main ($short) says $on_main in scripts/release-version, not $version. Merge the prepared version first"
+git show "${commit}:CHANGELOG.md" | grep -qx "## $version" || fail "CHANGELOG.md on origin/main has no '## $version' section"
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+    fail "the tag $tag exists in this repository already"
+fi
+[[ -z "$(git ls-remote --tags origin "refs/tags/$tag")" ]] || fail "the tag $tag exists on origin already"
+
+# The CI check the rules of main require, on this very commit.
+repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+results="$(gh api -X GET "repos/$repo/commits/$commit/check-runs" -f check_name="$check" \
+    --jq '.check_runs[] | "\(.status) \(.conclusion)"')"
+if ! grep -qx 'completed success' <<< "$results"; then
+    if grep -q '^queued\|^in_progress\|^pending\|^waiting' <<< "$results"; then
+        fail "the check '$check' is still running on $short. Try again when it has passed"
+    fi
+    fail "the check '$check' has not passed on $short${results:+ (${results//$'\n'/, })}"
+fi
+
+git tag -a "$tag" -m "Display 16X $version" "$commit"
+print "Tagged $tag at $short, where '$check' passed."
+if [[ "$push" == --push ]]; then
+    git push origin "refs/tags/$tag"
+    print "Pushed. The Release workflow runs now: https://github.com/$repo/actions/workflows/release.yml"
+    print "It waits for a reviewer before Publish, as docs/release.md describes."
+else
+    print "Push it to start the Release workflow:
+  git push origin $tag"
+fi

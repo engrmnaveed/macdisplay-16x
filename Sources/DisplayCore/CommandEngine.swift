@@ -191,7 +191,7 @@ public final class CommandEngine {
                 }
             }
             guard let stored else { return entry(.failed, detail: "no value is known yet") }
-            return entry(.accepted, actual: stored, detail: "stored value")
+            return entry(.accepted, actual: stored, detail: controls.knowledge(of: control, for: tag).storedValueDetail)
         }
 
         let target: Double
@@ -268,7 +268,7 @@ public final class CommandEngine {
                     return entry(.confirmed, actual: value >= 0.5)
                 }
             }
-            return entry(.accepted, actual: stored, detail: "stored value")
+            return entry(.accepted, actual: stored, detail: controls.knowledge(of: .mute, for: tag).storedValueDetail)
         }
 
         let wanted: Bool
@@ -297,7 +297,8 @@ public final class CommandEngine {
             guard let current = settings.recordSettings(tag).currentInput else {
                 return entry(.failed, detail: "the current input is not known. Monitors do not report it reliably")
             }
-            return entry(.accepted, actual: current, detail: "last input chosen here")
+            let reported = controls.knowledge(of: .input, for: tag) == .readBack
+            return entry(.accepted, actual: current, detail: reported ? "reported by the monitor when it was checked" : "last input chosen here")
         }
         guard case .choice(let id)? = command.value else { return entry(.failed, detail: "input needs the name of an input") }
         let result = await controls.setInput(id, for: tag, origin: command.origin)
@@ -395,6 +396,7 @@ public final class CommandEngine {
                 if let key = record.modelKey { facts.append("model \(key)") }
                 if let serial = record.identifiers.serialText { facts.append("serial \(serial)") }
                 if let uuid = record.identifiers.systemUUID { facts.append("UUID \(uuid)") }
+                if let live = registry.live[tag] { facts.append("connection \(live.connection.isKnown ? live.connection.label : "not known")") }
                 if let mode = modes.currentMode(for: tag) { facts.append(mode.summary) }
                 return DisplayResult(
                     tag: tag, name: record.displayName, outcome: .confirmed,

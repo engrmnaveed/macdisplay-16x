@@ -2,12 +2,14 @@
 
 Display 16X needs an Apple silicon Mac with macOS 14 or later. Each release on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) has one ZIP with the menu bar app, and the `display16x` command line tool inside it.
 
-Releases are signed with the project's own certificate and are not notarized by Apple. What that means for you:
+How a release is signed decides what you do when you install it and at every update. The release notes of each version say how it is signed.
+
+**Display 16X 0.2.0, the first release, is ad hoc signed** and not notarized by Apple. What that means for you:
 
 - **Once:** macOS blocks the first launch until you allow it in Privacy & Security, and the brightness and volume keys need the Accessibility permission. Both are described below.
-- **At every update:** the signature stays the same, so the Accessibility permission carries over, and a Homebrew upgrade also keeps your first-launch approval. An update you download by hand is allowed once more; Accessibility still carries over.
+- **At every update:** macOS sees each ad hoc signed version as a new app. You allow the first launch again, and you give the Accessibility permission again by removing the old entry and adding the app. Homebrew warns about it during the upgrade.
 
-The release notes of each version say how it is signed. A Developer ID with notarization will replace the project certificate later, and from then on the app opens without the first-launch step.
+Later releases are to be signed with the project's own certificate. Its signature stays the same from release to release, so the Accessibility permission carries over and a Homebrew upgrade keeps your first-launch approval. The first update to such a release still asks for both once, because its signature differs from the ad hoc one. A Developer ID with notarization will replace the certificate after that, and from then on the app opens without the first-launch step.
 
 ## Install with Homebrew
 
@@ -23,24 +25,24 @@ Since Homebrew 6, Homebrew only loads casks from taps you trust, and installing 
 brew trust --cask engrmnaveed/tap/display16x
 ```
 
-The cask puts **Display 16X.app** in Applications and links the `display16x` command into Homebrew's `bin` folder.
+The cask puts **Display 16X.app** in Applications and links the `display16x` command into Homebrew's `bin` folder. If Homebrew says it cannot find `display16x` in the tap, the tap has not been given the newest release yet: install the release ZIP below, or try again later.
 
-- **Upgrade:** `brew upgrade --cask display16x`. If the app is running, Homebrew quits it, replaces it and opens it again.
+- **Upgrade:** `brew upgrade --cask display16x`. If the app is running, Homebrew quits it, replaces it and opens it again. For an ad hoc signed release, Homebrew prints "display16x's signer changed so macOS may prompt at next launch": allow the launch and give the Accessibility permission again, as described below.
 - **Remove:** see [Remove Display 16X](#remove-display-16x).
 
 ## Install the release ZIP
 
-Download `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file from the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) into one folder. Check the download and unpack it there. The commands use version 0.1.0 as an example.
+Download `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file from the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) into one folder. Check the download and unpack it there. The commands use version 0.2.0 as an example.
 
 ```sh
-shasum -a 256 -c display16x-0.1.0-macos-arm64.zip.sha256
-ditto -x -k display16x-0.1.0-macos-arm64.zip .
+shasum -a 256 -c display16x-0.2.0-macos-arm64.zip.sha256
+ditto -x -k display16x-0.2.0-macos-arm64.zip .
 ```
 
 The SHA-256 file only shows that the download is complete, since it comes from the same place. Each release also has a GitHub build-provenance attestation, which shows that the ZIP was built by this repository's release workflow from the tagged commit. Check it with the [GitHub CLI](https://cli.github.com/):
 
 ```sh
-gh attestation verify display16x-0.1.0-macos-arm64.zip \
+gh attestation verify display16x-0.2.0-macos-arm64.zip \
   --repo engrmnaveed/macdisplay-16x \
   --signer-workflow engrmnaveed/macdisplay-16x/.github/workflows/release.yml
 ```
@@ -52,11 +54,11 @@ mkdir -p ~/.local/bin
 ln -sf "/Applications/Display 16X.app/Contents/MacOS/display16x" ~/.local/bin/display16x
 ```
 
-To update, download the new ZIP and replace the app in Applications. macOS asks you to allow the first launch of each downloaded version once more. The Accessibility permission carries over.
+To update, download the new ZIP and replace the app in Applications. macOS asks you to allow the first launch of each downloaded version once more. The Accessibility permission carries over between releases signed with the project certificate. After an ad hoc signed one, give it again.
 
 ## Allow the first launch
 
-Apple has not checked a release signed with the project certificate, so macOS blocks its first launch. You allow it once:
+No release is notarized by Apple yet, so macOS blocks the first launch of a downloaded version until you allow it:
 
 1. Open Display 16X. macOS says it could not verify that the app is free of malware. Click **Done**. Don't click **Move to Trash**, which deletes the app.
 2. Open **System Settings → Privacy & Security**.
@@ -75,7 +77,7 @@ xattr -dr com.apple.quarantine "/Applications/Display 16X.app"
 
 The `display16x` command is checked the same way the first time it runs. If macOS blocks it in Terminal, allow it under Privacy & Security as above, or use the `xattr` command.
 
-**After an update:** `brew upgrade` keeps your approval, because the new version has the same signature as the one you allowed, and the app opens again without asking. An update downloaded by hand is allowed again with the same steps.
+**After an update:** an ad hoc signed version is allowed again with the same steps, however you installed it. Between releases signed with the project certificate, `brew upgrade` keeps your approval, because the new version has the same signature as the one you allowed, and the app opens again without asking. An update downloaded by hand is allowed again with the same steps.
 
 ## Allow the brightness and volume keys
 
@@ -85,9 +87,11 @@ The brightness and volume keys need the Accessibility permission. Everything els
 2. In **System Settings → Privacy & Security → Accessibility**, switch on **Display 16X**. If it isn't listed, click **+** and choose it from Applications.
 3. Close the panel and open it again.
 
-macOS gives the permission to the app's signature, and every release is signed with the same certificate, so the permission carries over to new versions. Nothing to do after an update.
+macOS gives the permission to the app's signature.
 
-**If the keys stop working after an update** although Display 16X is still switched on in the list, the permission no longer matches the app. Select the **Display 16X** entry, remove it with **−**, add the app again with **+**, then close and open the panel. Please also [open an issue](https://github.com/engrmnaveed/macdisplay-16x/issues), because with the same certificate this should not happen. It is what happens after every update for a release that is ad hoc signed, which its release notes say, and for builds you make yourself.
+**After an update where either version is ad hoc signed, as 0.2.0 is:** the list still shows Display 16X switched on, but the permission belongs to the version you replaced, so the keys do nothing. Select the **Display 16X** entry, remove it with **−**, add the app again with **+**, then close and open the panel. The same goes for builds you make yourself.
+
+**Between releases signed with the project certificate:** every one has the same signature, so the permission carries over and there is nothing to do. If the keys stop working after such an update although Display 16X is still switched on, remove the entry and add the app again as above, and please [open an issue](https://github.com/engrmnaveed/macdisplay-16x/issues), because this should not happen.
 
 To see how the installed app is signed, run:
 
@@ -99,7 +103,7 @@ A requirement that starts with `identifier "com.16xbrains.macdisplay16x" and cer
 
 ## Remove Display 16X
 
-1. If you switched on launch at login in the app, switch it off there first, so macOS has no login item left pointing at a missing app.
+1. If you switched on opening at login in the app's settings window, switch it off there first, so macOS has no login item left pointing at a missing app.
 2. Quit Display 16X from its panel. Changes made over DDC, such as brightness and volume, stay in the monitor.
 3. Remove the app:
    - **Homebrew:** `brew uninstall --cask display16x`. Add `--zap` to also remove the settings folder.

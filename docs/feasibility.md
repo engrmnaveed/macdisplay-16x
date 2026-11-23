@@ -587,6 +587,137 @@ Still to do, for a later version: check 11 as planned above (layout protection o
 
 Also seen: `AppleClamshellCausesSleep` read 1 at 11:12 and 12:17 and 0 from about 12:50, after the built-in panel had been turned off, and stayed 0 after it came back. Whether the app caused it is not known.
 
+## 23 November 2026 · How a display is connected · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
+
+Read-only and unattended, for the interface pass: the card of a display says "External" today and should name the connection. Only the I/O registry and the window server's display list were read. Nothing was sent to a monitor, no DDC and no I2C, and the owner's Display 16X 0.1.0 kept running throughout. Other display utilities were not inspected.
+
+The probe is [`spikes/connection-probe.swift`](../spikes/connection-probe.swift). It prints no serial number, UUID or EDID. Its output with the displays awake:
+
+```text
+Ports macOS lists:
+  USB-C 1: active transports: none
+  USB-C 2: active transports: none
+  USB-C 3: active transports: CC, USB2, DisplayPort
+  MagSafe 3 1: active transports: CC
+  HDMI 1: active transports: DisplayPort
+  SD Card 1: active transports: none
+
+DisplayPort links macOS reports: 2
+  LEN P32p-20: port HDMI, the Mac's own port HDMI 1 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at 8.1 Gbps (HBR3), through a converter
+  LG SDQHD: port USB-C, the Mac's own port USB-C 3 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at 8.1 Gbps (HBR3)
+
+Displays: 2
+  LEN P32p-20: matched by vendor, model and serial number to the HDMI port
+  LG SDQHD: matched by vendor, model and serial number to the USB-C port
+```
+
+What this shows:
+
+- **macOS describes each of the Mac's ports and each display link in the I/O registry.** A port entry (class `IOPort`) carries its type in words ("USB-C", "HDMI", "MagSafe 3", "SD Card") and what is active on it. Each display has a link entry (class `IOPortTransportStateDisplayPort`) under its port, with the type of the Mac's own port, whether the picture is tunneled, the lane count and rate, and the monitor's EDID. Reading them needs no private symbol, only public IOKit calls. The names are undocumented.
+- **The EDID in the link entry pairs it with a display.** Both monitors matched on vendor, model and serial number, the same way the DDC channel is paired.
+- **Every external display is a DisplayPort link as far as the Mac is concerned,** the one on the HDMI port too: the Mac drives its HDMI port through a converter, and the link entry says so. So "DisplayPort" tells two connections apart no better than "external" does. The port does.
+- **The Lenovo is on the Mac's HDMI port. The LG is on a USB-C port that carries DisplayPort, not tunneled.** These notes call the LG's connection DisplayPort throughout, which is the signal. The port also has USB 2 active. That fits a USB-C cable to the monitor's own USB-C input as well as a DisplayPort cable with a small USB device in its plug, and nothing macOS reports tells the two apart.
+- **macOS does not know the far end of the cable.** A USB-C port can lead to a monitor's USB-C input, a DisplayPort plug, or an adapter to HDMI. A converter in the path is visible, as it is inside the Mac's own HDMI port, but not what it converts to.
+
+With the displays asleep at 16:26 (both reported asleep, the Mac idle for 650 seconds), the same read gave:
+
+```text
+  LEN P32p-20: port HDMI, the Mac's own port HDMI 1 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at 8.1 Gbps (HBR3), through a converter
+  LG SDQHD: port USB-C, the Mac's own port USB-C 3 (port built in: yes), transport DisplayPort, tunneled no, 4 lanes at No Link
+```
+
+- **The link entries stay through a display sleep,** still marked active and still holding the EDID, so the connection stays known. The LG's direct link is down while it sleeps ("No Link"). The Lenovo's is not, because that link ends at the converter inside the Mac.
+
+The app's own read, through the same inventory the running app uses and without a DDC query, named the Lenovo "HDMI" and the LG "USB-C" on this Mac (a read-only unit test, `ConnectionMatcherTests.inventory`).
+
+Not checked, because nothing on this desk offers it or the Mac was unattended:
+
+- A Thunderbolt dock or a Thunderbolt display. The link entry has a "Tunneled" flag, and the app reads a tunneled link as Thunderbolt. That reading has not met one.
+- An adapter (USB-C to HDMI, a hub), a DisplayLink adapter, AirPlay, Sidecar, a virtual display. The last four should have no link entry and read as not known.
+- Two units of one model on different kinds of port. The app leaves both as not known, by a unit test only.
+- Another Mac and another macOS release. Since which release the registry has these entries is not known. On the CI runner, a virtual Mac, there is nothing to read and the connection is not known.
+- Which cable the LG is on. The owner can say.
+- How a value is known (read back, sent, not known), the other fact built in the same change, has run in unit tests only. Nothing on the desk ran this build.
+
+## 23 November 2026 · Interface pass, checked off screen · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
+
+The rebuilt interface was checked from the render harness, in the test process, on made-up monitors. The app was not started, no display was touched, and the copy in daily use was left alone. Nothing below has been seen on screen yet.
+
+### What VoiceOver is given
+
+Every one of the 47 surfaces and states is drawn with a text file of its accessibility tree, and the render run fails when a control has no name or a slider no value. It passes. A bar speaks its value in words ("53 percent"), each text-size stop is a button named by its size ("3200 by 1800"), the one in use is marked selected, and the pop-ups carry a name and their choice. Not checked, because it needs VoiceOver running: that pressing a pop-up opens its menu, and the order in which the panel is read.
+
+### Contrast
+
+`SkinContrastTests` measures the skin's color pairs in light, dark and both increased-contrast looks, with the luminance formula of the Web Content Accessibility Guidelines. Text on cards, the canvas, quiet buttons and banners is at 7 to 1 or more, secondary text and the accent as text at 4.5 to 1 or more, and with Increase Contrast 10 and 7. One value was short and was changed: the bed of a bar in the dark increased-contrast look.
+
+**macOS hands out its increased-contrast appearance only while Increase Contrast is on in System Settings.** Asked for by name with the setting off, it returns the ordinary appearance. So the harness draws the two contrast looks by telling the skin to answer with its increased-contrast colors, and the system's own controls in those pictures (switches, the settings tabs) stay ordinary. The pictures called "increased contrast" before this was found were the ordinary looks.
+
+### Motion and transparency
+
+The only animations are the countdown ring and line, one linear animation each, started when they appear. With Reduce Motion they stay full and the digits tell the time. The indicator and the notices are opaque with Reduce Transparency. The panel paints an opaque canvas in every case. Read from the code and not seen on screen: a picture cannot show either setting.
+
+### How long the panel takes to build
+
+`DISPLAY16X_MEASURE=1 swift test --filter PanelSpeed` builds the panel's two models, its views and their first layout forty times on the sample desk, off screen.
+
+| Page | Median | Worst |
+| --- | --- | --- |
+| Displays, two cards and three scenes | 18 to 21 ms | 33 ms |
+| One display's page | 25 to 30 ms | 46 ms |
+| Arrange | 18 ms | 36 ms |
+
+Debug and release builds gave the same within a few milliseconds. This is a stand-in for the budget "the panel opens in under 100 ms warm": it leaves out the popover itself and the monitors' own answers, and it is the M5 Pro and not the MacBook Air M1 the budget is written for.
+
+### On screen, 19:50 to 19:55 (the owner at the desk)
+
+A build packaged from this branch ran in place of the copy in daily use, with a settings folder of its own, on the Lenovo P32p-20 and the LG SDQHD. At start it read both monitors and wrote nothing ("still has its brightness, contrast, volume" for both). The owner opened the panel five times.
+
+| Budget | Target | Measured here |
+| --- | --- | --- |
+| Panel open, the first time | None set | 133 ms |
+| Panel open, warm | Under 100 ms | 85, 88, 76 and 76 ms |
+| Memory, panel closed, after four opens | At most 50 MiB | 40 MB physical footprint, peak 44 MB |
+| Idle CPU and wakeups over 10 minutes | 0.1% of a core, no recurring wakeups | Not measured. The run ended after four minutes, see below |
+
+The open time is from the click to the popover being shown and key. It is inside the budget on the M5 Pro. The budget is written for a MacBook Air M1, where it is likely to be over: the panel's own content builds in about 20 ms off screen, so most of the time is elsewhere, and the verbose log now splits it into models, views, bringing the app forward and showing the popover to find out where.
+
+**The run ended at 19:55 when an uninstaller removed the copy in daily use.** The owner removed the 0.1.0 bundle from the main checkout's `dist/` folder and the app's standard settings folder with an uninstaller, and it quit the build under test, which has the same bundle identifier. The ten-minute idle measurement had run for one minute. The build under test in this worktree's own `dist/` and its settings folder were not touched.
+
+### The copy in daily use from 19:59 on: this branch at `897c40f`
+
+The owner removed the 0.1.0 copy and asked for the latest build to run in its place. The planning thread packaged this branch's tip (version 0.1.0, build 116, signed ad hoc) and started it at 19:59:31 from the main checkout's `dist/` with `--verbose` and the standard settings location, which was created fresh. Everything below was read from outside: the process was sampled with `top`, `ps` and `footprint`, and its log was read with `display16x get log`.
+
+- **Start:** both monitors connected, DDC working on both, values read and nothing written.
+- **Accessibility:** not granted at start, granted by the owner by 20:19.
+
+| Budget | Target | Measured here (M5 Pro) |
+| --- | --- | --- |
+| Panel open, warm | Under 100 ms | 81, 109, 103, 102, 96 and 77 ms |
+| Memory, panel closed, after about ten opens | At most 50 MiB | 52 MB physical footprint, peak 59 MB. 57 MB straight after a burst of opens |
+| Idle CPU and wakeups over 10 minutes | 0.1% of a core, no recurring wakeups | See below |
+
+**Two budgets are at or over the line on the fastest Mac we have.** The log splits an open: building the two models takes 33 to 51 ms, building the views 0, bringing the app forward 2 to 5, and showing the popover 36 to 61. Off screen, on made-up monitors, models and views together took about 20 ms, so on real displays it is the models that cost: what they ask the system for on every open has not been profiled yet. Memory was 41 MB for v0.1 and 47 MB for v0.2 by the same measure.
+
+**Idle.** The first ten-minute window (20:04:31 to 20:14:32) had four panel opens in it and was thrown away: 3.30 s of CPU and 23 idle wakeups with those opens. The second window, 20:14:33 to 20:24:34, had none: **0.20 s of CPU in 601 s, which is 0.033% of a core, and no idle wakeup.** The owner was typing in that time and the key capture was on, which v0.1's figure of 0.02 s did not have. Memory at the end: 53 MB, peak 59 MB.
+
+**Where an open's time went, and the one thing changed.** The calls behind one build of the panel's models were timed on these two monitors, read-only:
+
+| Call | Time |
+| --- | --- |
+| Whether a display can be rotated | 21.7 ms for the Lenovo, 4.3 ms for the LG |
+| The list of modes | 2.2 ms and 0.6 ms |
+| The current mode, the frame, the main display, mirroring, the lid | 0.05 ms or less each |
+| Listing the connected displays (not part of an open; it runs when the set of displays changes) | 17.5 ms |
+
+The rotation question was asked for every display on every build, and only a display's page shows the answer. It is now asked once, when that page opens. That takes about 26 ms out of the 33 to 51 ms the models took. **Not measured on screen yet:** the copy in daily use is `897c40f`, which does not have this change.
+
+**The owner's word on the budgets (23 November, in the interface session):** no over-engineering. Where a budget is still missed after a quick look, it may be extended by 10%. Memory with the panel closed is the one that needs it: 53 MB against 50 MiB.
+
+### Still to be measured with the app running
+
+A development build in place of the copy in daily use: the panel's open time on screen, memory with the panel closed (at most 50 MiB), and wakeups when idle. And by eye: the popover's arrow against the skin's canvas, real blur, the feel of the bars, full keyboard access through the panel, VoiceOver, and Increase Contrast, Reduce Motion and Reduce Transparency switched on in System Settings.
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:
@@ -605,9 +736,10 @@ swiftc -O spikes/gamma-table-write-probe.swift -o /tmp/gamma-probe && /tmp/gamma
 swiftc -O spikes/ddc-write-probe.swift -o /tmp/ddc-write-probe && /tmp/ddc-write-probe "P32p"
 swiftc -O spikes/ddc-reliability-probe.swift -o /tmp/ddc-reliability-probe && /tmp/ddc-reliability-probe
 swiftc -O spikes/layout-probe.swift -o /tmp/layout-probe && /tmp/layout-probe   # add --watch to follow changes
+swiftc -O spikes/connection-probe.swift -o /tmp/connection-probe && /tmp/connection-probe
 ```
 
-The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header.
+The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header.
 
 To list the display-related functions a system framework exports on a given macOS version:
 

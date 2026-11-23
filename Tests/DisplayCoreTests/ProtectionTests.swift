@@ -243,6 +243,52 @@ struct ProtectionTests {
         #expect(rig.rig.modeSystem.current[Fixture.lgID]?.sameMode(as: wide) == true)
     }
 
+    private func isSentence(_ text: String) -> Bool {
+        guard let first = text.first, let last = text.last else { return false }
+        return first.isUppercase && last == "."
+    }
+
+    @Test("Every notice is a sentence, whatever the occasion it starts with")
+    func noticesAreSentences() {
+        #expect(ProtectionText.occasions.count == 4)
+        #expect(ProtectionText.occasions.contains { $0.first?.isLowercase == true })
+        for occasion in ProtectionText.occasions {
+            for what in ["#1 LEN P32p-20 back at 270°", "#2 LG SDQHD back to 2304 × 2048 HiDPI, 60 Hz", "the saved arrangement back"] {
+                let text = ProtectionText.restored(occasion: occasion, what: what)
+                #expect(isSentence(text), "\(text)")
+            }
+        }
+        for (what, until) in [("the rotation of #1 LEN", "you set a rotation"), ("the mode of #1 LEN", "you choose a mode"), ("the arrangement", "you arrange the displays or save the layout")] {
+            #expect(isSentence(ProtectionText.stopped(what: what, until: until)))
+        }
+        #expect(isSentence(ProtectionText.notOffered(display: "#1 LEN P32p-20", mode: "5120 × 2880 HiDPI, 60 Hz")))
+        #expect(isSentence(ProtectionText.commandLineOffer))
+        #expect(ProtectionText.restored(occasion: ProtectionText.outsideChange, what: "the saved arrangement back") == "After a change made elsewhere, put the saved arrangement back.")
+        #expect(ProtectionText.sentence("ends already?") == "Ends already?")
+        #expect(ProtectionText.sentence(" spaced ") == "Spaced.")
+    }
+
+    @Test("A notice after a change made elsewhere starts with a capital letter")
+    func outsideChangeNotice() async {
+        let rig = LayoutRig()
+        await rig.startWithBoth()
+        rig.protection.setProtectMode(true, for: rig.lenovoTag)
+        rig.rig.modeSystem.current[Fixture.lenovoID] = wide
+        await rig.settling { await rig.rig.reconfigure() }
+        await rig.advance(6)
+        let message = rig.notices.first?.message ?? ""
+        #expect(message.hasPrefix("After a change made elsewhere, put"))
+        #expect(isSentence(message))
+    }
+
+    @Test("Shortcut conflict messages are sentences")
+    func conflictMessages() {
+        let conflicts: [ShortcutConflict] = [.needsModifier, .duplicate("preset Desk"), .system("a system shortcut"), .takenByAnotherApp, .invalidCommand("brightness needs a value")]
+        for conflict in conflicts {
+            #expect(isSentence(conflict.message), "\(conflict.message)")
+        }
+    }
+
     @Test("The limiter counts within its window and starts again on a new target")
     func limiter() {
         var limiter = EnforcementLimiter(limit: 2, window: 60)

@@ -50,6 +50,8 @@ public struct PrivateCapabilities: Sendable, Equatable {
     public var windowServerModes: Bool
     /// Taking a display out of use and bringing it back. Added in v0.2.
     public var displayConnection: Bool = DisplayConnection.isAvailable
+    /// The registry's description of the Mac's ports, which names how a display is attached.
+    public var portLinks: Bool = PortLinkDirectory.isAvailable
 
     public static let current = PrivateCapabilities(
         avServiceI2C: AVServiceDirectory.isAvailable,
@@ -65,6 +67,7 @@ public struct PrivateCapabilities: Sendable, Equatable {
             "Rotation: \(rotation ? "available" : "missing")",
             "Window server mode list: \(windowServerModes ? "available" : "missing")",
             "Display connection: \(displayConnection ? "available" : "missing")",
+            "Port descriptions (connection type): \(portLinks ? "available" : "missing")",
         ]
     }
 }
@@ -349,6 +352,89 @@ public enum WindowServerModes {
         guard let configure = PrivateLibraries.skyLight.symbol("SLSConfigureDisplayMode", as: ConfigureFunction.self) else { return false }
         configure(configuration, display, number)
         return true
+    }
+}
+
+// MARK: Port links
+
+/// One display link as the I/O registry describes it: the port of the Mac it leaves from,
+/// and the EDID of the monitor at the other end, which is what pairs it with a display.
+public struct PortLink: Sendable, Equatable {
+    public var edid: [UInt8]
+    /// The Mac's own port in macOS's words, such as "HDMI" or "USB-C".
+    public var portType: String?
+    public var portNumber: Int?
+    /// True when the picture travels inside a Thunderbolt or USB4 connection.
+    public var isTunneled: Bool?
+    /// True when a converter sits between the port and the monitor, as inside the Mac's
+    /// own HDMI port, in an adapter or in a hub.
+    public var hasConverter: Bool
+    public var lanes: Int?
+    public var linkRate: String?
+
+    public init(edid: [UInt8], portType: String?, portNumber: Int? = nil, isTunneled: Bool? = nil, hasConverter: Bool = false, lanes: Int? = nil, linkRate: String? = nil) {
+        self.edid = edid
+        self.portType = portType
+        self.portNumber = portNumber
+        self.isTunneled = isTunneled
+        self.hasConverter = hasConverter
+        self.lanes = lanes
+        self.linkRate = linkRate
+    }
+}
+
+/// Reads how each display is attached from the port entries of the I/O registry. Nothing
+/// here is a private symbol: the calls are public IOKit. The class and property names are
+/// undocumented, which is why this lives here and every answer is optional. A macOS that
+/// names things differently returns no links, and that costs a label and nothing else.
+public enum PortLinkDirectory {
+    static let portClass = "IOPort"
+    static let linkClass = "IOPortTransportStateDisplayPort"
+
+    private static func entries(ofClass name: String) -> [io_registry_entry_t] {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(name), &iterator) == KERN_SUCCESS else { return [] }
+        defer { IOObjectRelease(iterator) }
+        var found: [io_registry_entry_t] = []
+        while case let entry = IOIteratorNext(iterator), entry != 0 { found.append(entry) }
+        return found
+    }
+
+    private static func property(_ entry: io_registry_entry_t, _ key: String) -> Any? {
+        IORegistryEntryCreateCFProperty(entry, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+    }
+
+    private static func flag(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
+
+    /// True when this macOS describes the Mac's ports in the registry.
+    public static var isAvailable: Bool {
+        let ports = entries(ofClass: portClass)
+        defer { ports.forEach { IOObjectRelease($0) } }
+        return !ports.isEmpty
+    }
+
+    /// The links of the displays attached right now. Read once per topology change.
+    public static func displayLinks() -> [PortLink] {
+        entries(ofClass: linkClass).compactMap { entry in
+            defer { IOObjectRelease(entry) }
+            // A link that is not carrying a picture has nothing to say about a display.
+            if flag(property(entry, "Active")) == false { return nil }
+            guard let edid = property(entry, "EDID") as? Data, !edid.isEmpty else { return nil }
+            let port = property(entry, "ParentBuiltInPortTypeDescription") as? String
+                ?? property(entry, "ParentPortTypeDescription") as? String
+            return PortLink(
+                edid: [UInt8](edid),
+                portType: port,
+                portNumber: (property(entry, "ParentBuiltInPortNumber") as? NSNumber)?.intValue,
+                isTunneled: flag(property(entry, "Tunneled")),
+                hasConverter: property(entry, "BranchDeviceOUI") != nil,
+                lanes: (property(entry, "LaneCount") as? NSNumber)?.intValue,
+                linkRate: property(entry, "LinkRateDescription") as? String
+            )
+        }
     }
 }
 

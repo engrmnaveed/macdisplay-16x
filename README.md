@@ -1,20 +1,22 @@
+<img src="packaging/AppIcon.png" width="96" alt="The Display 16X icon: a display with its menu bar line, in aqua on navy">
+
 # Display 16X
 
 A free, open-source menu bar utility for the display controls macOS leaves out: every resolution and HiDPI mode, hardware brightness and volume on external monitors, software dimming, and brightness and volume keys that work on a monitor that is not Apple's. By [16X Brains](https://16xbrains.com/), under the MIT License.
 
 It targets Apple silicon, and it is built to do nothing when nothing is happening: no timers, no polling, and nothing that renders frames unless you turn a feature on.
 
-**Status: v0.1 Core is complete (23 November 2026).** It runs on the developer's Mac with two external monitors. It is not signed for distribution or tested on other hardware yet. See [what works](#what-works-today) and, for what has not been run on hardware, the [feasibility notes](docs/feasibility.md#where-v01-core-stands-at-the-end-of-23-november).
+**Status: 0.2.0, the first release, with v0.2 Layout and a redesigned interface (23 November 2026).** It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
 
 ## Install
 
-Releases are published as a Homebrew cask and as a ZIP on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases), from 0.1.0 on, for Apple silicon Macs with macOS 14 or later:
+Releases are published as a Homebrew cask and as a ZIP on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases), from 0.2.0 on, for Apple silicon Macs with macOS 14 or later:
 
 ```sh
 brew install --cask engrmnaveed/tap/display16x
 ```
 
-Releases are signed with the project's own certificate and are not notarized by Apple. macOS asks you to allow the first launch once, in Privacy & Security. After that, updates keep the Accessibility permission for the brightness and volume keys, and Homebrew upgrades also keep the first-launch approval.
+0.2.0 is ad hoc signed and not notarized by Apple. macOS asks you to allow the first launch in Privacy & Security, and after every update you allow it again and give the Accessibility permission for the brightness and volume keys again. Later releases are to be signed with the project's own certificate, which keeps that permission and Homebrew's first-launch approval from one release to the next.
 
 The [installation guide](docs/install.md) covers Homebrew, the direct download with its checksum and attestation, allowing the first launch, the Accessibility permission, and removal. The [release runbook](docs/release.md) is how a release is made.
 
@@ -32,10 +34,10 @@ open "dist/Display 16X.app"
 The app appears as a display icon in the menu bar and has no Dock icon. Click the icon for one card per display.
 
 - **Safe mode:** hold Shift while the app starts, or pass `--safe`. Nothing is restored or reapplied automatically in safe mode.
-- **After sleep and at start:** the app does not push its values at a monitor. It reads the monitor and follows it, so a change made with the monitor's buttons or another tool stays. If a monitor forgets its brightness or volume while asleep, switch on "Put my values back after sleep" in that display's details, or run `display16x set restoreAfterWake on --tag N`.
+- **After sleep and at start:** the app does not push its values at a monitor. It reads the monitor and follows it, so a change made with the monitor's buttons or another tool stays. If a monitor forgets its brightness or volume while asleep, switch on "Put my values back after sleep" on that display's page in the panel, or run `display16x set restoreAfterWake on --tag N`.
 - **Verbose log:** pass `--verbose` to log debug detail and echo the log to standard error.
 - **Brightness and volume keys** need Accessibility permission. The panel says so and opens the right page in System Settings. The package is ad hoc signed, so macOS asks again after every rebuild: remove the old Display 16X entry from the Accessibility list and add the new one. To keep the grant across rebuilds, create a code signing certificate in Keychain Access (Certificate Assistant, Create a Certificate, type Code Signing) and pass its name: `DISPLAY16X_SIGN_IDENTITY="name" scripts/package-macos.sh`.
-- **Panel snapshot:** `--snapshot-panel FILE` renders the panel to a PNG without showing it and quits, and `--snapshot-details` opens the detail views in it. It is a development aid for checking the layout.
+- **Pictures of the interface without running it:** `scripts/render-surfaces.sh` draws every surface and state from made-up monitors into `renders/`, in light and dark, with one overview sheet per group. The app is not started and no display is touched. See [The look](#the-look).
 - **A build under test next to the copy you use:** set `DISPLAY16X_SUPPORT_DIRECTORY=~/d16x-dev` for the app and for `display16x`, and the build keeps its settings, recovery values and socket in that folder instead of the usual one. Such a build does not start while the normal copy is running, because both would drive the same monitors.
 
 ## Checks
@@ -57,6 +59,22 @@ CI also checks the ZIP after `unzip`, as Homebrew unpacks it, and runs `brew sty
 
 Captured hardware output that becomes a test fixture carries made-up serial numbers, UUIDs and manufacture dates, never the real ones.
 
+## The look
+
+The interface is drawn in three layers, so that a new look is a small change:
+
+| Layer | File | What it holds |
+| --- | --- | --- |
+| The skin | `Sources/Display16XApp/Design/Theme.swift` | Every color, distance, size, font, symbol name and duration, as values. A re-color or re-spacing ends here. |
+| The pieces | `Sources/Display16XApp/Design/Primitives.swift` | How a bar, a text-size stop, a chip, a card or a banner is drawn from those values. |
+| The surfaces | `Sources/Display16XApp/Surfaces/` | Which pieces a surface is made of, and its words. A surface has no color, font, radius, distance or symbol of its own, and a test fails when one does. |
+
+The app icon is drawn by a script, the way the pieces are: `swift packaging/icon/draw-icon.swift packaging/AppIcon.png` draws the 1024-pixel picture, and `scripts/make-icon.sh packaging/AppIcon.png` makes `packaging/AppIcon.icns` from it with `sips` and `iconutil`. The packaging script puts that file into the bundle. The mark is the one the app draws in its panel and in the menu bar.
+
+A re-skin is held to two measures by the tests: `SkinContrastTests` measures the skin's color pairs in light, dark and both increased-contrast looks, and the render run fails when a control would reach VoiceOver without a name.
+
+To check a change, run `scripts/render-surfaces.sh` and look at `renders/surfaces/sheets/skin-light.png` and `skin-dark.png`, which show every value and piece on one picture, then at the other sheets in that folder. `DISPLAY16X_COMPARE=before:after swift test --filter RenderHarness/compare` lists the pictures that differ between two runs.
+
 ## Command line
 
 `scripts/package-macos.sh` also produces `dist/display16x`.
@@ -71,6 +89,8 @@ dist/display16x set resolution 2560x1440 --pointer --try   # asks Keep or Revert
 dist/display16x set restoreAfterWake on --tag 2            # for a monitor that forgets its values while asleep
 dist/display16x features                   # every feature and its operations
 ```
+
+`list` and `probe` say how each connected display is attached: HDMI, USB-C, Thunderbolt, built-in, or not known. That names the Mac's own port. What is at the far end of the cable is not something macOS reports. A `get` says whether the value it returns was read back from the monitor or only sent.
 
 `probe` is read-only and runs on its own, which makes it the thing to attach to a bug report. Every other command is sent to the running app over a socket only your user can open, with a timeout and a clear message when the app is not running. Each display gets one line: `confirmed` (read back from the device), `accepted` (sent or stored, not proven) or `failed` with the reason.
 

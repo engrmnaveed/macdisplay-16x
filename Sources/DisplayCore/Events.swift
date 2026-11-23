@@ -87,6 +87,10 @@ public enum DisplayEvent: Sendable, Equatable {
 
     case modeChanged(ModeChange)
     case valueChanged(ValueChange)
+    /// How a value of this display is known changed, with or without the value changing:
+    /// a write was read back, the monitor answered after wake, or the Mac went to sleep.
+    /// Ask `ControlService.knowledge(of:for:)` for the controls shown.
+    case valueKnowledgeChanged(DisplayTag)
     /// A mode change started or stopped waiting for Keep or Revert.
     case modeConfirmationChanged(DisplayTag)
     /// A change to arrangement, mirroring, the main display or a connection started or

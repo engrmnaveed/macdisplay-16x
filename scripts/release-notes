@@ -2,14 +2,18 @@
 # Prints the GitHub release notes for VERSION: its CHANGELOG.md section, then the text
 # every release carries. Without a section, it warns and prints only the standard text.
 #
-#   scripts/release-notes VERSION [SIGNING]
+#   scripts/release-notes VERSION [SIGNING [CHANGED_FROM]]
 #
 # SIGNING is how the app was signed: certificate (the default, decision 12), developer-id
 # or adhoc. The release workflow passes the level it checked on the signed app.
+# CHANGED_FROM is the tag of the last release when this one does not satisfy its signing
+# requirement, so its users give the Accessibility permission once more. The workflow
+# passes it too. An ad hoc release says that for every update anyway.
 set -eu
 
-version=${1:?usage: scripts/release-notes VERSION [certificate|developer-id|adhoc]}
+version=${1:?usage: scripts/release-notes VERSION [certificate|developer-id|adhoc [CHANGED_FROM]]}
 signing=${2:-certificate}
+changed_from=${3:-}
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 case "$signing" in
@@ -23,6 +27,17 @@ case "$signing" in
         echo "scripts/release-notes: SIGNING is certificate, developer-id or adhoc" >&2
         exit 1 ;;
 esac
+
+# The first release with a new signer, such as the first one signed with the certificate
+# after ad hoc releases, costs its users the permission once.
+if [ -n "$changed_from" ]; then
+    case "$signing" in
+        certificate)
+            signed="$signed If you update from $changed_from, which was signed differently, macOS treats this version as a new app once: allow the first launch again, and give the Accessibility permission again by removing the old Display 16X entry under Privacy & Security, Accessibility, and adding the app again. From then on the permission carries over, and Homebrew upgrades keep the approval." ;;
+        developer-id)
+            signed="$signed If you update from $changed_from, which was signed differently, give the Accessibility permission again once, by removing the old Display 16X entry under Privacy & Security, Accessibility, and adding the app again. Later updates keep it." ;;
+    esac
+fi
 
 section=$(awk -v heading="## $version" '
   $0 == heading { found = 1; next }

@@ -18,8 +18,21 @@ final class PanelModel: ObservableObject {
     struct Card: Identifiable, Equatable {
         var tag: DisplayTag
         var name: String
-        var subtitle: String
+        /// The line under the name: what kind of display it is and its part on the desk.
+        var caption: String
         var isChecking: Bool
+        var isMain = false
+        var isBuiltIn = false
+        /// Width divided by height as the display stands on the desk, for its small picture.
+        var aspect = 16.0 / 9.0
+        /// How the display is connected to the Mac, and its diagonal where the display says it.
+        var connection = ConnectionType.unknown
+        var inches: Int?
+        /// How each value on the card is known, from the core. Nil for a control the
+        /// display does not have.
+        var brightnessKnowledge: ValueKnowledge?
+        var contrastKnowledge: ValueKnowledge?
+        var volumeKnowledge: ValueKnowledge?
         var brightness = ControlState()
         var contrast = ControlState()
         var volume = ControlState()
@@ -62,11 +75,20 @@ final class PanelModel: ObservableObject {
     @Published private(set) var brightnessKeys = true
     @Published private(set) var volumeKeys = true
     @Published private(set) var keyTarget = KeyTargetPolicy.underPointer
+    /// The user was sent to System Settings for Accessibility and the grant is still missing.
+    @Published private(set) var accessibilityDidNotTake = false
+    /// The app has never run on this Mac before: there was no settings file when it started.
+    @Published private(set) var isFirstRun = false
     /// The last thing that went wrong, in the user's terms. Cleared by the next success.
     @Published var message: String?
 
     private let context: AppContext
     private var subscription: EventBus.Subscription?
+    /// Whether a display can be rotated, asked once when its page opens. macOS takes up to
+    /// 20 ms to answer for one display, and only that page shows the answer, so the
+    /// question is kept out of the panel's opening.
+    private var rotationAsked: Set<DisplayTag> = []
+    private var rotationReasons: [DisplayTag: String] = [:]
 
     init(context: AppContext) {
         self.context = context
@@ -117,7 +139,16 @@ final class PanelModel: ObservableObject {
             case .mute: cards[index].isMuted = change.value >= 0.5
             default: break
             }
-        case .displayAdded, .displayRemoved, .controllersReady, .modeChanged, .modeConfirmationChanged,
+        case .valueKnowledgeChanged(let tag):
+            // How a value is known can change while the value stays: a drag ends and the
+            // last write is read back, or the Mac goes to sleep.
+            guard let index = cards.firstIndex(where: { $0.tag == tag }) else { return }
+            setKnowledge(&cards[index])
+        case .displayAdded, .displayRemoved:
+            rotationAsked.removeAll()
+            rotationReasons.removeAll()
+            rebuild()
+        case .controllersReady, .modeChanged, .modeConfirmationChanged,
              .reconfigurationSettled, .permissionsChanged, .gateChanged, .wakeSettled:
             rebuild()
         default:
@@ -142,14 +173,21 @@ final class PanelModel: ObservableObject {
     func rebuild() {
         let registry = context.registry
         let document = context.settings.document
+        var frames: [DisplayTag: DisplayFrame] = [:]
+        for entry in context.layout.snapshot().entries { frames[entry.tag] = entry.frame }
         cards = registry.live.keys.sorted().compactMap { tag -> Card? in
             guard let live = registry.live[tag], let record = registry.record(for: tag) else { return nil }
             let mode = context.modes.currentMode(for: tag)
-            var parts: [String] = [record.kind == .builtIn ? "Built-in" : "External"]
-            if live.snapshot.isMain { parts.append("Main display") }
-            if live.snapshot.mirrorSource != nil { parts.append("Mirrored") }
-
-            var card = Card(tag: tag, name: record.displayName, subtitle: parts.joined(separator: " · "), isChecking: live.isDetecting)
+            let inches: Int? = PanelText.inches(record.physicalSizeOverride ?? record.physicalSize)
+            let caption: String = PanelText.caption(
+                inches: inches, connection: live.connection, isMain: live.snapshot.isMain, isMirrored: live.snapshot.mirrorSource != nil
+            )
+            var card = Card(tag: tag, name: record.displayName, caption: caption, isChecking: live.isDetecting)
+            card.isMain = live.snapshot.isMain
+            card.isBuiltIn = record.kind == .builtIn
+            card.connection = live.connection
+            card.inches = inches
+            card.aspect = PanelText.aspect(frame: frames[tag], mode: mode)
             card.brightness = state(.brightness, tag: tag)
             card.contrast = state(.contrast, tag: tag)
             card.volume = state(.volume, tag: tag)
@@ -161,7 +199,7 @@ final class PanelModel: ObservableObject {
             card.currentMode = mode
             card.refreshRates = context.modes.refreshRates(for: tag)
             card.rotation = context.modes.rotation(for: tag)
-            if case .unavailable(let reason) = context.modes.rotationAvailability(for: tag) { card.rotationReason = reason }
+            card.rotationReason = rotationReasons[tag]
             card.pending = context.modes.pending[tag]
             card.keyboardControl = document.effectiveSettings(for: tag).keyboardControl
             card.restoreAfterWake = document.effectiveSettings(for: tag).restoreAfterWake
@@ -171,13 +209,12 @@ final class PanelModel: ObservableObject {
             }
 
             let composition = context.controls.composition(for: tag)
-            if composition.hasSoftware && composition.hasHardware {
-                card.softwareNote = "Software dimming takes over below \(Int((composition.switchover * 100).rounded()))%."
-            } else if composition.hasSoftware {
-                card.softwareNote = "Brightness is software dimming only."
-            } else {
-                card.softwareNote = context.controls.availability(of: .softwareBrightness, for: tag).reason ?? "Software dimming is off."
-            }
+            setKnowledge(&card)
+            card.softwareNote = PanelText.dimmingNote(
+                hasSoftware: composition.hasSoftware, hasHardware: composition.hasHardware, switchover: composition.switchover,
+                globallyOn: document.global.colorTablesEnabled ?? SettingsDefaults.colorTablesEnabled,
+                reason: context.controls.availability(of: .softwareBrightness, for: tag).reason
+            )
             var identity = ["Tag \(tag.rawValue)"]
             if let key = record.modelKey { identity.append("model \(key)") }
             if let serial = record.identifiers.serialText { identity.append("serial \(serial)") }
@@ -189,12 +226,35 @@ final class PanelModel: ObservableObject {
             Remembered(tag: $0.tag, name: $0.displayName, lastSeen: $0.lastSeen)
         }
         advice = context.permissions.advice
+        accessibilityDidNotTake = context.permissions.accessibilityDidNotTake
+        if case .fresh = context.settings.loadOutcome { isFirstRun = true } else { isFirstRun = false }
         isSafeMode = context.gate.isSafeMode
         loginItem = context.permissions.state.loginItem
         softwareDimming = document.global.colorTablesEnabled ?? SettingsDefaults.colorTablesEnabled
         brightnessKeys = document.global.captureBrightnessKeys ?? SettingsDefaults.captureBrightnessKeys
         volumeKeys = document.global.captureVolumeKeys ?? SettingsDefaults.captureVolumeKeys
         keyTarget = document.global.keyTarget ?? SettingsDefaults.keyTarget
+    }
+
+    // MARK: Rotation
+
+    /// Asks once whether this display can be rotated, for its page.
+    func loadRotationAvailability(tag: DisplayTag) {
+        guard rotationAsked.insert(tag).inserted else { return }
+        guard case .unavailable(let reason) = context.modes.rotationAvailability(for: tag) else { return }
+        rotationReasons[tag] = reason
+        if let index = cards.firstIndex(where: { $0.tag == tag }) { cards[index].rotationReason = reason }
+    }
+
+    // MARK: What is known
+
+    /// How each value on the card is known: read back from the display, only sent, or not
+    /// known. The core keeps this fact, and the command line prints the same one.
+    private func setKnowledge(_ card: inout Card) {
+        let controls = context.controls
+        card.brightnessKnowledge = card.brightness.isAvailable ? controls.knowledge(of: .brightness, for: card.tag) : nil
+        card.contrastKnowledge = card.contrast.isAvailable ? controls.knowledge(of: .contrast, for: card.tag) : nil
+        card.volumeKnowledge = card.volume.isAvailable ? controls.knowledge(of: .volume, for: card.tag) : nil
     }
 
     // MARK: Commands
