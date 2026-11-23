@@ -11,7 +11,7 @@
 ## Who changes what
 
 - **Planning documents** (`PRD.md`, `docs/roadmap.md`, `docs/core-architecture.md`, `docs/feature-inventory.md`) are changed by the maintainer or the planning session only.
-- **Build work** owns `Sources/`, `Tests/`, `scripts/`, `spikes/`, `README.md` and `docs/feasibility.md`.
+- **Build work** owns `Sources/`, `Tests/`, `scripts/`, `spikes/`, `.github/`, `packaging/`, `README.md`, `CHANGELOG.md`, `docs/feasibility.md`, `docs/install.md` and `docs/release.md`.
 - **[docs/domain-log.md](docs/domain-log.md)** is how build work reports upward. Append a dated entry for anything about the domain or the product: how a monitor, a connection or macOS actually behaves, a rule the product should follow, a decision the maintainer needs to make, a place where the architecture did not fit and what was done instead. Keep implementation detail out of it. If the architecture needs to change, log it, take the smallest workable deviation, and carry on.
 
 ## Rules

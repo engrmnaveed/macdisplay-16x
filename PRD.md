@@ -69,7 +69,7 @@ A SwiftPM package with no third-party dependencies in the core, built with Swift
 
 The [core architecture](docs/core-architecture.md) fixes five things from the first commit so later features do not force a rewrite. Displays are saved records with a stable tag, separate from the live connection. Each display has several controllers with declared capabilities. Brightness is one scale composed of hardware and software parts. The menu, keys and CLI all go through one command engine. Every automatic write passes one gate that safe mode can close. The [feature inventory](docs/feature-inventory.md) lists every capability considered and the core hook it depends on.
 
-Use macOS 14 as the provisional deployment floor, in line with Space 16X. List a macOS version as supported only after a release build has been checked on it. Distribute a Developer ID signed and notarized app through GitHub Releases and a Homebrew cask.
+Use macOS 14 as the provisional deployment floor, in line with Space 16X. List a macOS version as supported only after a release build has been checked on it. Distribute through GitHub Releases and a cask in the `engrmnaveed/homebrew-tap` Homebrew tap, the same way as Space 16X. Sign every release with one stable identity, so the Accessibility grant survives updates, and use a Developer ID with notarization once the credentials are configured. The [roadmap](docs/roadmap.md#release-mechanism) describes the mechanism.
 
 ### Performance budget
 
@@ -88,7 +88,8 @@ Provisional targets for the MacBook Air M1 (8 GB). Record measured numbers befor
 | Milestone | Done when |
 | --- | --- |
 | Spikes | Each risky mechanism has a small probe and a recorded result on real hardware. Mode listing and DDC reads are done. See [feasibility](docs/feasibility.md). |
-| v0.1 Core | Resolution, refresh rate, DDC brightness and volume, software dimming and brightness keys work from the menu bar on the test monitors. The idle and memory budgets are met. |
+| v0.1 Core | Resolution, refresh rate, DDC brightness and volume, software dimming and brightness keys work from the menu bar on the test monitors. The idle and memory budgets are met. *Done on 23 November 2026.* |
+| Release 0.1.0 | A tag builds, checks and publishes the app to GitHub Releases, and `brew install --cask` installs it from our tap. |
 | v0.2 Layout | Arrangement, disconnect and reconnect, configuration restore, presets, and the CLI. |
 | v0.3 Advanced | Flexible scaling through overrides and virtual screens, each behind its own switch with a clean uninstall path. |
 | Public release | Signed, notarized artifacts, an installation guide, a tested-hardware list, and contribution issues. |

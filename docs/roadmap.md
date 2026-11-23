@@ -26,9 +26,9 @@ Licenses were read from the GitHub API on 22 November 2026. Credit any MIT sourc
 | Resolution, HiDPI and refresh rate | List modes from the window server, which includes the scaled HiDPI modes the public list hides. Apply in a configuration transaction that persists | Private SkyLight for the list, public Core Graphics to apply and as the fallback list | Verified on two monitors, with Keep and Revert | None | v0.1 |
 | DDC brightness, contrast, volume, input | DDC/CI over the display's AV service I2C channel | Private IOKit | Read and write verified on two monitors. Input switching was never sent | On demand only | v0.1 |
 | Built-in and Apple display brightness | System brightness service | Private DisplayServices | Present. No built-in panel or Apple display was available | None | v0.1 |
-| Software dimming | Scale the display's gamma table | Public Core Graphics | Verified while awake. macOS resets it at unlock. The fix is built and not yet watched across a lock | None after the table is set | v0.1, off by default |
+| Software dimming | Scale the display's gamma table | Public Core Graphics | Verified while awake and across a lock and unlock, where the app writes the table again. Not checked with a custom color profile | None after the table is set | v0.1, off by default |
 | Brightness and volume keys, on-screen indicator | Event tap for media keys (needs Accessibility permission) and a small indicator window | Public | Verified with Accessibility granted | Negligible | v0.1 |
-| Rotation | Display preferences class of the MonitorPanel framework | Private | Present. The write path is built and has never been run | None | v0.1, unverified |
+| Rotation | Display preferences class of the MonitorPanel framework | Private | Verified once through the timed revert on one monitor | None | v0.1 |
 | Arrangement, main display, mirroring | Configuration transaction | Public Core Graphics | Not yet probed | None | v0.2 |
 | Disconnect and reconnect a display | Window server enable flag | Private SkyLight | Present | None | v0.2 |
 | Configuration restore | Reapply saved state on reconfiguration and wake events | Public | Not yet probed | Event-driven | v0.2 |
@@ -59,15 +59,17 @@ One small probe per risky mechanism, each recording Mac model, macOS build, moni
 - [x] DDC write with coalescing while dragging
 - [ ] DDC on a connection that carries video and no DDC
 - [x] Gamma-table dimming while awake
-- [ ] Gamma-table dimming across a lock and unlock (the blind rewrite needs to be watched once), with Night Shift, and with a custom color profile on any connected display
+- [x] Gamma-table dimming across a lock and unlock
+- [ ] Gamma-table dimming with Night Shift, and with a custom color profile on any connected display
 - [x] DDC readiness after a short display sleep: both monitors answer within a second, and bad replies stop within 3.4 seconds
 - [x] DDC readiness after a display sleep of ten minutes or more (measured at 10 minutes, 37 minutes, and five and a half hours): the DisplayPort monitor leaves the system and returns 3.3 seconds later, answers before it is listed, and gives "not ready" replies on and off for at least 16 seconds. Both monitors kept their values
 - [ ] DDC readiness after a full system sleep and a cable reconnect
-- [ ] The same DDC timings with no other display utility running
+- [x] DDC with no other display utility running: identical results, and the DisplayPort monitor refuses a single query on a quiet channel too
 - [ ] Key capture without Accessibility permission
 - [x] A display's system UUID survives a display sleep and a reconnect during wake
-- [ ] Whether it survives a full system sleep, an unplugged cable and a port change
-- [ ] Rotation write through the timed revert
+- [x] The tag, the system UUID and the display ID survive an unplugged cable, and a move to another port
+- [ ] Whether they survive a full system sleep, a dock or an adapter, and how two units of one model behave
+- [x] Rotation write through the timed revert
 - [ ] Launch at login
 - [ ] Display override install, activation and removal on macOS 27
 - [ ] Virtual display create and destroy
@@ -86,16 +88,27 @@ Built to the [core architecture](core-architecture.md), in this order:
 
 Ready when the performance budget in the [PRD](../PRD.md#performance-budget) is met on the baseline Mac, a monitor that ignores DDC leaves the menu responsive, and settings follow a monitor across a reconnect and a restart.
 
-**Status on 23 November 2026.** All four stages are built on the `v0.1-core` branch, with 224 unit tests. On the two test monitors the owner has checked brightness, contrast and volume from the panel, the text-size strip with Keep and Revert, refresh rate, the brightness and volume keys with the indicator, and software dimming while awake. The idle and memory budgets are met on the M5 Pro.
+**Done.** The owner called v0.1 Core complete on 23 November 2026. All four stages are built, with 224 unit tests and a CI run on every pull request ([pull request 1](https://github.com/engrmnaveed/macdisplay-16x/pull/1)). On the two test monitors the owner has checked brightness, contrast and volume from the panel, the text-size strip with Keep and Revert, refresh rate, one rotation through the timed revert, the brightness and volume keys with the indicator, software dimming while awake and across a lock, and the monitors across a cable replug and a port change. The idle and memory budgets are met on the M5 Pro.
 
-Left before v0.1 is called done:
+Carried forward, none of it blocking the first release:
 
-1. Watch software dimming across a lock and unlock.
-2. See the [decided](#5-open-decisions) rules handle their harder cases on hardware. All six are built. One wake and one start have run with them: both monitors were read, every value matched and nothing was written. Not seen yet: a value changed on the monitor while the app was not looking, "restore after wake" writing a value back, and the floor after a long absence.
-3. Settle the open decisions marked v0.1.
-4. One rotation run through the timed revert, or ship rotation marked unverified.
-5. Register the login item once.
-6. Run the app and the budget measurements on a MacBook Air M1, with its built-in panel.
+- A MacBook Air M1 with its built-in panel: the app, native brightness and the budget measurements.
+- Hardware nobody on this desk has: a monitor that forgets its values in standby, a connection that carries video and no DDC, an Apple display, two units of one model.
+- Software dimming with a custom color profile and with Night Shift. It stays off by default until then.
+- Registering the login item once.
+- Fine points of software dimming after a return, held at lower priority by the owner.
+
+### Release mechanism
+
+Built the same way as Space 16X, so one owner runs both projects with the same steps.
+
+- **Version.** One file, `scripts/release-version`. The packaging script and the command line tool take the version from it, and CI fails when they disagree. `CHANGELOG.md` has a section per version.
+- **Tag to release.** Pushing a tag `vX.Y.Z` that matches the version file runs the release workflow: the same checks as CI, the packaged app zipped as `display16x-X.Y.Z-macos-arm64.zip` with a SHA-256 file, a build provenance attestation, and a GitHub Release with the version's changelog section as its notes. Publication waits in a `release` environment for the owner's approval.
+- **Homebrew.** A cask named `display16x` in the existing tap `engrmnaveed/homebrew-tap`. It is rendered from a template with the version and the digest, attached to the release, and committed to the tap by the workflow through a deploy key. The cask installs the app and links the `display16x` command. The official cask repository is not an option until the app passes Gatekeeper.
+- **Signing.** The workflow signs with what the `release` environment holds: a Developer ID with notarization, a project certificate, or neither, which means ad hoc. Display 16X needs a stable identity more than Space 16X does, because the Accessibility grant belongs to the signature and an ad hoc build loses it at every update. See [decision 12](#5-open-decisions).
+- **Guides.** `docs/release.md` is the runbook, with the one-time GitHub settings. `docs/install.md` covers Homebrew, the direct download, the first launch, the Accessibility grant and removal.
+
+The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
 
 ### v0.2 Layout
 
@@ -124,6 +137,7 @@ HDR switching, XDR brightness on capable hardware, color profile and color mode 
 | Override-based scaling may behave differently on current macOS | Probe it before building interface for it. Keep mirror-based scaling as the fallback. |
 | Hardware coverage | Publish a tested-hardware list and accept probe output in issues. |
 | Scope | BetterDisplay is years of full-time work. Ship the core well before starting the next group. |
+| An app that is not notarized is blocked at first launch, and Homebrew tightens its rules for such casks | Publish through our own tap, document the first launch, check the cask with Homebrew's own style check in CI, and move to a Developer ID when the membership is there. |
 
 ## 5. Open decisions
 
@@ -139,6 +153,8 @@ Raised by build work in the [domain log](domain-log.md). The maintainer decides.
 | 4 | The restore floor | Hardware brightness set by hand is restored exactly as set. The floor applies to the software part only, when the user returns. |
 | 10 | What counts as the user returning, for the floor | App start, and a wake, unlock or session return after the displays were off or the screen was locked for 30 minutes or more. A shorter blank leaves a picture that was dimmed on purpose alone. The time comes from the sleep and lock events, with no timer. |
 | 11 | Values at app start | Read and adopt, the same rule as after wake. The check of each display already reads the values, so it costs no extra queries. |
+| 7 | One rotation test on the owner's desk | Done with the owner present: 90° on one monitor, left unanswered, back on its own after 15 seconds, arrangement unchanged. |
+| 9 | A DDC run with no other display utility running | Done. Results were identical. Idle utilities cost no replies. A program that is reading at that moment does. |
 
 The rules are written out in the [core architecture](core-architecture.md), sections 5 and 7.
 
@@ -147,7 +163,6 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | # | Decision | Current behavior | Recommendation | Needed for |
 | --- | --- | --- | --- | --- |
 | 5 | Labels for vendor-specific input values | Shown by number, the user can rename | Keep numbers. Add a table of confirmed labels later, from hardware reports | Later |
-| 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild | A local code-signing certificate now, Developer ID for releases. The packaging script already takes a certificate name | v0.1 |
-| 7 | One rotation test on the owner's desk | Never run | One run on the monitor that is not rotated, through the timed revert, with the owner present | v0.1 |
+| 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac. Follows from decision 12 for releases | Next development round |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
-| 9 | A clean DDC measurement with no other display utility running | Every number so far was taken with one running | One short run before v0.1 is called done, when the owner agrees to quit the other utility for a few minutes | v0.1 |
+| 12 | The signing identity for releases | None yet, so a release would be ad hoc signed and every update would lose the Accessibility grant | A Developer ID with notarization if the Apple Developer Program membership is available. Otherwise one project certificate kept as a release secret, so the grant survives updates, with the first launch allowed by hand as in Space 16X | First release |
