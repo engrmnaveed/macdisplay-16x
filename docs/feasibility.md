@@ -149,7 +149,17 @@ What follows: the table has to be written again without asking whether it is sti
 
 - **That change is built, and not yet watched (04:36).** The app now writes the table again blindly on reconfiguration, wake, unlock and the return of the user's session, at 1, 3 and 8 seconds after each, and when the panel opens. The read-back check is gone. Software dimming is reported as accepted, never confirmed, and so is a brightness it has a share in. The unit tests cover the moments and that writing again never dims twice. Whether those moments catch the reset at unlock can only be seen by someone at the screen: switch software dimming on, leave a monitor in the software range, lock, let the displays sleep a minute, wake and unlock. The app's log then shows each rewrite with milliseconds ("Color table written again on #2 after unlock").
 
-Until that has been watched, color tables stay off by default. A custom color profile was not present in any of these checks.
+- **It now stays across a lock and unlock (09:23, checked by the owner).** With software dimming on and the LG at the far left, the owner locked the screen and unlocked about ten seconds later. The picture stayed dimmed. The app's log for that minute:
+
+| Time | What the app did |
+| --- | --- |
+| 09:23:30.8 | Wrote the LG's table again after a display reconfiguration that came with the lock, and once more a second later |
+| 09:23:32.8 | Wrote it again after the wake, then 1 and 3 seconds later. Both monitors were read and still had their values |
+| 09:23:40.4 | Wrote it again at the unlock, then 1 and 3 seconds later |
+
+The earlier failure was at exactly this point: the picture came back dimmed and went bright a couple of seconds after the unlock. Writing blindly at the unlock and shortly after is what holds it.
+
+Not watched: a lock with a display sleep long enough for the LG to leave the system, where the dimming is written again from the stored level when the LG returns, and the lift to the floor after 30 minutes away. A custom color profile was not present in any of these checks, so color tables stay off by default, as decided.
 
 #### Started while the displays were asleep (04:36)
 
@@ -358,6 +368,25 @@ Three things the toolchain does not do on its own, each worked around in the rep
 - XCTest is not shipped. Tests use Swift Testing.
 - `swift test` does not find the Swift Testing macro plugin. The manifest adds its folder for the test targets.
 - In the macOS 27 SDK, SwiftUI's `@State` is a macro whose plugin ships with Xcode only. The app declares view state with the `State` type instead.
+
+### Where v0.1 Core stands at the end of 23 November
+
+Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
+
+Built and unit-tested, and not run on hardware:
+
+- Rotation. One run through the timed revert is waiting for the maintainer's word.
+- Input switching. It can cut the Mac off from the monitor, and nothing on this desk needs it.
+- Launch at login, and native brightness (no built-in or Apple display here).
+- "Put my values back after sleep" writing a value back, and the app taking over a value that was changed on a monitor during a sleep. Neither test monitor loses a value, and nobody changed one by its buttons while the displays slept.
+- The lift of software dimming to the floor after 30 minutes away, and software dimming with a custom color profile.
+
+Not measured:
+
+- A full system sleep, as opposed to a display sleep.
+- Unplugging a cable and moving a monitor to another port, to see whether the system UUID stays.
+- DDC with no other display utility running. Every number here was taken with one running.
+- Any Mac other than the M5 Pro, in particular the MacBook Air M1 the PRD sets the budgets for.
 
 ## Running the probes
 

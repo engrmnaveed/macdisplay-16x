@@ -6,6 +6,20 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.1 Core is complete, with a short list held for later
+
+The owner called the core done on 23 November and asked for the branch to be pushed. All four stages are built, 224 unit tests pass, and everything the owner could check at the desk has been checked. The full list of what was and was not run on hardware is at the end of the 23 November section of the feasibility notes.
+
+Held at lower priority, by the owner's word:
+
+- Fine points of software dimming after a return, such as the picture coming back at the 15% floor. With the 30 minute rule this now happens only after a long absence or at the start of the app.
+
+Left for the maintainer, unchanged from the roadmap's open decisions: vendor input labels (5), a stable signing identity (6), one rotation run (7), identical monitors (8) and a DDC run without another display utility (9). Decisions 7 and 9 need the owner at the desk and a clear go-ahead, and neither was run.
+
+Still unknown from this desk, and worth a hardware report from anyone who has the kit: a monitor that really forgets its values in standby, a connection that carries video and no DDC, an Apple display, and a MacBook Air M1.
+
+For the planning documents: the roadmap still describes v0.1 as in progress. Build work does not edit it.
+
 ## 23 November 2026 · The after-wake default and the restore floor are built as decided, with three things to confirm
 
 Built to the decisions recorded this morning (core architecture, sections 5 and 7). Unit-tested. The first run on hardware is the next wake of the displays.
@@ -80,6 +94,8 @@ Status: open. The owner asked to set it aside for now. Software dimming stays of
 Update, 23 November, 04:36: the blind rewrite is built. The table is written again on reconfiguration, wake, unlock and the return of the user's session, at 1, 3 and 8 seconds after each, and when the panel opens. Software dimming is now reported as accepted, never confirmed, and so is a brightness it has a share in. Nobody has watched it across a lock and unlock yet, so the status stays open until the owner has.
 
 **Decision needed:** none yet. It becomes a decision if blind rewrites turn out not to be enough: whether software dimming ships in v0.1 at all, or with a note that it is lost at unlock until the brightness is touched.
+
+Update, 23 November, 09:23: closed. The owner dimmed the LG to the bottom of the software range, locked, unlocked, and the picture stayed dimmed. The log shows the table written again at the unlock and 1 and 3 seconds after. Blind rewrites are enough for this case, and no decision is needed. Software dimming stays off by default for the other reason: it has not been checked with a custom color profile.
 
 ## 23 November 2026 · Other programs on the DDC channel answer each other's questions
 

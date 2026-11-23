@@ -4,7 +4,7 @@ A free, open-source menu bar utility for the display controls macOS leaves out: 
 
 It targets Apple silicon, and it is built to do nothing when nothing is happening: no timers, no polling, and nothing that renders frames unless you turn a feature on.
 
-**Status: v0.1 Core, in development.** It runs on the developer's Mac with two external monitors. It is not signed for distribution or tested on other hardware yet. See [what works](#what-works-today).
+**Status: v0.1 Core is complete (23 November 2026).** It runs on the developer's Mac with two external monitors. It is not signed for distribution or tested on other hardware yet. See [what works](#what-works-today) and, for what has not been run on hardware, the [feasibility notes](docs/feasibility.md#where-v01-core-stands-at-the-end-of-23-november).
 
 ## Build and run
 
@@ -50,7 +50,7 @@ dist/display16x features                   # every feature and its operations
 | Resolution list, text-size strip, refresh rate, Keep and Revert with a timed revert | Verified on hardware: size changes from the strip, Keep, Revert, and the revert on its own when unanswered. The list includes the scaled sizes macOS hides from its public mode list |
 | DDC brightness, contrast, volume and input, one serial queue per display | Brightness verified on a Lenovo P32p-20 and an LG SDQHD by an independent read. Volume, contrast and mute are read on hardware and written only in unit tests. Input switching is never run on hardware |
 | Native brightness for built-in and Apple displays | Built. No such display was available to test |
-| Software dimming through color tables | Looks right while awake on both monitors: smooth, clearly darker than the monitor's own minimum, and back to normal. **Known problem:** it was lost when the screen is unlocked after a display sleep. A fix that writes the table again at unlock is built and not yet watched on hardware. Dimming left very dark is lifted to a readable level when you come back after the displays were off or the screen was locked for half an hour, and when the app starts. Off by default |
+| Software dimming through color tables | Verified by eye on both monitors: smooth, clearly darker than the monitor's own minimum, back to normal on the way up, and it stays across a lock and unlock. macOS resets color tables at unlock without saying so, so the app writes its table again at wake, at unlock and a few moments after. Dimming left very dark is lifted to a readable level when you come back after the displays were off or the screen was locked for half an hour, and when the app starts. Not checked with a custom color profile. Off by default |
 | Brightness and volume keys, on-screen indicator | Verified on both monitors after granting Accessibility. If the grant does not take, remove the old Display 16X entry in System Settings and add it again |
 | At start, after wake and when a display returns | The app reads the monitor and shows what it has. Nothing is written. Ran on hardware at one start and at two wakes where the LG left and came back: nothing was written and both monitors still held the values the app had. Not yet seen taking over a value that was changed elsewhere. In five measured wakes, one after five and a half hours, neither test monitor had lost a value |
 | "Put my values back after sleep", per display, off by default | For a monitor that forgets its values. Reads first and writes only a value you chose and the monitor no longer has. Built and unit-tested. Never seen repairing a lost value, because neither test monitor loses one |
