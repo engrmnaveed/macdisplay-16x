@@ -219,6 +219,30 @@ struct ProtectionTests {
         #expect(second.report == "layout kept")
     }
 
+    @Test("The gate is checked before each write: when the Mac begins to sleep after the first, the second is not sent")
+    func gateBeforeEachWrite() async {
+        let rig = LayoutRig()
+        await rig.startWithBoth()
+        rig.protection.setProtectMode(true, for: rig.lenovoTag)
+        rig.protection.setProtectMode(true, for: rig.lgTag)
+        await rig.advance(6)
+        let reconfigure = rig.rig.modeSystem.onApply
+        var first = true
+        rig.rig.modeSystem.onApply = {
+            reconfigure?()
+            if first {
+                first = false
+                rig.rig.sequencer.systemWillSleep()
+            }
+        }
+        rig.rig.modeSystem.current[Fixture.lenovoID] = wide
+        rig.rig.modeSystem.current[Fixture.lgID] = wide
+        await rig.settling { await rig.rig.reconfigure() }
+        await rig.advance(6)
+        #expect(rig.rig.modeSystem.applied.map(\.display) == [Fixture.lenovoID])
+        #expect(rig.rig.modeSystem.current[Fixture.lgID]?.sameMode(as: wide) == true)
+    }
+
     @Test("The limiter counts within its window and starts again on a new target")
     func limiter() {
         var limiter = EnforcementLimiter(limit: 2, window: 60)

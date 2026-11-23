@@ -270,8 +270,15 @@ public final class ConfigurationProtection: RestoreStage {
         "\(tag) \(registry.record(for: tag)?.displayName ?? "display")"
     }
 
+    /// The gate is checked before each write, not once per pass: each write waits for the
+    /// system to settle, and the Mac can begin to sleep in the meantime.
+    private var gateOpen: Bool {
+        if case .blocked = gate.check(.automation) { return false }
+        return true
+    }
+
     private func enforce(_ tag: DisplayTag, occasion: String) async {
-        guard registry.live[tag] != nil, modes.pending[tag] == nil else { return }
+        guard gateOpen, registry.live[tag] != nil, modes.pending[tag] == nil else { return }
         let target = settings.document.layoutSettings(for: tag)
         if target.protectRotation == true, let wanted = target.targetRotation, let current = modes.rotation(for: tag), current != wanted {
             let key = "rotation-\(tag.rawValue)"
@@ -285,6 +292,7 @@ public final class ConfigurationProtection: RestoreStage {
                 notify(ProtectionNotice(kind: .stopped, tag: tag, message: "Stopped putting the rotation of \(name(tag)) back, because it keeps changing. It starts again when you set a rotation."))
             }
         }
+        guard gateOpen else { return }
         if target.protectMode == true, let wanted = target.targetMode, let current = modes.currentMode(for: tag), !current.sameMode(as: wanted) {
             let key = "mode-\(tag.rawValue)"
             guard modes.modes(for: tag).contains(where: { $0.sameMode(as: wanted) }) else {
