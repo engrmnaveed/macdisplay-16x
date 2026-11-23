@@ -57,6 +57,7 @@ Measured on the M5 Pro with the packaged release build, panel closed, over 10 mi
 - **Finished branches are closed.** `v0.1-core` was merged on 23 November 2026 and takes no more commits. A change lands on the current line of development and ships with the milestone in progress. It is never added to an older version or its branch.
 - **`main` is the line everything merges into**, through pull requests that pass CI. Release tags are cut from `main` only.
 - **Sessions commit locally.** Pushing a branch, opening a pull request, merging into `main`, tagging and publishing each wait for the owner's word.
+- **The owner's running copy is the latest build.** The owner tests by using the app every day. When a milestone's work ends, its session makes that build the running copy, with the standard settings folder. It keeps the previous app and a copy of the settings folder, and writes down how to go back. Set by the owner on 23 November 2026, after the Mac had gone back to the 0.1.0 build once v0.2 was checked.
 
 ### Spikes
 
@@ -116,11 +117,11 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 - **Signing.** The workflow signs with what the `release-signing` environment holds: a Developer ID with notarization, a project certificate, or neither, which means ad hoc. The `release` environment holds the tap's deploy key and the required reviewer, so the one approval comes after the app is signed and the signed archive can be tried first. Display 16X needs a stable identity more than Space 16X does, because the Accessibility grant belongs to the signature and an ad hoc build loses it at every update. Releases are signed with one project certificate ([decision 12](#5-open-decisions)). Notarization needs the hardened runtime. The command line tool's hardware report is identical with and without it, and CI compares the two on every pull request. The menu bar app itself has not been started under it yet.
 - **Guides.** `docs/release.md` is the runbook, with the one-time GitHub settings. `docs/install.md` covers Homebrew, the direct download, the first launch, the Accessibility grant and removal.
 
-The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
+**Every version gets a release.** Set by the owner on 23 November 2026: the latest version is released now, and each later version is released when its milestone is on `main`. The first release is 0.2.0, which holds v0.2 Layout and the interface pass. 0.1.0 was never tagged. v0.3 ships as 0.3.0, v0.4 as 0.4.0, and so on. A release is: the version file and the changelog section in one pull request, then the tag, then the workflow.
 
 **Status on 23 November 2026.** Merged into `main` as pull request 3. CI now runs the version check, the archive with an unpack-and-verify step, the cask style check on all three signing levels, and the comparison of the private interfaces with and without the hardened runtime, and all of it passed on the GitHub runner. The tag-triggered workflow has never run, because that needs a published tag. Before the first tag the owner has four steps, listed in [release.md](release.md): create the project certificate and back it up, add its three secrets to the `release-signing` environment, add the tap's deploy key to the `release` environment, and then tag `v0.1.0`. Both environments exist since 23 November, limited to `v*` tags, with the owner as required reviewer on `release` and no secrets yet. The other one-time settings are in place too: `main` accepts changes only through a pull request with the CI check passing, `v*` tags can be created, moved or deleted only by a repository admin, published releases are immutable, and private vulnerability reporting is on. With the first two releases the owner checks that the Accessibility permission survives an update.
 
-**Where the first tag goes.** `v0.1.0` is tagged on the last commit of `main` before v0.2 merges, because later commits hold v0.2 under "Unreleased". The release workflow runs from the tagged commit, so this works after v0.2 has merged. The other choice is to skip 0.1.0 and make 0.2.0 the first release. The owner decides when the certificate is ready.
+**Signing, until the project certificate exists.** The workflow signs with what the `release-signing` environment holds. It holds nothing yet, so 0.2.0 is signed ad hoc: the first launch has to be allowed by hand, and every update costs the Accessibility grant. The owner's certificate, its three secrets and the tap's deploy key change that from the release after they are added.
 
 ### Interface pass
 
@@ -132,7 +133,31 @@ The v0.1 interface was built to exercise the core, and it looks like it. This mi
 4. **Identity.** The app icon, the name treatment and the About panel.
 5. **Quality bar.** Every control reachable by keyboard and VoiceOver. Reduce Motion and Increase Contrast respected. The panel still opens in under 100 ms warm, is built on open and released on close, and the memory budget holds.
 
-Ready when the owner has approved each surface on their own Mac and the budgets are measured again. It runs after release 0.1.0 works end to end. Later milestones build their interface on the design system, so their first panels stay plain until it lands.
+Ready when the owner has approved each surface on their own Mac and the budgets are measured again. Later milestones build their interface on the design system, so their first panels stay plain until it lands.
+
+**Order.** On 23 November 2026 the owner moved this milestone ahead: it starts as soon as v0.2 is on `main`, before release 0.1.0 and before v0.3. It needs the owner's choices on rendered options and no time at the monitors. Release 0.1.0 waits on the owner's certificate, and v0.3 opens with hardware spikes. The surfaces now include the v0.2 panels: the arrangement canvas, mirroring, connection and presets, the Keep window for a layout change, the protection offer and the protection notices. Images and the app icon are made with the image generator the owner has set up, and each one is a candidate for the owner to approve.
+
+**Done on 23 November 2026**, as [pull request 7](https://github.com/engrmnaveed/macdisplay-16x/pull/7), with 389 unit tests passing.
+
+- **Direction:** the owner chose B, "Studio": the family's navy and aqua, displays drawn to scale, thick bars and a stepped text-size strip.
+- **Surfaces:** approved by the owner from renders. The panel is one column with three pages: the displays with scenes on top, one display's page, and Arrange with the desk drawn to scale. Its height is bounded and it scrolls. There is a settings window, and a menu bar icon drawn in code with three states. A card's caption reads size, connection and role, and a value that was only sent or is not known carries a small tag.
+- **Icon:** the owner chose the code-drawn display on a foot. The image generator was signed out both times, so no generated candidate was made.
+- **Checked off screen:** every control on all surfaces and states has a name and a spoken value for VoiceOver, and contrast was measured in four looks.
+- **Measured on screen, M5 Pro:** the panel opens in 76 to 88 ms warm and 133 ms the first time. Memory with the panel closed is 53 MB after use, so the owner raised that budget to 55 MiB.
+- **The owner's running copy is this build**, with fresh settings.
+
+Left for daily use and a later round: real blur, full keyboard access, VoiceOver's reading order, the three accessibility settings switched on, and decision 18.
+
+**The look must stay cheap to change.** The owner asked for an interface that is "easy and cost-effective (from agentic tokens POV) to re-skin". So the look has three layers: one file of values (colors, distances, fonts, symbols), a few files of pieces (bar, chip, card, banner), and surfaces that only compose them. A test fails when a surface holds a color, a font, a radius, a distance or a symbol of its own. A re-skin is checked on one sheet that shows every value and piece. Later milestones build their panels the same way.
+
+What the review found, beyond looks:
+
+- **The panel has no upper limit to its height.** With three displays and everything open it is about 2,170 points tall and nothing scrolls. The redesign gives it a bounded height.
+- **Nothing on screen told a confirmed value from a sent one, and the card could not say how a display is connected.** The core now gives both facts, and the interface session is taking them in.
+- **Scenes are three steps away**, where the PRD wants one click.
+- **Protection notices began with a small letter**, and a three-line notice did not fit its window. The v0.2 session fixed the text, and the redesign measures the window for its text.
+- **The Keep windows never take the keyboard.** See decision 18.
+- **VoiceOver gets no name for three kinds of menu**, and the displays on the arrangement canvas can be moved with the pointer only. Both belong to stage 5.
 
 ### v0.2 Layout
 
@@ -150,7 +175,7 @@ Every change to arrangement, mirroring, the main display or a connection is reve
 
 Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
 
-**Built, and closed by the owner on 23 November 2026 with check 11 left for a later version.** All five stages are on the branch `claude/v0-2-layout-14c08e`, with 324 unit tests passing, not pushed. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
+**Built, and closed by the owner on 23 November 2026 with check 11 left for a later version.** All five stages are built, with 324 unit tests passing. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
 
 Three more things were done after the checks, at unit-test level. The first is the core session's change. The other two came out of its review of how v0.2 uses the core:
 
@@ -158,7 +183,7 @@ Three more things were done after the checks, at unit-test level. The first is t
 - **One unreadable stored command costs one preset or shortcut.** The lists are read entry by entry, and what was dropped is logged with its name.
 - **The gate is checked before each protection write**, and again between a rotation write and the mode write that follows it.
 
-The branch waits for the owner's word to go to `main` through a pull request.
+Merged into `main` on 23 November 2026 as [pull request 5](https://github.com/engrmnaveed/macdisplay-16x/pull/5). Its first CI build failed on a view the runner's older compiler could not type-check, and the layout panel's views were broken up for it. The branch is closed.
 
 Carried forward to a later version, by the owner's word:
 
@@ -172,6 +197,16 @@ Left out of v0.2, both moved to Later in the inventory:
 
 - **Shortcuts actions.** The step that produces what the Shortcuts app reads ships with Xcode only. The CLI and the link scheme reach every feature from a shortcut in the meantime. See decision 15.
 - **Asking macOS to look for displays again.** The private call exists, and no permitted reference documents its arguments.
+
+### After the interface pass
+
+Set by the owner on 23 November 2026: the next milestones are built in new sessions on the Opus model, one milestone at a time, and two at once only where they touch different files.
+
+1. **The interface pass lands first**, and 0.2.0 is released with it. Later panels are built on its design system, so nothing starts before it is on `main`.
+2. **v0.3 Advanced scaling**, as below. Its first stage is spikes. The read-only ones run unattended. The ones that write an override file or create a virtual screen need the owner for a short check, and are carried forward when the owner is away.
+3. **Release groundwork, alongside v0.3.** It touches documents and `.github` only, so it can run at the same time: the tested-hardware list, the contribution guide and issue templates, the note on running next to other display utilities, and a pass over the README and the install guide for the new interface.
+4. **v0.4 HDR and color**, after v0.3, because both change the core and the app.
+5. **A verification round** for what earlier milestones carried forward. Daily use of the latest build covers part of it.
 
 ### v0.3 Advanced scaling
 
@@ -194,6 +229,7 @@ HDR switching, XDR brightness on capable hardware, color profile and color mode 
 | The Accessibility grant is tied to the code signature | Sign every build with a stable identity. Tell the user to remove a stale entry when a grant does not take. |
 | The public mode list hides modes | Use the window server's list, validate it as a whole, and fall back to the public list. |
 | Override-based scaling may behave differently on current macOS | Probe it before building interface for it. Keep mirror-based scaling as the fallback. |
+| CI builds with an older compiler than the development Mac | CI is the judge, and nothing reaches `main` without it. The runner's Swift 6.3.3 gave up on a SwiftUI expression that Swift 6.4.2 accepts: `Double` and `CGFloat` arithmetic mixed in one modifier chain. Keep view bodies small and work out typed values before drawing. Compile time on the development Mac does not predict the failure. |
 | Hardware coverage | Publish a tested-hardware list and accept probe output in issues. |
 | Scope | BetterDisplay is years of full-time work. Ship the core well before starting the next group. |
 | A display the app turned off stays off while the app is not running | The app reconnects what it disconnected when it quits, and at its next start after a crash. It reconnects at once when no display is left in use. A disconnect lasts for the login session only. The automatic turn-off of the built-in panel is the case this does not cover fully, see decision 16. |
@@ -226,11 +262,15 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | # | Decision | Current behavior | Recommendation | Needed for |
 | --- | --- | --- | --- | --- |
 | 5 | Labels for vendor-specific input values | Shown by number, the user can rename | Keep numbers. Add a table of confirmed labels later, from hardware reports | Later |
-| 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac, separate from the project certificate, whose key stays with the owner and the release secrets | Next development round |
+| 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac, separate from the project certificate, whose key stays with the owner and the release secrets | Now. The running copy is replaced at the end of every milestone, and each replacement costs the Accessibility grant until this exists |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
 | 15 | Shortcuts actions | Left out, because the Command Line Tools cannot produce their metadata | Leave them out for now. Revisit at the public release: building releases with Xcode on CI would bring them back and would end "builds with the Command Line Tools alone" for releases only | Public release |
 | 16 | Turning the built-in panel off automatically | Built, and off by default. The panel comes back when the app quits and when the last external display goes away, and only once the lid is open, because turned on behind a closed lid it becomes the main display. If the app is not running at that moment, the panel stays dark until the user logs out | Hold the switch back from the v0.2 release and keep the code. Closing the lid already gives the same result at a desk. Bring the switch back when there is a way back that works without the app running, and the lid-sleep reading is explained. The owner's view, given at the desk: the built-in display should not be left dark | Before the switch is shown |
 | 17 | Brightness written by a rule | An automatic brightness change gets the restore floor and also stops just above black, unless the user allowed black at zero. A restore gets the floor alone. No rule writes brightness yet, so nothing changes today | Confirm it. A restore puts back a value the user already chose. A rule's value arrives with nobody watching, and a black picture is the worst case for this app | The first rule that writes a value |
+| 18 | Whether Keep and Revert answer to the keyboard at once | The Keep window is shown without taking the keyboard, so Return and Escape reach it only after a click. That keeps a mode change from stealing the keyboard from the app in use | Take the keyboard only when the change was made from the app's own panel. Escape reverts. Keep never sits on Return, so a key pressed blind cannot keep a picture the monitor cannot show. A change from the CLI, a link or a shortcut leaves the keyboard where it is, and the countdown reverts it | Interface pass, stage 3 |
+| 19 | The word for a USB-C port that carries the picture directly | "USB-C". macOS knows the Mac's own port and never the far end of the cable, and every external display is a DisplayPort link to the Mac, HDMI included. On the test desk the Lenovo reads HDMI and the LG reads USB-C | Keep "USB-C". The label names the Mac's port, which is true whatever cable or adapter follows | Interface pass |
+| 20 | When "read back" ends | At sleep, at once: what was read back becomes not known, and what was only sent stays sent. The read the app makes anyway after the wake decides again | Keep it. A monitor can change while the Mac sleeps, and the app says only what it knows | Interface pass |
+| 21 | One word for a saved setup | "Scene" in the interface, as the PRD says, and `preset` in the command line and the settings file | Leave both until the public release, then choose one word, with the other kept as an alias in the command line | Public release |
 
 ### Core changes waiting for the core session
 
@@ -239,3 +279,5 @@ Changes to what v0.1 built are made by the session that built it, on the line of
 | Change | Why | Lands on | Status |
 | --- | --- | --- | --- |
 | A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Built by the core session on 23 November 2026, on the branch `core/automation-origin` cut from the v0.2 branch, with 321 unit tests passing, not pushed. Merged into the v0.2 branch the same day, where the rule-driven writes now use it. Nothing from outside can claim the origin: the socket and links always run as commands |
+| Confirmed or only sent, for each control | The PRD shows a value the monitor read back as confirmed and one the app only sent as sent. The engine knows this for each write, and the panel is only told a value | The interface pass branch | Built by the core session on 23 November 2026 on the branch `core/panel-facts`, with 350 unit tests passing, and sent to the interface session to merge. Each control's value is read back, sent or not known. No read was added for it and nothing is stored. Not seen in the running app yet |
+| How a display is connected | The PRD's card is "name, connection". The panel is told nothing, so the card says "External" | The interface pass branch | Built on the same branch. Built-in, HDMI, DisplayPort, USB-C, Thunderbolt or not known, read from the I/O registry with public calls. Thunderbolt, adapters and docks are unverified: none was on the desk |

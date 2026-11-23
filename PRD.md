@@ -78,7 +78,7 @@ Provisional targets for the MacBook Air M1 (8 GB). Record measured numbers befor
 | Scenario | Target |
 | --- | --- |
 | Idle, menu closed, displays unchanged | No recurring wakeups from the app. Average CPU at most 0.1% of one core over 10 minutes. |
-| Memory after first use | At most 50 MiB physical footprint with the menu closed. |
+| Memory after first use | At most 55 MiB physical footprint with the menu closed. Raised from 50 by the owner on 23 November 2026, after the designed interface measured 53 MB. |
 | Menu open | Under 100 ms warm, using cached capabilities. No DDC traffic on the main thread. |
 | Brightness drag | At most 20 DDC writes per second per display, latest value wins, final value always sent. |
 | Core features enabled | No measurable change in WindowServer CPU or GPU load compared with the app not running. |
@@ -89,7 +89,7 @@ Provisional targets for the MacBook Air M1 (8 GB). Record measured numbers befor
 | --- | --- |
 | Spikes | Each risky mechanism has a small probe and a recorded result on real hardware. Mode listing and DDC reads are done. See [feasibility](docs/feasibility.md). |
 | v0.1 Core | Resolution, refresh rate, DDC brightness and volume, software dimming and brightness keys work from the menu bar on the test monitors. The idle and memory budgets are met. *Done on 23 November 2026.* |
-| Release 0.1.0 | A tag builds, checks and publishes the app to GitHub Releases, and `brew install --cask` installs it from our tap. |
+| Releases | Every version is released when its milestone is on `main`, starting with 0.2.0. A tag builds, checks and publishes the app to GitHub Releases, and `brew install --cask` installs it from our tap. |
 | Interface pass | Every surface has a designed look the owner has approved, with keyboard and VoiceOver access, inside the performance budget. Done before the public release. |
 | v0.2 Layout | Arrangement, disconnect and reconnect, configuration restore, presets, and the CLI. |
 | v0.3 Advanced | Flexible scaling through overrides and virtual screens, each behind its own switch with a clean uninstall path. |
