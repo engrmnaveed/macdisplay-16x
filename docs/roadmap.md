@@ -118,7 +118,7 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 
 The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
 
-**Status on 23 November 2026.** Built on the branch `claude/bold-galileo-63f5e0`, not pushed and not merged. From a clean checkout the version check, the unit tests, packaging, the archive, the smoke test and the rendered cask all pass, and the archive's signature still verifies after Homebrew's way of unpacking it. The tag-triggered workflow has never run, because that needs a published tag. No tag, release, secret or GitHub setting exists yet. Those are the owner's steps, listed in the branch's `docs/release.md`.
+**Status on 23 November 2026.** Merged into `main` as pull request 3. CI now runs the version check, the archive with an unpack-and-verify step, the cask style check on all three signing levels, and the comparison of the private interfaces with and without the hardened runtime, and all of it passed on the GitHub runner. The tag-triggered workflow has never run, because that needs a published tag. Before the first tag the owner has four steps, listed in [release.md](release.md): create the project certificate and back it up, create the `release` and `release-signing` environments with the signing secrets, add the tap's deploy key, and then tag `v0.1.0`. With the first two releases the owner checks that the Accessibility permission survives an update.
 
 ### Interface pass
 
