@@ -100,6 +100,7 @@ final class FakeController: DisplayController, @unchecked Sendable {
     private var _reportedInputs: [Int]?
     private var _choiceQueries = 0
     private var _deafControls: Set<ControlID> = []
+    private var _unanswered: Set<ControlID> = []
     private var _onWrite: (@Sendable (ControlID) -> Void)?
 
     /// Called for every write that reaches the device, to check the order of things.
@@ -169,9 +170,22 @@ final class FakeController: DisplayController, @unchecked Sendable {
 
     var isInvalidated: Bool { lock.withLock { _invalidated } }
 
+    /// Controls whose question gets no usable reply during a check, as on a channel
+    /// another program is using at the same moment.
+    var unanswered: Set<ControlID> {
+        get { lock.withLock { _unanswered } }
+        set { lock.withLock { _unanswered = newValue } }
+    }
+
     func detect() async -> ControllerDetection {
         lock.withLock {
-            ControllerDetection(outcome: _outcome, capabilities: _capabilities, currentRaw: _failReads ? [:] : _values.filter { _capabilities[$0.key] != nil })
+            let answered = _capabilities.filter { !_unanswered.contains($0.key) }
+            return ControllerDetection(
+                outcome: _outcome,
+                capabilities: answered,
+                currentRaw: _failReads ? [:] : _values.filter { answered[$0.key] != nil },
+                unanswered: _unanswered
+            )
         }
     }
 

@@ -265,12 +265,16 @@ public struct ControllerDetection: Sendable, Equatable {
     /// Raw values read while detecting, used to seed tracked values on first sight.
     public var currentRaw: [ControlID: Double]
     public var notes: [String]
+    /// Controls that were asked about and got no usable reply. This is not the device
+    /// saying it lacks them: on a channel shared with other programs a reply can be lost.
+    public var unanswered: Set<ControlID>
 
-    public init(outcome: DetectionOutcome, capabilities: [ControlID: ControlCapability] = [:], currentRaw: [ControlID: Double] = [:], notes: [String] = []) {
+    public init(outcome: DetectionOutcome, capabilities: [ControlID: ControlCapability] = [:], currentRaw: [ControlID: Double] = [:], notes: [String] = [], unanswered: Set<ControlID> = []) {
         self.outcome = outcome
         self.capabilities = capabilities
         self.currentRaw = currentRaw
         self.notes = notes
+        self.unanswered = unanswered
     }
 }
 

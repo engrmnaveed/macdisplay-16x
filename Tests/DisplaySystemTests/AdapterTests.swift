@@ -14,7 +14,18 @@ final class ScriptedMonitor: I2CTransport, @unchecked Sendable {
     private var maxima: [UInt8: UInt16]
     private var lastRequest: UInt8?
     private var written: [(code: UInt8, value: UInt16, host: UInt8)] = []
+    private var unready: Set<UInt8> = []
     let style: Style
+
+    /// What the LG SDQHD sent instead of an answer on 23 November 2026, in the seconds
+    /// after it returned from a long standby while several programs were asking it things.
+    static let capturedNotReady: [UInt8] = [0x6E, 0x80, 0xBE, 0x04, 0x00, 0x0D, 0x12, 0x18, 0x27, 0x16, 0x1C]
+
+    /// Codes that get the captured not-ready message instead of an answer.
+    var notReadyCodes: Set<UInt8> {
+        get { lock.withLock { unready } }
+        set { lock.withLock { unready = newValue } }
+    }
 
     init(style: Style, values: [UInt8: UInt16], maxima: [UInt8: UInt16] = [:]) {
         self.style = style
@@ -42,6 +53,7 @@ final class ScriptedMonitor: I2CTransport, @unchecked Sendable {
         try lock.withLock {
             if style == .broken { throw I2CError(code: -1, operation: "read") }
             guard style != .silent, let code = lastRequest else { return [UInt8](repeating: 0, count: length) }
+            if unready.contains(code) { return ScriptedMonitor.capturedNotReady }
             guard let current = values[code] else {
                 let body: [UInt8] = [0x6E, 0x88, 0x02, 0x01, code, 0, 0, 0, 0, 0]
                 return body + [DDCPacket.checksum(body, seed: DDCAddress.replyChecksumSeed)]
@@ -92,6 +104,20 @@ struct DDCControllerTests {
         #expect(detection.currentRaw[.hardwareBrightness] == 63)
         #expect(detection.capabilities[.volume] == nil, "an unsupported code is simply absent")
         #expect(detection.notes == ["replies have a non-standard header"])
+    }
+
+    @Test("A code that gets no usable reply is reported as unanswered, not as missing")
+    func unansweredCodes() async {
+        let monitor = ScriptedMonitor(style: .lg, values: [0x10: 68, 0x12: 68, 0x62: 44, 0x8D: 2, 0x60: 15])
+        monitor.notReadyCodes = [0x12, 0x8D]
+        let detection = await controller(monitor, vendor: 0x1E6D, product: 0x5BF6).detect()
+        #expect(detection.outcome == .working)
+        #expect(Set(detection.capabilities.keys) == [.hardwareBrightness, .volume, .input])
+        #expect(detection.unanswered == [.contrast, .mute])
+
+        // A monitor that says it lacks a code has answered.
+        let without = await controller(ScriptedMonitor(style: .standard, values: [0x10: 50])).detect()
+        #expect(without.unanswered.isEmpty)
     }
 
     @Test("A silent monitor is unsupported, a failing channel is no channel, and partial support is limited")

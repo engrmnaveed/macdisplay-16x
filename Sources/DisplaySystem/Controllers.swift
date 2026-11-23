@@ -89,6 +89,7 @@ public final class DDCDisplayController: DisplayController, @unchecked Sendable 
         var transportFailures = 0
         var silent = 0
         var notes: [String] = []
+        var unanswered: Set<ControlID> = []
 
         for (control, code) in DDCDisplayController.codes {
             // Two codes in a row without any answer: the monitor is not listening, and the
@@ -123,10 +124,14 @@ public final class DDCDisplayController: DisplayController, @unchecked Sendable 
                 answered += 1
             case .failure(.transport):
                 transportFailures += 1
+                unanswered.insert(control)
             case .failure(.cancelled):
                 return ControllerDetection(outcome: .unsupported)
             case .failure:
+                // No usable reply after the retries. Another program on the channel can
+                // cause this, so it is not taken as the monitor lacking the control.
                 silent += 1
+                unanswered.insert(control)
             }
         }
 
@@ -140,7 +145,7 @@ public final class DDCDisplayController: DisplayController, @unchecked Sendable 
         } else {
             outcome = capabilities[.hardwareBrightness] != nil ? .working : .limited
         }
-        return ControllerDetection(outcome: outcome, capabilities: capabilities, currentRaw: current, notes: notes)
+        return ControllerDetection(outcome: outcome, capabilities: capabilities, currentRaw: current, notes: notes, unanswered: unanswered)
     }
 
     public func read(_ control: ControlID, access: ControlAccess) async -> Result<RawReading, ControlFailure> {

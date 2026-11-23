@@ -531,6 +531,47 @@ struct StandbyTests {
         #expect(rig.controls.trackedValue(.brightness, for: tag) == 0.75)
     }
 
+    @Test("A control that goes unanswered in one check is kept, and one the monitor says it lacks is removed")
+    func unansweredControlIsKept() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .contrast, on: .tag(1), value: .absolute(0.6))
+        #expect(ddc.values[.contrast] == 60)
+
+        // The monitor leaves and returns. On the busy channel two questions get no reply.
+        rig.unplug(Fixture.lenovo().systemID)
+        await rig.reconfigure()
+        ddc.unanswered = [.contrast, .mute]
+        ddc.clearWrites()
+        _ = rig.plug(Fixture.lenovo(), ddc: ddc)
+        await rig.reconfigure()
+        #expect(rig.engine.availability(of: .contrast, for: tag) == .available(.ddc), "what was learned before is kept")
+        #expect(rig.registry.live[tag]?.capabilities[.ddc]?[.mute] != nil)
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.detected?[.contrast] != nil, "and stays stored")
+        #expect(await eventually { ddc.writes(to: .contrast) == [60] }, "a chosen value on a kept control is still restored")
+
+        // A later check gets an answer for every code, and the monitor has no mute.
+        ddc.unanswered = []
+        ddc.capabilities[.mute] = nil
+        rig.coordinator.redetect(tag)
+        await rig.idle()
+        #expect(rig.engine.availability(of: .contrast, for: tag) == .available(.ddc))
+        // Mute itself stays on offer, through the volume. The monitor's own control is gone.
+        #expect(rig.registry.live[tag]?.capabilities[.ddc]?[.mute] == nil, "only the monitor's own no removes a control")
+        #expect(rig.settings.recordSettings(tag).controllers[.ddc]?.detected?[.mute] == nil)
+    }
+
+    @Test("A control never seen before is not invented by a missing reply")
+    func unansweredControlNeverLearned() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        ddc.unanswered = [.contrast]
+        await rig.start()
+        #expect(!rig.engine.availability(of: .contrast, for: tag).isAvailable)
+        #expect(rig.engine.availability(of: .brightness, for: tag) == .available(.ddc))
+    }
+
     @Test("Opening the panel probes a silent monitor again, but not more than once a minute")
     func redetectOnDemand() async {
         let rig = Rig()

@@ -270,18 +270,28 @@ public final class DisplayCoordinator {
                     continue
                 }
             }
-            live.capabilities[kind] = detection.capabilities
+            // A control that answered before and got no reply this time is kept. Only the
+            // monitor saying it lacks a control removes it. One lost reply on a channel
+            // shared with other programs would otherwise take a slider out of the panel.
+            var capabilities = detection.capabilities
+            let known = live.capabilities[kind] ?? [:]
+            let kept = detection.unanswered.filter { capabilities[$0] == nil && known[$0] != nil }.sorted { $0.rawValue < $1.rawValue }
+            for control in kept { capabilities[control] = known[control] }
+            if !kept.isEmpty {
+                Log.core.info("\(kind.title) on \(tag) did not answer for \(kept.map(\.rawValue).joined(separator: ", ")). Keeping what was learned before.")
+            }
+            live.capabilities[kind] = capabilities
             live.detection[kind] = detection.outcome
             settings.updateRecord(tag) { record in
                 var configuration = record.controllers[kind] ?? ControllerSettings()
-                configuration.detected = detection.capabilities
+                configuration.detected = capabilities
                 configuration.detectionOutcome = detection.outcome
                 if !detection.notes.isEmpty { configuration.quirks = detection.notes }
                 record.controllers[kind] = configuration
             }
             seed(detection, kind: kind, tag: tag, trigger: trigger)
             if kind == .ddc {
-                Log.core.info("DDC on \(tag): \(detection.outcome.rawValue), controls \(detection.capabilities.keys.map(\.rawValue).sorted().joined(separator: " "))\(detection.notes.isEmpty ? "" : ", notes: " + detection.notes.joined(separator: "; ")).")
+                Log.core.info("DDC on \(tag): \(detection.outcome.rawValue), controls \(capabilities.keys.map(\.rawValue).sorted().joined(separator: " "))\(detection.notes.isEmpty ? "" : ", notes: " + detection.notes.joined(separator: "; ")).")
             }
         }
         live.isDetecting = false
