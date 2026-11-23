@@ -36,9 +36,9 @@ cask "display16x" do
     Or remove the quarantine attribute yourself:
       xattr -dr com.apple.quarantine "#{appdir}/Display 16X.app"
 
-    The signature stays the same from release to release, so brew upgrade
-    keeps this approval, and the Accessibility permission for the brightness
-    and volume keys carries over to new versions.
+    The brightness and volume keys need Accessibility permission, granted
+    once from the app's panel. The signature stays the same from release to
+    release, so brew upgrade keeps both this approval and that permission.
   EOS
 @end@
 @begin adhoc@

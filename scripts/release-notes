@@ -4,12 +4,12 @@
 #
 #   scripts/release-notes VERSION [SIGNING]
 #
-# SIGNING is how the app was signed: developer-id, certificate or adhoc (the default).
-# The release workflow passes the level it signed with.
+# SIGNING is how the app was signed: certificate (the default, decision 12), developer-id
+# or adhoc. The release workflow passes the level it checked on the signed app.
 set -eu
 
-version=${1:?usage: scripts/release-notes VERSION [developer-id|certificate|adhoc]}
-signing=${2:-adhoc}
+version=${1:?usage: scripts/release-notes VERSION [certificate|developer-id|adhoc]}
+signing=${2:-certificate}
 root=$(cd "$(dirname "$0")/.." && pwd)
 
 case "$signing" in
@@ -20,7 +20,7 @@ case "$signing" in
     adhoc)
         signed="The app is ad hoc signed and not notarized by Apple, so macOS asks you to allow the first launch, and after every update the Accessibility permission for the brightness and volume keys has to be given again." ;;
     *)
-        echo "scripts/release-notes: SIGNING is developer-id, certificate or adhoc" >&2
+        echo "scripts/release-notes: SIGNING is certificate, developer-id or adhoc" >&2
         exit 1 ;;
 esac
 

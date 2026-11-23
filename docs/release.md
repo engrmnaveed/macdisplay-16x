@@ -10,10 +10,10 @@ A release is a tag. Pushing `vX.Y.Z` that matches [scripts/release-version](../s
 4. Preview the release notes. They are the changelog section followed by the standard text about the assets and how the app is signed:
 
    ```sh
-   scripts/release-notes 0.1.1 certificate
+   scripts/release-notes 0.1.1
    ```
 
-   The second argument is the signing level, `developer-id`, `certificate` or `adhoc`. The workflow passes the level it actually signed with.
+   An optional second argument names the signing level: `certificate` (the default), `developer-id` or `adhoc`. The workflow passes the level it read back from the signed app.
 5. Run the checks CI runs, from a clean checkout of `main`:
 
    ```sh
@@ -44,7 +44,7 @@ Use `git tag -a` if you do not sign tags. The workflow then runs these jobs:
 
 1. **Tag matches scripts/release-version.** Fails unless the tag is `v` followed by the content of `scripts/release-version`, and `CHANGELOG.md` has a section for it.
 2. **Same checks as CI.** Runs [ci.yml](../.github/workflows/ci.yml) unchanged: identifiers, build, unit tests, packaging, smoke test, version check, hardened runtime check, the archive, and `brew style` on the cask.
-3. **Package, sign and archive**, in the `release-signing` environment, on macOS with the full history (the build number is the commit count). It signs at the level the environment's secrets allow (see [Signing](#signing)), writes `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file, unpacks the ZIP with `unzip` as Homebrew does and verifies the signature and the version. The run summary shows the signing level, the designated requirement and the digest. It warns when the designated requirement no longer matches the last release's, because users would then lose the Accessibility grant and Homebrew's first-launch approval. The ZIP is kept as the run's artifact `display16x-macos-arm64`, with the notary log when the app was notarized.
+3. **Package, sign and archive**, in the `release-signing` environment, on macOS with the full history (the build number is the commit count). It signs at the level the environment's secrets allow (see [Signing](#signing)), writes `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file, unpacks the ZIP with `unzip` as Homebrew does and verifies the signature and the version. It reads the signing level back from the signed app and stops if it is not the level it meant, so the cask's caveats and the release notes always describe the level users get. The run summary shows the signing level, the designated requirement and the digest. It warns when the designated requirement no longer matches the last release's, because users would then lose the Accessibility grant and Homebrew's first-launch approval. The ZIP is kept as the run's artifact `display16x-macos-arm64`, with the notary log when the app was notarized.
 4. **Publish**, in the `release` environment. It waits here for a required reviewer. Before you approve, read the run summary and, if you like, download the artifact and try it. After approval it:
    - checks the archive's digest again, renders the cask with `scripts/render-cask` and the notes with `scripts/release-notes`,
    - attests build provenance for the ZIP,
@@ -53,14 +53,50 @@ Use `git tag -a` if you do not sign tags. The workflow then runs these jobs:
 
 If a job fails before **Publish**, nothing is published. Fix the cause on `main`, delete the tag if your rules allow it, and tag again, or move on to the next patch version.
 
-After the release, install it with Homebrew on a Mac and open it once. For the first release signed with a certificate or a Developer ID, check with the next release that Accessibility stays granted after `brew upgrade`: that is the one thing the checks above cannot prove.
+After the release, install it with Homebrew on a Mac and open it once. With the first two releases signed with the project certificate, also do the [check across an update](#check-the-first-two-releases).
+
+## Check the first two releases
+
+The checks above prove that the signing requirement stays the same from release to release. They cannot prove what macOS and Homebrew do with it at a real update: that the Accessibility permission stays granted, and that the first launch is not blocked again. Check it once, with the first two releases signed with the project certificate, such as 0.1.0 and 0.1.1, on your own Mac.
+
+**Before the first release:**
+
+1. Quit every development copy of Display 16X, such as one started from `dist/`. Two copies must not run at once: they share the settings folder and the socket of the command line tool.
+2. In **System Settings → Privacy & Security → Accessibility**, remove every **Display 16X** entry with **−**. Development builds are ad hoc signed under the same bundle identifier, and a leftover entry would spoil the result.
+
+**With the first release:**
+
+3. In the run summary, check that the signing level is `certificate` and that the designated requirement ends with `certificate leaf = H"…"`, where the hash is the certificate's SHA-1 fingerprint you recorded (lowercase, without colons).
+4. Install it with `brew install --cask engrmnaveed/tap/display16x` and open it. macOS blocks the first launch. Allow it with **Open Anyway** in Privacy & Security, as users do, not with `xattr`.
+5. Grant Accessibility from the panel. Check that the brightness and volume keys change a monitor and show the indicator.
+6. Note the requirement of the installed app:
+
+   ```sh
+   codesign -d -r- "/Applications/Display 16X.app"
+   ```
+
+**With the second release:**
+
+7. In the run summary, the step **Same signer as the last release** says this release satisfies the designated requirement of the first, and there is no **Signer changed** line.
+8. Leave Display 16X running and upgrade it:
+
+   ```sh
+   brew update
+   brew upgrade --cask display16x
+   ```
+
+   Homebrew quits the app, replaces it and opens it again. It must not print that the signer changed or that macOS may prompt, and macOS must not block the reopened app.
+9. Without opening System Settings, press the brightness and volume keys. They work, the indicator shows, and the Accessibility list still has one **Display 16X** entry, switched on.
+10. `codesign -d -r- "/Applications/Display 16X.app"` prints the same requirement as in step 6.
+
+If all of this holds, the permission across an update is proven: record it in the [domain log](domain-log.md) with the Mac, the macOS build and the Homebrew version. If the keys stopped working or the launch was blocked, note which and the exact messages, get the keys back by removing the **Display 16X** entry and adding the app again, and log it, because the guides and the cask's caveats then promise something that does not happen.
 
 ## One-time GitHub settings
 
 These live on GitHub, not in the repository. Set them before the first tag.
 
 - **Settings → Environments → `release`:** add yourself, or the release owners, as required reviewers. Under deployment branches and tags, allow only tags matching `v*`. Without a reviewer, a tag push publishes at once. Add the `HOMEBREW_TAP_DEPLOY_KEY` secret here.
-- **Settings → Environments → `release-signing`:** allow only tags matching `v*`, and add the signing secrets for the level you chose. A required reviewer here is optional: it gates signing as well, at the cost of a second approval per release. Without the environment, the workflow creates it empty on the first run and signs ad hoc.
+- **Settings → Environments → `release-signing`:** allow only tags matching `v*`, and add the project certificate's three secrets (see [Project certificate](#project-certificate)). A required reviewer here is optional: it gates signing as well, at the cost of a second approval per release. Without the environment, the workflow creates it empty on the first run and signs ad hoc.
 - **Settings → Rules → Rulesets:** protect tags matching `v*` from creation, update and deletion by anyone outside the release owners. Protect `main` with required pull requests and the CI check **Build, test and package**.
 - **Settings → General → Releases:** enable immutable releases, so a published release's assets and tag cannot be replaced.
 - **Settings → Security → Private vulnerability reporting:** enable it so people can report a vulnerability privately.
@@ -69,80 +105,114 @@ These live on GitHub, not in the repository. Set them before the first tag.
 
 The Accessibility permission for the brightness and volume keys belongs to the app's code signature, more exactly to its designated requirement. Homebrew uses the same requirement to decide whether an upgrade keeps the user's first-launch approval. So the signing level decides what users go through at every update.
 
+Releases are signed with one project certificate ([decision 12](roadmap.md#5-open-decisions), 23 November 2026). A Developer ID with notarization replaces it once the Apple Developer Program membership is there. Ad hoc remains as the fallback the workflow uses when `release-signing` holds no certificate, with a warning.
+
 | Level | Chosen when `release-signing` holds | First launch | After an update |
 | --- | --- | --- | --- |
-| Developer ID, notarized | a Developer ID Application certificate and the notary API key | Opens normally | Accessibility stays granted |
-| Project certificate | a certificate, and no notary API key | Allowed once by hand in Privacy & Security | Accessibility stays granted. `brew upgrade` keeps the approval; a new direct download is allowed again by hand |
-| Ad hoc | no certificate | Allowed by hand in Privacy & Security | Allowed by hand again, and Accessibility granted again: remove the old entry, add the new one |
+| Project certificate (decided) | a certificate, and no notary API key | Allowed once by hand in Privacy & Security | Accessibility stays granted. `brew upgrade` keeps the approval; a new direct download is allowed again by hand |
+| Developer ID, notarized (later) | a Developer ID Application certificate and the notary API key | Opens normally | Accessibility stays granted |
+| Ad hoc (fallback) | no certificate | Allowed by hand in Privacy & Security | Allowed by hand again, and Accessibility granted again: remove the old entry, add the new one |
 
-Which level to use is [roadmap decision 12](roadmap.md#5-open-decisions). The workflow works with any of them, and the level can change between releases. Changing from one certificate to another, or from a certificate to a Developer ID, costs users their Accessibility grant once, and the build job warns about it.
+The level can change between releases. Changing from one certificate to another, or from the project certificate to a Developer ID, costs users their Accessibility grant once. The build job warns about it, and the release notes of that version should say so.
+
+### Project certificate
+
+No Apple membership needed. One long-lived self-signed code signing certificate signs every release, so the designated requirement stays `identifier "com.16xbrains.macdisplay16x" and certificate leaf = H"…"` from release to release. This was checked: two different builds signed with one self-signed certificate had the identical requirement, and the second satisfied the first's, which is the test Homebrew applies at an upgrade. Whether macOS keeps the Accessibility permission across a real update is checked with the [first two releases](#check-the-first-two-releases).
+
+> **Make it once, and never again.** The requirement names this exact certificate. A renewed, replaced or lost certificate is a different one, and every user then has to grant Accessibility again. So it is made valid for 20 years, backed up outside GitHub, and never created again. Guard the private key like a password: anyone who has it can sign an app that macOS treats as Display 16X, including the Accessibility permission users gave it. If it ever leaks, make a new one, sign the next release with it, and say in that release's notes that users have to grant Accessibility again.
+
+The owner's steps, once, on a Mac you trust. They need the GitHub CLI signed in with access to the repository, and the `release-signing` environment created first (see [One-time GitHub settings](#one-time-github-settings)).
+
+1. Work in a new folder outside the repository:
+
+   ```sh
+   mkdir ~/display16x-certificate && cd ~/display16x-certificate
+   ```
+
+2. Create the certificate and its private key, valid for 20 years. Use the system's `/usr/bin/openssl`: a PKCS#12 file from OpenSSL 3 or later uses an encryption that the macOS `security` tool may not import.
+
+   ```sh
+   cat > display16x-release.cnf <<'EOF'
+   [ req ]
+   distinguished_name = dn
+   x509_extensions = ext
+   prompt = no
+   [ dn ]
+   CN = Display 16X Release
+   [ ext ]
+   basicConstraints = critical, CA:false
+   keyUsage = critical, digitalSignature
+   extendedKeyUsage = critical, codeSigning
+   subjectKeyIdentifier = hash
+   EOF
+   /usr/bin/openssl req -x509 -newkey rsa:3072 -nodes -days 7300 \
+     -config display16x-release.cnf -keyout display16x-release.key -out display16x-release.pem
+   ```
+
+3. Note its fingerprint and end date. The SHA-1 fingerprint, in lowercase without colons, is the hash every release's requirement names after `certificate leaf =`, so each run summary can be compared with it.
+
+   ```sh
+   /usr/bin/openssl x509 -in display16x-release.pem -noout -subject -enddate -fingerprint -sha1
+   ```
+
+4. Export the certificate and the key together as a PKCS#12 file. It asks for an export password twice: use a long generated one from your password manager. Then check that the file opens with it; it prints `MAC verified OK`.
+
+   ```sh
+   /usr/bin/openssl pkcs12 -export -name "Display 16X Release" \
+     -inkey display16x-release.key -in display16x-release.pem -out display16x-release.p12
+   /usr/bin/openssl pkcs12 -in display16x-release.p12 -noout
+   ```
+
+5. Back it up before anything else. Store `display16x-release.p12`, its export password and the fingerprint in your password manager, and keep a second copy offline, such as on an encrypted disk. The `.p12` file holds both the certificate and the key.
+6. Set the three secrets in the `release-signing` environment. The second command asks for the value: paste the export password.
+
+   ```sh
+   base64 -i display16x-release.p12 | gh secret set MACOS_CERTIFICATE_BASE64 --env release-signing --repo engrmnaveed/macdisplay-16x
+   gh secret set MACOS_CERTIFICATE_PASSWORD --env release-signing --repo engrmnaveed/macdisplay-16x
+   gh secret set MACOS_SIGN_IDENTITY --env release-signing --repo engrmnaveed/macdisplay-16x --body 'Display 16X Release'
+   ```
+
+   Do not set the three `APPLE_API_KEY` secrets: with them, the workflow switches to the Developer ID level.
+7. Delete the local files once the backup is safe:
+
+   ```sh
+   cd ~ && rm -r ~/display16x-certificate
+   ```
+
+The next tag is signed with it. The run summary then says `certificate` and shows the fingerprint in the designated requirement.
+
+Keychain Access (in `/System/Library/CoreServices/Applications` on recent macOS) → Certificate Assistant → Create a Certificate, with identity type Self Signed Root, certificate type Code Signing and "Let me override defaults" for a 20 year validity, makes an equivalent certificate, which is then exported as `.p12`. It leaves the key in that Mac's login keychain, so the steps above are preferred.
+
+The release is not notarized at this level, so Gatekeeper still asks users to allow the first launch once.
+
+### Developer ID
+
+For later, with a membership in the Apple Developer Program.
+
+1. Create a **Developer ID Application** certificate in the Apple Developer account, install it on a Mac, and export it with its private key from Keychain Access as a `.p12` file with a password.
+2. In App Store Connect, under Users and Access → Integrations, create a team API key for the notary service and download its `.p8` file. Note the key ID and the issuer ID.
+3. Replace the three certificate secrets in `release-signing` with the Developer ID's and add the three `APPLE_API_KEY` secrets. Keep the project certificate's backup.
+
+The workflow signs a copy of the app inside out with the hardened runtime and a secure timestamp, checks that the private interfaces resolve as they do without the hardened runtime, notarizes it, staples the ticket and checks it with `spctl`. On the developer's Mac, a build signed ad hoc with the hardened runtime gave the same probe results as one without it, private interfaces and DDC replies alike, and passed the smoke test. The menu bar app itself has never run with the hardened runtime: open it after the first notarized build and check the controls and the keys. The change from the project certificate costs users the Accessibility grant once.
+
+### Ad hoc
+
+Nothing to set: with no certificate in `release-signing`, the workflow signs ad hoc and warns that it did. Every build has a new signature, so users allow the first launch and grant Accessibility again after every update. Use it only when the certificate is not available.
 
 ### Secrets for each level
 
 All of them are secrets of the `release-signing` environment. The names are the same as Space 16X's.
 
-| Secret | Developer ID | Project certificate | Ad hoc |
+| Secret | Project certificate | Developer ID | Ad hoc |
 | --- | --- | --- | --- |
-| `MACOS_CERTIFICATE_BASE64` | The Developer ID Application certificate and its private key, exported as PKCS#12, then base64 | The project certificate and its private key, exported as PKCS#12, then base64 | Not set |
-| `MACOS_CERTIFICATE_PASSWORD` | The password of that PKCS#12 file | The password of that PKCS#12 file | Not set |
-| `MACOS_SIGN_IDENTITY` | The full identity, `Developer ID Application: Name (TEAMID)` | The certificate's name, or its SHA-1 hash from `security find-identity -p codesigning` | Not set |
-| `APPLE_API_KEY_BASE64` | The App Store Connect API key file (`AuthKey_….p8`), base64 | Not set | Not set |
-| `APPLE_API_KEY_ID` | The key's ID | Not set | Not set |
-| `APPLE_API_ISSUER` | The issuer ID | Not set | Not set |
+| `MACOS_CERTIFICATE_BASE64` | The project certificate and its private key, exported as PKCS#12, then base64 | The Developer ID Application certificate and its private key, exported as PKCS#12, then base64 | Not set |
+| `MACOS_CERTIFICATE_PASSWORD` | The export password of that PKCS#12 file | The export password of that PKCS#12 file | Not set |
+| `MACOS_SIGN_IDENTITY` | `Display 16X Release`, the certificate's name | The full identity, `Developer ID Application: Name (TEAMID)` | Not set |
+| `APPLE_API_KEY_BASE64` | Not set | The App Store Connect API key file (`AuthKey_….p8`), base64 | Not set |
+| `APPLE_API_KEY_ID` | Not set | The key's ID | Not set |
+| `APPLE_API_ISSUER` | Not set | The issuer ID | Not set |
 
 The `release` environment holds `HOMEBREW_TAP_DEPLOY_KEY` at every level.
-
-Set a secret from a file with the GitHub CLI, for example:
-
-```sh
-base64 -i certificate.p12 | gh secret set MACOS_CERTIFICATE_BASE64 --env release-signing --repo engrmnaveed/macdisplay-16x
-```
-
-### Developer ID
-
-Needs a membership in the Apple Developer Program.
-
-1. Create a **Developer ID Application** certificate in the Apple Developer account, install it on a Mac, and export it with its private key from Keychain Access as a `.p12` file with a password.
-2. In App Store Connect, under Users and Access → Integrations, create a team API key for the notary service and download its `.p8` file. Note the key ID and the issuer ID.
-3. Set all six secrets in `release-signing`.
-
-The workflow signs a copy of the app inside out with the hardened runtime and a secure timestamp, checks that the private interfaces resolve as they do without the hardened runtime, notarizes it, staples the ticket and checks it with `spctl`. On the developer's Mac, a build signed ad hoc with the hardened runtime gave the same probe results as one without it, private interfaces and DDC replies alike, and passed the smoke test. The menu bar app itself has never run with the hardened runtime: open it after the first notarized build and check the controls and the keys.
-
-### Project certificate
-
-No Apple membership needed. One long-lived self-signed code signing certificate signs every release, so the designated requirement stays `identifier "com.16xbrains.macdisplay16x" and certificate leaf = H"…"` from release to release. This was checked: two different builds signed with one self-signed certificate had the identical requirement, and the second satisfied the first's requirement, which is the test Homebrew applies at an upgrade.
-
-The requirement names that exact certificate. A renewed or replaced certificate is a different one, and every user loses the grant once. So make it valid for many years, keep a backup of the `.p12` file and its password outside GitHub, and never create it again.
-
-Create it on a Mac with the system's LibreSSL, outside any keychain:
-
-```sh
-cat > display16x-release.cnf <<'EOF'
-[ req ]
-distinguished_name = dn
-x509_extensions = ext
-prompt = no
-[ dn ]
-CN = Display 16X Release
-[ ext ]
-basicConstraints = critical, CA:false
-keyUsage = critical, digitalSignature
-extendedKeyUsage = critical, codeSigning
-subjectKeyIdentifier = hash
-EOF
-/usr/bin/openssl req -x509 -newkey rsa:3072 -nodes -days 7300 \
-  -config display16x-release.cnf -keyout display16x-release.key -out display16x-release.pem
-/usr/bin/openssl pkcs12 -export -name "Display 16X Release" \
-  -inkey display16x-release.key -in display16x-release.pem -out display16x-release.p12
-```
-
-Use `/usr/bin/openssl`: a PKCS#12 file from OpenSSL 3 or later uses an encryption the macOS `security` tool may not import. Then set `MACOS_CERTIFICATE_BASE64` from the `.p12` file, `MACOS_CERTIFICATE_PASSWORD` to its export password and `MACOS_SIGN_IDENTITY` to `Display 16X Release`. Keep the `.key`, `.pem` and `.p12` files in a password manager and delete them from the disk. Keychain Access (in `/System/Library/CoreServices/Applications` on recent macOS) → Certificate Assistant → Create a Certificate, with identity type Self Signed Root, certificate type Code Signing and "Let me override defaults" for a longer validity than one year, makes an equivalent certificate, which is then exported as `.p12`. That puts it in the login keychain of that Mac.
-
-The release is not notarized at this level, so Gatekeeper still asks users to allow the first launch.
-
-### Ad hoc
-
-Nothing to set. Every build has a new signature, so users allow the first launch and grant Accessibility again after every update. The build job says so with a warning.
 
 ## Homebrew tap
 

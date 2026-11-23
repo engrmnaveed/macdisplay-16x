@@ -14,7 +14,9 @@ Releases are published as a Homebrew cask and as a ZIP on the [releases page](ht
 brew install --cask engrmnaveed/tap/display16x
 ```
 
-The [installation guide](docs/install.md) covers Homebrew, the direct download with its checksum and attestation, allowing the first launch, the Accessibility permission for the keys and what happens to it after an update, and removal. The [release runbook](docs/release.md) is how a release is made.
+Releases are signed with the project's own certificate and are not notarized by Apple. macOS asks you to allow the first launch once, in Privacy & Security. After that, updates keep the Accessibility permission for the brightness and volume keys, and Homebrew upgrades also keep the first-launch approval.
+
+The [installation guide](docs/install.md) covers Homebrew, the direct download with its checksum and attestation, allowing the first launch, the Accessibility permission, and removal. The [release runbook](docs/release.md) is how a release is made.
 
 ## Build and run
 

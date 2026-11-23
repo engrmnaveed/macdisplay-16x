@@ -142,7 +142,7 @@ jobs:
               archive="$(scripts/archive-macos.sh)"
               ;;
             adhoc)
-              echo "::warning::No signing certificate is set, so this release is ad hoc signed. Users will have to grant Accessibility again after the update."
+              echo "::warning::release-signing holds no certificate, so this release is ad hoc signed instead of with the project certificate (decision 12). Users will have to allow the first launch and grant Accessibility again after the update."
               scripts/package-macos.sh
               archive="$(scripts/archive-macos.sh)"
               ;;
@@ -159,8 +159,21 @@ jobs:
           app="$unpacked/Display 16X.app"
           codesign --verify --strict --verbose=2 "$app"
           scripts/check-version.sh "$app"
+          # The cask's caveats and the release notes follow the signing level, so read the
+          # level back from the signed app and stop if it is not the one this job meant.
+          signature="$(codesign -dv "$app" 2>&1)"
+          if grep -Eq '^CodeDirectory .*flags=0x[0-9a-f]+\([^)]*adhoc' <<< "$signature"; then
+            signed_as=adhoc
+          elif xcrun stapler validate "$app" > /dev/null 2>&1; then
+            signed_as=developer-id
+          else
+            signed_as=certificate
+          fi
+          if [[ "$signed_as" != "$SIGNING" ]]; then
+            echo "::error::The archive is signed as $signed_as, but this job meant $SIGNING. The cask and the notes would describe the wrong level."
+            exit 1
+          fi
           if [[ "$SIGNING" == developer-id ]]; then
-            xcrun stapler validate "$app"
             spctl --assess --type execute --verbose "$app"
           fi
           requirement="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^\(# \)\{0,1\}designated => //p')"
@@ -169,7 +182,7 @@ jobs:
           {
             echo "### Display 16X $GITHUB_REF_NAME"
             echo
-            echo "- Signing level: \`$SIGNING\`"
+            echo "- Signing level: \`$SIGNING\`, read back from the signed app"
             echo "- Designated requirement: \`$requirement\`"
             echo "- SHA-256: \`$(cut -d ' ' -f 1 "$ARCHIVE.sha256")\`"
           } >> "$GITHUB_STEP_SUMMARY"

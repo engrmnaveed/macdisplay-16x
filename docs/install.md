@@ -1,6 +1,13 @@
 # Install Display 16X
 
-Display 16X needs an Apple silicon Mac with macOS 14 or later. Each release on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) has one ZIP with the menu bar app, and the `display16x` command line tool inside it. The release notes say how that release is signed, which decides what macOS asks of you at the first launch and after an update.
+Display 16X needs an Apple silicon Mac with macOS 14 or later. Each release on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) has one ZIP with the menu bar app, and the `display16x` command line tool inside it.
+
+Releases are signed with the project's own certificate and are not notarized by Apple. What that means for you:
+
+- **Once:** macOS blocks the first launch until you allow it in Privacy & Security, and the brightness and volume keys need the Accessibility permission. Both are described below.
+- **At every update:** the signature stays the same, so the Accessibility permission carries over, and a Homebrew upgrade also keeps your first-launch approval. An update you download by hand is allowed once more; Accessibility still carries over.
+
+The release notes of each version say how it is signed. A Developer ID with notarization will replace the project certificate later, and from then on the app opens without the first-launch step.
 
 ## Install with Homebrew
 
@@ -45,11 +52,11 @@ mkdir -p ~/.local/bin
 ln -sf "/Applications/Display 16X.app/Contents/MacOS/display16x" ~/.local/bin/display16x
 ```
 
-To update, download the new ZIP and replace the app in Applications.
+To update, download the new ZIP and replace the app in Applications. macOS asks you to allow the first launch of each downloaded version once more. The Accessibility permission carries over.
 
 ## Allow the first launch
 
-A release signed with a Developer ID and notarized by Apple opens normally. Any other release is blocked by macOS at the first launch, because Apple has not checked it. You approve it once:
+Apple has not checked a release signed with the project certificate, so macOS blocks its first launch. You allow it once:
 
 1. Open Display 16X. macOS says it could not verify that the app is free of malware. Click **Done**. Don't click **Move to Trash**, which deletes the app.
 2. Open **System Settings → Privacy & Security**.
@@ -68,7 +75,7 @@ xattr -dr com.apple.quarantine "/Applications/Display 16X.app"
 
 The `display16x` command is checked the same way the first time it runs. If macOS blocks it in Terminal, allow it under Privacy & Security as above, or use the `xattr` command.
 
-**After an update:** a Homebrew upgrade keeps your approval when the new version has the same signature as the old one, which is the case for releases signed with a Developer ID or the project certificate. An update downloaded by hand is approved again with the same steps. An ad hoc signed release is a new app to macOS each time, so it is approved again after every update.
+**After an update:** `brew upgrade` keeps your approval, because the new version has the same signature as the one you allowed, and the app opens again without asking. An update downloaded by hand is allowed again with the same steps.
 
 ## Allow the brightness and volume keys
 
@@ -78,10 +85,9 @@ The brightness and volume keys need the Accessibility permission. Everything els
 2. In **System Settings → Privacy & Security → Accessibility**, switch on **Display 16X**. If it isn't listed, click **+** and choose it from Applications.
 3. Close the panel and open it again.
 
-macOS gives the permission to the app's signature. What happens after an update depends on how the release is signed:
+macOS gives the permission to the app's signature, and every release is signed with the same certificate, so the permission carries over to new versions. Nothing to do after an update.
 
-- **Developer ID or the project certificate:** the signature stays the same from release to release, so the permission carries over. Nothing to do.
-- **Ad hoc:** every build has a new signature, so the old permission no longer applies, even though Display 16X still looks switched on in the list. Select the old **Display 16X** entry, remove it with **−**, then add the new app with **+**, and close and open the panel.
+**If the keys stop working after an update** although Display 16X is still switched on in the list, the permission no longer matches the app. Select the **Display 16X** entry, remove it with **−**, add the app again with **+**, then close and open the panel. Please also [open an issue](https://github.com/engrmnaveed/macdisplay-16x/issues), because with the same certificate this should not happen. It is what happens after every update for a release that is ad hoc signed, which its release notes say, and for builds you make yourself.
 
 To see how the installed app is signed, run:
 
@@ -89,7 +95,7 @@ To see how the installed app is signed, run:
 codesign -d -r- "/Applications/Display 16X.app"
 ```
 
-A requirement that names a `cdhash` means ad hoc. One that starts with `identifier "com.16xbrains.macdisplay16x"` or `anchor apple generic` means the project certificate or a Developer ID.
+A requirement that starts with `identifier "com.16xbrains.macdisplay16x" and certificate leaf` means the project certificate, and it is the same for every release. One that starts with `anchor apple generic` means a Developer ID. One that names a `cdhash` means ad hoc.
 
 ## Remove Display 16X
 

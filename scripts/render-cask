@@ -4,19 +4,21 @@
 #   scripts/render-cask VERSION ZIP_SHA256 [SIGNING]
 #
 # SIGNING says how the app in the ZIP is signed, which decides the caveats users see:
+#   certificate    the project's own certificate, not notarized (the default, decision 12):
+#                  allow the first launch once, and approval and Accessibility carry over
 #   developer-id   Developer ID, notarized and stapled: no caveats
-#   certificate    the project's own certificate, not notarized: allow the first launch once
-#   adhoc          ad hoc (the default): allow the first launch and grant Accessibility
-#                  again after every update
+#   adhoc          ad hoc: allow the first launch and grant Accessibility again after every
+#                  update
+# The release workflow passes the level it checked on the signed app.
 set -eu
 
 if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-    echo "Usage: $0 VERSION ZIP_SHA256 [developer-id|certificate|adhoc]" >&2
+    echo "Usage: $0 VERSION ZIP_SHA256 [certificate|developer-id|adhoc]" >&2
     exit 1
 fi
 version=${1#v}
 digest=$2
-signing=${3:-adhoc}
+signing=${3:-certificate}
 
 # The bundle version is three numbers, so the cask's is too.
 printf '%s\n' "$version" | LC_ALL=C grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
@@ -28,7 +30,7 @@ case "$digest" in *[!0-9a-fA-F]*|'') echo "Use a 64-character SHA-256 digest." >
 digest=$(printf '%s' "$digest" | LC_ALL=C tr '[:upper:]' '[:lower:]')
 case "$signing" in
     developer-id|certificate|adhoc) ;;
-    *) echo "SIGNING is developer-id, certificate or adhoc." >&2; exit 1 ;;
+    *) echo "SIGNING is certificate, developer-id or adhoc." >&2; exit 1 ;;
 esac
 
 template="$(dirname "$0")/../packaging/homebrew/display16x.rb.in"
