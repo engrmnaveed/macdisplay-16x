@@ -330,9 +330,25 @@ The displays were off from 09:07:58 to 09:17:49, which is 9 minutes 51 seconds (
 
 Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 
+### Rotation through the timed revert (09:30, with the owner present)
+
+One run, on the Lenovo, which was at 0° and is the main display. The LG stayed at its 270°. Command: `display16x set rotation 90 --tag 1 --try`.
+
+| Time | What happened |
+| --- | --- |
+| Before | Lenovo 3200 × 1800 at the origin, 0°, main. LG 2304 × 2048 to its left, 270° |
+| 09:30:13.8 | The Lenovo turned to 90° and became 1800 × 3200. The command answered "confirmed 90, keep or revert within 15 seconds". The LG did not move |
+| While waiting | The recovery store held the unconfirmed rotation with 0° as the way back |
+| 09:30:29.9 | Nobody answered. "Mode change on #1 was not confirmed. Reverting." |
+| 09:30:31.4 | Back at 0°. Origins, sizes, rotation, the main display and both modes were identical to the record taken before. The recovery store was empty again |
+
+- The write path through the MonitorPanel class works on this Mac, and so does the way back.
+- Rotating one display did not disturb the other one's place in the arrangement.
+- Not run: Keep, Revert by hand, 180° and 270°, and a rotation of the LG.
+
 ### Interfaces and modes
 
-- Rotation: the display preferences class of the MonitorPanel framework is present, reports the same angle as Core Graphics for both monitors, and says both can be rotated. The write path has never been run.
+- Rotation: the display preferences class of the MonitorPanel framework is present, reports the same angle as Core Graphics for both monitors, and says both can be rotated. The write path ran once, on 23 November at 09:30, described below.
 - Mode flags: 101 of the Lenovo's 140 modes and 27 of the LG's 46 are marked safe. Every mode reports the same 8-bit pixel encoding, so depth cannot be told apart through the public interface.
 - Sizes on the text-size strip: 11 on the Lenovo (1280 × 720 to 3360 × 1890), 5 on the LG (900 × 800 to 2304 × 2048).
 
@@ -371,11 +387,10 @@ Three things the toolchain does not do on its own, each worked around in the rep
 
 ### Where v0.1 Core stands at the end of 23 November
 
-Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
+Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, one rotation with the revert on its own, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
 
 Built and unit-tested, and not run on hardware:
 
-- Rotation. One run through the timed revert is waiting for the maintainer's word.
 - Input switching. It can cut the Mac off from the monitor, and nothing on this desk needs it.
 - Launch at login, and native brightness (no built-in or Apple display here).
 - "Put my values back after sleep" writing a value back, and the app taking over a value that was changed on a monitor during a sleep. Neither test monitor loses a value, and nobody changed one by its buttons while the displays slept.

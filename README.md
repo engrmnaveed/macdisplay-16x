@@ -55,7 +55,7 @@ dist/display16x features                   # every feature and its operations
 | At start, after wake and when a display returns | The app reads the monitor and shows what it has. Nothing is written. Ran on hardware at one start and at two wakes where the LG left and came back: nothing was written and both monitors still held the values the app had. Not yet seen taking over a value that was changed elsewhere. In five measured wakes, one after five and a half hours, neither test monitor had lost a value |
 | "Put my values back after sleep", per display, off by default | For a monitor that forgets its values. Reads first and writes only a value you chose and the monitor no longer has. Built and unit-tested. Never seen repairing a lost value, because neither test monitor loses one |
 | Safe mode | Built and unit-tested. Hardware check pending |
-| Rotation | Built behind the timed revert. Never run on hardware |
+| Rotation | Ran once on hardware: 90° on one monitor with the countdown, left unanswered, and the app turned it back after 15 seconds with the arrangement unchanged. Keep and the other angles were not run |
 | Launch at login | Built. Not verified |
 | CLI and hardware probe | Working |
 
