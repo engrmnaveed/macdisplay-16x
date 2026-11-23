@@ -49,6 +49,26 @@ struct ModeServiceTests {
         }
     }
 
+    @Test("An automatic mode change applies without a countdown, is announced with its origin, and safe mode refuses it")
+    func automationHasNoCountdown() async {
+        let rig = await makeRig()
+        let report = await change(rig, ModeRequest(logicalWidth: 2560, logicalHeight: 1440), origin: .automation)
+        #expect(report.failure == nil)
+        #expect(!report.awaitsConfirmation)
+        #expect(rig.modes.pending.isEmpty)
+        #expect(rig.recovery.document.unconfirmedModes.isEmpty)
+        let announced = rig.events.compactMap { event -> ModeChange? in
+            if case .modeChanged(let change) = event { return change }
+            return nil
+        }
+        #expect(announced.last?.origin == .automation)
+
+        let safe = await makeRig(safeMode: true)
+        let refused = await safe.run(.set, .resolution, on: .tag(1), value: .mode(ModeRequest(logicalWidth: 2560, logicalHeight: 1440)), origin: .automation)
+        #expect(refused.error == "automatic changes are paused: safe mode is on")
+        #expect(safe.modeSystem.applied.isEmpty)
+    }
+
     @Test("A command can ask for the countdown, and then it reverts like an interactive change")
     func commandWithTimedRevert() async throws {
         let rig = await makeRig()

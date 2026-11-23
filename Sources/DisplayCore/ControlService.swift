@@ -198,7 +198,9 @@ public final class ControlService {
             switch origin {
             case .interface, .keyboard, .command:
                 record.chosen.insert(control)
-            case .outsideChange, .restore, .startup, .sync:
+            case .outsideChange, .restore, .automation, .startup, .sync:
+                // Not the user's choice. An automatic write also leaves an earlier choice
+                // standing, as a restore does.
                 guard endsChoice else { break }
                 record.chosen.remove(control)
                 if control == .hardwareBrightness || control == .softwareBrightness { record.chosen.remove(.brightness) }
