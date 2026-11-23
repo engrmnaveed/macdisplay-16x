@@ -61,7 +61,7 @@ One small probe per risky mechanism, each recording Mac model, macOS build, moni
 - [x] Gamma-table dimming while awake
 - [ ] Gamma-table dimming across a lock and unlock (the blind rewrite needs to be watched once), with Night Shift, and with a custom color profile on any connected display
 - [x] DDC readiness after a short display sleep: both monitors answer within a second, and bad replies stop within 3.4 seconds
-- [x] DDC readiness after a long display sleep (five and a half hours): the DisplayPort monitor leaves the system and returns 3.3 seconds later, answers before it is listed, and gives "not ready" replies on and off for at least 16 seconds. Both monitors kept their values
+- [x] DDC readiness after a long display sleep (37 minutes, and five and a half hours): the DisplayPort monitor leaves the system and returns 3.3 seconds later, answers before it is listed, and gives "not ready" replies on and off for at least 16 seconds. Both monitors kept their values
 - [ ] DDC readiness after a full system sleep and a cable reconnect
 - [ ] The same DDC timings with no other display utility running
 - [ ] Key capture without Accessibility permission
@@ -86,12 +86,12 @@ Built to the [core architecture](core-architecture.md), in this order:
 
 Ready when the performance budget in the [PRD](../PRD.md#performance-budget) is met on the baseline Mac, a monitor that ignores DDC leaves the menu responsive, and settings follow a monitor across a reconnect and a restart.
 
-**Status on 23 November 2026.** All four stages are built on the `v0.1-core` branch, with 221 unit tests. On the two test monitors the owner has checked brightness, contrast and volume from the panel, the text-size strip with Keep and Revert, refresh rate, the brightness and volume keys with the indicator, and software dimming while awake. The idle and memory budgets are met on the M5 Pro.
+**Status on 23 November 2026.** All four stages are built on the `v0.1-core` branch, with 224 unit tests. On the two test monitors the owner has checked brightness, contrast and volume from the panel, the text-size strip with Keep and Revert, refresh rate, the brightness and volume keys with the indicator, and software dimming while awake. The idle and memory budgets are met on the M5 Pro.
 
 Left before v0.1 is called done:
 
 1. Watch software dimming across a lock and unlock.
-2. Build decisions 10 and 11, then watch one wake and one start with the after-wake default and the restore floor as [decided](#5-open-decisions). Decisions 2 and 4 are built and unit-tested, and have not run on hardware yet.
+2. See the [decided](#5-open-decisions) rules handle their harder cases on hardware. All six are built. One wake and one start have run with them: both monitors were read, every value matched and nothing was written. Not seen yet: a value changed on the monitor while the app was not looking, "restore after wake" writing a value back, and the floor after a long absence.
 3. Settle the open decisions marked v0.1.
 4. One rotation run through the timed revert, or ship rotation marked unverified.
 5. Register the login item once.
