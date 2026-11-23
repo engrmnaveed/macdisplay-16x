@@ -122,8 +122,8 @@ final class AdvancedRig {
 
     var rig: Rig { layoutRig.rig }
 
-    init(safeMode: Bool = false, ledgerPersistence: MemoryPersistence = MemoryPersistence(), configure: ((inout SettingsDocument) -> Void)? = nil) {
-        layoutRig = LayoutRig(safeMode: safeMode, features: .complete, configure: configure)
+    init(safeMode: Bool = false, ledgerPersistence: MemoryPersistence = MemoryPersistence(), recoveryPersistence: MemoryPersistence = MemoryPersistence(), features: FeatureRegistry = .complete, configure: ((inout SettingsDocument) -> Void)? = nil) {
+        layoutRig = LayoutRig(safeMode: safeMode, recoveryPersistence: recoveryPersistence, features: features, configure: configure)
         let rig = layoutRig.rig
         self.ledgerPersistence = ledgerPersistence
         ledger = SystemFileLedger(persistence: ledgerPersistence)

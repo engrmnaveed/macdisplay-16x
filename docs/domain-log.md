@@ -6,6 +6,33 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · v0.4 core: what it adds to the core, the rules it adopted, and where the architecture did not fit
+
+**Where v0.4 touches what earlier milestones built.** No existing behavior changed, and every earlier test passes unchanged. Three optional keys, the settings version stays 1, so an older build reads both files and ignores them:
+
+1. `color` in the settings document, next to `layout` and `advanced`: the three switches.
+2. `color` in a record's settings, next to `layout`: what protection puts back, the SDR and HDR profiles, the fallback list, and hardware brightness in HDR. Reset and transfer treat it like the rest of the record.
+3. `color` in the recovery store: HDR, profile and preset before a change that waits for Keep, and what the app turned off for HDR. Reset, export and import never touch it, which is the inventory's "protected recovery values".
+
+The v0.3 test rig takes the feature list and a recovery store as parameters. Everything else is in new files.
+
+**Rules adopted where the documents left room:**
+
+- **HDR, a profile and a reference preset each get Keep and Revert from the panel**, and from the command line with `--try`, as a mode does. A switch from the command line, a scene or protection applies at once. What was there is written to the recovery store before the change.
+- **A color change still waiting for Keep is undone at quit**, and one left by a crash at the next start, through the gate. Safe mode leaves it for the next normal start.
+- **Night Shift and True Tone off in HDR give back only what they took.** The debt is written to the recovery store before the switch, so a crash between the two still gives it back. If the user turned Night Shift on again in the meantime, the debt is dropped and nothing is written. At quit it is given back without the gate, because that undoes the app's own change.
+- **The HDR profile goes on whenever HDR switches, whoever switched it**, once the user has chosen one. It is the user's own pair of profiles, so it does not wait for protection to be on. Protection adds the correction of a profile changed elsewhere.
+- **A protected profile's target is what the user asked for, not the fallback used**, so the wanted file is used again once it is back.
+- **A profile assigned elsewhere announces nothing.** It is put back only at the moments everything else is checked (start, wake, reconnect, any reconfiguration) and when HDR switches. Nothing polls for it.
+
+**Where the architecture did not fit, and what was done instead:**
+
+- **"Hardware brightness in HDR" names the resolver as its hook.** Changing how the resolver picks an owner would change the core. Instead the v0.4 command extension holds back a brightness command for a monitor in HDR when the user switched hardware brightness in HDR off, and says why. Other displays named in the same command run as before, one at a time through the engine. The switch is on by default, so nothing changes unless the user asks.
+- **"SDR level in HDR" names the brightness composition.** On a display with its own brightness the composite already drives the panel's brightness, which macOS uses as the SDR level in HDR. External monitors have no SDR level of their own. So no composition was added: the headroom report says what sets the SDR level on each display. The framebuffer's registry entry says the color table leaves pixels above SDR white alone (`GCPBypassesEDRPixels`), which would make software dimming an SDR level in HDR. That is unverified.
+- **"Neutral table reset" is already the core's rule**: at neutral the pipeline writes nothing and gives the table back to the system. The check with the owner showed the LG's table stays a plain ramp in HDR. v0.4 adds nothing here.
+- **The protection stage was reserved and empty.** Color protection is that stage.
+- **Keep and Revert:** the command line's `keep` and `revert` answer a color change too, when it is the only change waiting on the display named.
+
 ## 24 November 2026 · v0.4 spikes: how macOS 27 exposes HDR and color, and two inventory rows that can only be read
 
 Read-only, on the M5 Pro (Mac17,9, macOS 27.2.1) with the Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, lid closed. The numbers are in the [feasibility notes](feasibility.md#24-november-2026--v04-hdr-and-color-spikes--apple-m5-pro-mac179--macos-2721-26b131).

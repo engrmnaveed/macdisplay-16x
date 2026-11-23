@@ -266,6 +266,8 @@ public struct RecordSettings: Codable, Sendable, Equatable {
     public var previousMode: ModeDescriptor?
     /// Arrangement, protection and connection settings of this display. Added in v0.2.
     public var layout: RecordLayoutSettings?
+    /// HDR, color profile and upscaling settings of this display. Added in v0.4.
+    public var color: RecordColorSettings?
 
     public init() {
         display = DisplaySettings()
@@ -289,6 +291,7 @@ public struct RecordSettings: Codable, Sendable, Equatable {
         favouriteModes = try container.decodeIfPresent([ModeDescriptor].self, forKey: .favouriteModes) ?? []
         previousMode = try container.decodeIfPresent(ModeDescriptor.self, forKey: .previousMode)
         layout = try container.decodeIfPresent(RecordLayoutSettings.self, forKey: .layout)
+        color = try container.decodeIfPresent(RecordColorSettings.self, forKey: .color)
     }
 }
 
@@ -340,6 +343,9 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
     /// Scaling, virtual screens and mirror-based HiDPI. Added in v0.3. An older version of
     /// the app ignores the section.
     public var advanced: AdvancedSettings
+    /// HDR, color profiles and upscaling. Added in v0.4. An older version of the app ignores
+    /// the section.
+    public var color: ColorSettings
 
     public init() {
         schemaVersion = SettingsDocument.currentSchemaVersion
@@ -350,6 +356,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         pendingRestores = []
         layout = LayoutSettings()
         advanced = AdvancedSettings()
+        color = ColorSettings()
     }
 
     public init(from decoder: Decoder) throws {
@@ -362,6 +369,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         pendingRestores = try container.decodeIfPresent([PendingRestore].self, forKey: .pendingRestores) ?? []
         layout = try container.decodeIfPresent(LayoutSettings.self, forKey: .layout) ?? LayoutSettings()
         advanced = try container.decodeIfPresent(AdvancedSettings.self, forKey: .advanced) ?? AdvancedSettings()
+        color = try container.decodeIfPresent(ColorSettings.self, forKey: .color) ?? ColorSettings()
         // A tag is never reused, whatever the file says.
         let highest = displays.map(\.record.tag.rawValue).max() ?? 0
         nextTag = max(nextTag, highest + 1)
@@ -577,6 +585,8 @@ public struct RecoveryDocument: Codable, Sendable, Equatable {
     /// Displays the app took out of use, with the system display ID that brings each one
     /// back. They are reconnected at quit, and at the next start after a crash. Added in v0.2.
     public var disconnectedByApp: [DisplayTag: UInt32]
+    /// HDR, profile, preset, Night Shift and upscaling values the app owes back. Added in v0.4.
+    public var color: ColorRecovery?
 
     public init() {
         schemaVersion = 1
@@ -594,6 +604,7 @@ public struct RecoveryDocument: Codable, Sendable, Equatable {
         layoutBeforeChange = try container.decodeIfPresent(LayoutSnapshot.self, forKey: .layoutBeforeChange)
         layoutUnconfirmed = try container.decodeIfPresent(Bool.self, forKey: .layoutUnconfirmed) ?? false
         disconnectedByApp = try container.decodeIfPresent([DisplayTag: UInt32].self, forKey: .disconnectedByApp) ?? [:]
+        color = try container.decodeIfPresent(ColorRecovery.self, forKey: .color)
     }
 }
 
