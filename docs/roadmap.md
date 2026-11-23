@@ -50,6 +50,14 @@ Measured on the M5 Pro with the packaged release build, panel closed, over 10 mi
 
 ## 3. Milestones
 
+### How the work is run
+
+- **One supervising thread.** The planning thread keeps these documents and drives the work until the product is finished. Each milestone is built in its own session, on its own branch, in its own worktree.
+- **A change goes back to the session that built the part.** That session holds the domain knowledge. The core belongs to the session that built v0.1. Before it changes anything, the planning thread tells it where the project stands: the branch to cut from, the milestone in progress and where the change lands.
+- **Finished branches are closed.** `v0.1-core` was merged on 23 November 2026 and takes no more commits. A change lands on the current line of development and ships with the milestone in progress. It is never added to an older version or its branch.
+- **`main` is the line everything merges into**, through pull requests that pass CI. Release tags are cut from `main` only.
+- **Sessions commit locally.** Pushing a branch, opening a pull request, merging into `main`, tagging and publishing each wait for the owner's word.
+
 ### Spikes
 
 One small probe per risky mechanism, each recording Mac model, macOS build, monitor, connection and result.
@@ -112,9 +120,33 @@ The first release is 0.1.0, tagged by the owner after pull request 1 is merged.
 
 **Status on 23 November 2026.** Built on the branch `claude/bold-galileo-63f5e0`, not pushed and not merged. From a clean checkout the version check, the unit tests, packaging, the archive, the smoke test and the rendered cask all pass, and the archive's signature still verifies after Homebrew's way of unpacking it. The tag-triggered workflow has never run, because that needs a published tag. No tag, release, secret or GitHub setting exists yet. Those are the owner's steps, listed in the branch's `docs/release.md`.
 
+### Interface pass
+
+The v0.1 interface was built to exercise the core, and it looks like it. This milestone gives the app a designed interface before the public release. The design is our own, to the [interface direction](../PRD.md#interface-direction) in the PRD.
+
+1. **Review and direction.** A screenshot of every surface as it is today with what is wrong with it, then two or three directions shown as real rendered panels. The owner chooses. Nothing is rebuilt before that.
+2. **Design system.** Spacing, type, color in light, dark and increased contrast, control styles, system symbols and motion, defined once in the app target.
+3. **Surfaces.** The menu bar icon and its states. The panel and the display cards. The text-size strip with Keep and Revert. The detail view with its "say why" rows. The on-screen indicator. The settings window. The first run and the permission flows, including the stale Accessibility entry. The empty and error states: no display, a silent monitor, safe mode.
+4. **Identity.** The app icon, the name treatment and the About panel.
+5. **Quality bar.** Every control reachable by keyboard and VoiceOver. Reduce Motion and Increase Contrast respected. The panel still opens in under 100 ms warm, is built on open and released on close, and the memory budget holds.
+
+Ready when the owner has approved each surface on their own Mac and the budgets are measured again. It runs after release 0.1.0 works end to end. Later milestones build their interface on the design system, so their first panels stay plain until it lands.
+
 ### v0.2 Layout
 
-Arrangement, main display and mirroring. Disconnect and reconnect, including automatically turning off the built-in panel when an external display is attached. Configuration restore after wake and reconnect. Presets with global shortcuts. CLI, URL scheme and Shortcuts actions.
+Arrangement, main display and mirroring. Disconnect and reconnect, including automatically turning off the built-in panel when an external display is attached. Configuration restore after wake and reconnect. Presets with global shortcuts. CLI, URL scheme and Shortcuts actions. The [feature inventory](feature-inventory.md) marks the 56 capabilities in scope.
+
+Built in this order, on the hooks the core reserved:
+
+1. **Spikes.** Read-only first: what the system reports about origins, the main display and mirror sets, and what a configuration transaction announces. Then, with the owner present: move a display and move it back, change the main display and restore it, mirror and unmirror, disconnect and reconnect one display. Also whether Shortcuts actions can be built with the Command Line Tools alone.
+2. **Core.** The reserved display states for a display disconnected by the app or by the system. Relationships between two displays and the second selector. The connection policy, which never removes the last eligible physical display. Presets as command lists. Desired mode, rotation and arrangement in the reconciler, with a limit on repeated enforcement. Export, import and reset of settings.
+3. **System adapters.** Arrangement, main display and mirroring through configuration transactions. Disconnect and reconnect through the private module. Lid events.
+4. **Surfaces.** A CLI verb for every feature, with generated help. The URL scheme and Shortcuts actions, each behind its own switch. Custom keyboard shortcuts with a recorder. Plain panel entries for arrangement, mirroring, connection and presets, which the interface pass later designs.
+5. **Connection automation.** Turning the built-in panel off when an external display is attached, with exceptions, a pause after a manual override, and reconnecting when no display is left.
+
+Every change to arrangement, mirroring, the main display or a connection is reversible: the layout before the change is recorded in the recovery store, and an interactive change gets Keep and Revert like a mode change.
+
+Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
 
 ### v0.3 Advanced scaling
 
