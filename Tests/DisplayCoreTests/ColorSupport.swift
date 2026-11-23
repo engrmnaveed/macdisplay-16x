@@ -174,16 +174,18 @@ enum ColorFixture {
     static let lgHeadroomInHDR = Headroom(current: 1.2, potential: 2.95, reference: 0)
 
     /// The LG SDQHD's link color modes as its framebuffer listed them on 24 November 2026, in
-    /// part: RGB and YCbCr at 8 and 10 bits, PQ only with 10 bits, and two entries marked
-    /// virtual with no score that are not offered.
+    /// part, with macOS's scores: RGB and YCbCr at 8 and 10 bits, PQ only with 10 bits and
+    /// scored the same as 10-bit SDR RGB, a virtual entry with no score, and one entry the
+    /// display's own timing does not offer.
     static let lgLink = LinkReport(
         modes: [
-            LinkColorMode(id: 67, depth: 8, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: true),
-            LinkColorMode(id: 70, depth: 8, encoding: .yCbCr(code: 2), limitedRange: true, transfer: .sdr, colorimetry: 1, offered: true),
-            LinkColorMode(id: 74, depth: 10, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: true),
-            LinkColorMode(id: 80, depth: 10, encoding: .rgb, limitedRange: false, transfer: .pq, colorimetry: 9, offered: true),
-            LinkColorMode(id: 6, depth: 12, encoding: .yCbCr(code: 2), limitedRange: true, transfer: .pq, colorimetry: 7, isVirtual: true, offered: true),
-            LinkColorMode(id: 68, depth: 8, encoding: .rgb, limitedRange: true, transfer: .sdr, colorimetry: 10, offered: false),
+            LinkColorMode(id: 67, depth: 8, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: true, score: 242_999),
+            LinkColorMode(id: 70, depth: 8, encoding: .yCbCr(code: 2), limitedRange: true, transfer: .sdr, colorimetry: 1, offered: true, score: 222_999),
+            LinkColorMode(id: 74, depth: 10, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: true, score: 442_999),
+            LinkColorMode(id: 80, depth: 10, encoding: .rgb, limitedRange: false, transfer: .pq, colorimetry: 9, offered: true, score: 447_999),
+            LinkColorMode(id: 73, depth: 10, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 9, offered: true, score: 447_999),
+            LinkColorMode(id: 6, depth: 12, encoding: .yCbCr(code: 2), limitedRange: true, transfer: .pq, colorimetry: 7, isVirtual: true, offered: true, score: -1),
+            LinkColorMode(id: 68, depth: 8, encoding: .rgb, limitedRange: true, transfer: .sdr, colorimetry: 10, offered: false, score: 242_999),
         ],
         timings: [
             LinkTiming(width: 2560, height: 2880, refreshRate: 60),
@@ -194,15 +196,23 @@ enum ColorFixture {
     )
 
     /// The Lenovo P32p-20 at 3840 × 2160 over HDMI: 8-bit RGB, and 10 and 12 bits only as
-    /// YCbCr. No 10-bit RGB at that timing.
+    /// YCbCr. No 10-bit RGB at that timing. Its link also offers 23.976, 24 and 25 Hz at that
+    /// size, which its mode list leaves out, and sizes the mode list does not have at all.
     static let lenovoLink = LinkReport(
         modes: [
-            LinkColorMode(id: 93, depth: 8, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: true),
-            LinkColorMode(id: 97, depth: 10, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: false),
-            LinkColorMode(id: 106, depth: 10, encoding: .yCbCr(code: 3), limitedRange: true, transfer: .sdr, colorimetry: 0, offered: true),
-            LinkColorMode(id: 104, depth: 12, encoding: .yCbCr(code: 2), limitedRange: true, transfer: .sdr, colorimetry: 0, offered: true),
+            LinkColorMode(id: 93, depth: 8, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: true, score: 242_999),
+            LinkColorMode(id: 97, depth: 10, encoding: .rgb, limitedRange: false, transfer: .sdr, colorimetry: 10, offered: false, score: 442_999),
+            LinkColorMode(id: 106, depth: 10, encoding: .yCbCr(code: 3), limitedRange: true, transfer: .sdr, colorimetry: 0, offered: true, score: 401_431),
+            LinkColorMode(id: 104, depth: 12, encoding: .yCbCr(code: 2), limitedRange: true, transfer: .sdr, colorimetry: 0, offered: true, score: 401_621),
         ],
-        timings: [LinkTiming(width: 3840, height: 2160, refreshRate: 60), LinkTiming(width: 3840, height: 2160, refreshRate: 24)],
+        timings: [
+            LinkTiming(width: 3840, height: 2160, refreshRate: 60),
+            LinkTiming(width: 3840, height: 2160, refreshRate: 59.94),
+            LinkTiming(width: 3840, height: 2160, refreshRate: 23.98, isVirtual: true),
+            LinkTiming(width: 3840, height: 2160, refreshRate: 24, isVirtual: true),
+            LinkTiming(width: 3840, height: 2160, refreshRate: 25, isVirtual: true),
+            LinkTiming(width: 5120, height: 2880, refreshRate: 60, isVirtual: true),
+        ],
         dithering: true
     )
 

@@ -28,6 +28,8 @@ display16x \(AppPaths.version) — command line for Display 16X
       Print a read-only hardware report. Works without the app.
   display16x probe --interfaces
       Only which private interfaces resolve. Looks at no display.
+  display16x probe --color
+      The private interfaces, then HDR and color only. Sends nothing to a monitor.
 
   display16x list                         Connected and remembered displays
   display16x status                       App state
@@ -187,7 +189,7 @@ func parseValue(_ text: String, for feature: FeatureDescriptor) -> CommandValue 
 // MARK: Sending
 
 func send(_ command: Command, arguments: Arguments) -> Never {
-    if let problem = FeatureRegistry.complete.validate(command) { fail(problem, .usage) }
+    if let problem = FeatureRegistry.withColor.validate(command) { fail(problem, .usage) }
     let client = UnixSocketClient(path: AppPaths().socketPath)
     let result: CommandResult
     do {
@@ -213,7 +215,7 @@ func send(_ command: Command, arguments: Arguments) -> Never {
 
 func feature(named name: String?) -> FeatureDescriptor {
     guard let name else { fail("name a feature. Run \"display16x features\" for the list", .usage) }
-    let registry = FeatureRegistry.complete
+    let registry = FeatureRegistry.withColor
     guard let match = registry.ordered.first(where: { $0.id.rawValue.lowercased() == name.lowercased() }) else {
         fail("unknown feature \"\(name)\". Run \"display16x features\" for the list", .usage)
     }
@@ -248,19 +250,20 @@ switch verb {
 case "help":
     if let name = arguments.positional.dropFirst().first {
         let target = feature(named: name)
-        print(FeatureRegistry.complete.completeHelp(for: target.id) ?? usage)
+        print(FeatureRegistry.withColor.helpWithColor(for: target.id) ?? usage)
     } else {
         print(usage)
     }
 
 case "features":
-    print("Features\n" + FeatureRegistry.complete.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
+    print("Features\n" + FeatureRegistry.withColor.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
 
 case "probe":
     var probeOptions = ProbeOptions()
     probeOptions.includeCapabilities = arguments.flags.contains("--capabilities")
     probeOptions.includeAllModes = arguments.flags.contains("--modes")
     probeOptions.interfacesOnly = arguments.flags.contains("--interfaces")
+    probeOptions.colorOnly = arguments.flags.contains("--color")
     let lines = await HardwareProbe.report(options: probeOptions)
     print(lines.joined(separator: "\n"))
     if arguments.flags.contains("--with-log") {
@@ -391,7 +394,7 @@ case "shortcut":
         var bound = command(operation, target.id, value: value)
         bound.origin = .keyboard
         bound.options.confirmed = arguments.flags.contains("--confirm")
-        if let problem = FeatureRegistry.complete.validate(bound) { fail(problem, .usage) }
+        if let problem = FeatureRegistry.withColor.validate(bound) { fail(problem, .usage) }
         let binding = ShortcutBinding(combo: combo, command: bound)
         guard let data = try? JSONEncoder().encode(binding) else { fail("the shortcut could not be encoded", .failed) }
         send(Command(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)), origin: .command), arguments: arguments)

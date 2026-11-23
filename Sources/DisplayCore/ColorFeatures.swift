@@ -378,7 +378,7 @@ public final class ColorCommands: CommandExtension {
             if writes { return (result(.failed, detail: ColorUnavailable.chooseLinkMode), nil) }
             let offered = link.offeredModes
             let lines = offered.map { "\($0.id): \($0.summary)" }
-            let best = offered.first.map { "best offered: \($0.summary)" } ?? "none offered at the display's own timing"
+            let best = offered.first.map { "ranked first by macOS: \($0.summary)" } ?? "none offered at the display's own timing"
             return (result(.confirmed, actual: .text("\(offered.count) modes"), detail: "\(best). The one in use is not reported"), "\(tag) \(display) link color modes:\n  " + lines.joined(separator: "\n  "))
 
         case .dithering:

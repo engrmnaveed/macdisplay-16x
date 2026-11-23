@@ -13,6 +13,9 @@ public struct ProbeOptions: Sendable {
     /// Stop after the private interfaces, before any display is looked at. For checking a
     /// build, such as one signed with the hardened runtime, without querying a monitor.
     public var interfacesOnly = false
+    /// The private interfaces, then HDR and color only: nothing is sent to a monitor. Added
+    /// in v0.4.
+    public var colorOnly = false
 
     public init() {}
 }
@@ -52,6 +55,7 @@ public enum HardwareProbe {
         let missing = reserved.filter { !$0.present }.map(\.name)
         lines.append("  Reserved for later milestones: \(reserved.count - missing.count) of \(reserved.count) present" + (missing.isEmpty ? "" : ", missing " + missing.joined(separator: ", ")))
         if options.interfacesOnly { return lines }
+        if options.colorOnly { return lines + colorReport() }
 
         let inventory = SystemDisplayInventory()
         let snapshots = inventory.connectedDisplays()

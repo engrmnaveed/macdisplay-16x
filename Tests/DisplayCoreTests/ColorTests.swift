@@ -16,11 +16,12 @@ import Testing
         #expect(ProfileFallback.resolve(.factory, fallback: ["/c.icc"], exists: exists).choice == .factory)
     }
 
-    @Test("Link color modes offered at the display's own timing come best first, without the virtual ones")
+    @Test("Link color modes offered at the display's own timing come in macOS's order, without the virtual ones")
     func linkModes() {
         let offered = ColorFixture.lgLink.offeredModes
-        #expect(offered.map(\.id) == [74, 80, 67, 70])
+        #expect(offered.map(\.id) == [73, 80, 74, 67, 70], "by score, and SDR before PQ at the same score")
         #expect(offered[1].summary == "10-bit RGB, full range, PQ")
+        #expect(ColorFixture.lenovoLink.offeredModes.first?.depth == 12, "macOS ranks 12-bit YCbCr first for the Lenovo at 4K over HDMI")
         #expect(ColorFixture.lenovoLink.offeredModes.contains { $0.depth == 10 && $0.encoding == .rgb } == false, "the Lenovo has no 10-bit RGB at 4K over HDMI")
         #expect(PixelEncoding(code: 0) == .rgb && PixelEncoding(code: 3) == .yCbCr(code: 3))
         #expect(TransferCode(code: 2) == .pq && TransferCode(code: 2).isHDR && !TransferCode(code: 0).isHDR)
@@ -29,7 +30,7 @@ import Testing
     @Test("Rates the link offers and the mode list leaves out are the connection-only rates")
     func connectionOnlyRates() {
         let rates = ColorFixture.lenovoLink.connectionOnlyRates(listed: Fixture.fourKModes)
-        #expect(rates == [LinkTiming(width: 3840, height: 2160, refreshRate: 24)])
+        #expect(rates.map(\.refreshRate) == [25, 23.98], "59.94 counts as 60, 23.98 and 24 are one rate, and a size the list lacks is left out")
     }
 
     @Test("A reference headroom of 0 means not reported, and headroom above 1 is room for HDR")
@@ -431,7 +432,7 @@ import Testing
         let rig = ColorRig()
         await rig.startWithDesk()
         let list = await rig.run(.get, .colorMode, on: .tag(rig.lgTag.rawValue))
-        #expect(list.entries.first?.actual == .text("4 modes"))
+        #expect(list.entries.first?.actual == .text("5 modes"))
         #expect(list.report?.contains("80: 10-bit RGB, full range, PQ") == true)
         let choose = await rig.run(.set, .colorMode, on: .tag(rig.lgTag.rawValue), value: .choice("80"))
         #expect(choose.entries.first?.detail == ColorUnavailable.chooseLinkMode)
@@ -452,8 +453,8 @@ import Testing
         let rig = ColorRig()
         await rig.startWithDesk()
         let result = await rig.run(.get, .linkRates, on: .tag(rig.lenovoTag.rawValue))
-        #expect(result.entries.first?.actual == .text("1 rates"))
-        #expect(result.report?.contains("3840 × 2160 at 24.00 Hz") == true)
+        #expect(result.entries.first?.actual == .text("2 rates"))
+        #expect(result.report?.contains("3840 × 2160 at 25.00 Hz, made up by macOS") == true)
     }
 
     @Test("A display without reference presets says so")

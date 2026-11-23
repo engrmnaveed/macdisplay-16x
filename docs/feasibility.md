@@ -924,6 +924,14 @@ The Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, rotated 270°. The MacBook
 - The corrected run turned Night Shift on and then off, read back each time, with the schedule mode unchanged. `setEnabled:` is a clean switch in both directions.
 - Back as it was: yes.
 
+### The adapters, read on the desk (`display16x probe --color`, 02:20)
+
+The hardware report gained a read-only HDR and color section, which sends nothing to a monitor. Through the app's own adapters it read the same as the probe: the LG offers HDR, off; both headrooms 1.0; each monitor's own profile in use; Night Shift off.
+
+- **Each link color mode carries macOS's own ranking**, `Score` in the registry. The app lists offered modes in that order and calls the first "ranked first by macOS", never "in use". For the LG that is 10-bit RGB, full range, SDR. For the Lenovo at 3840 × 2160 over HDMI it is 12-bit YCbCr, limited range, ahead of 8-bit RGB.
+- **The Lenovo's link offers 3840 × 2160 at 23.98, 24 and 25 Hz**, which its mode list (30, 50, 60 Hz) leaves out. These are the "connection-only rates". The timings are listed as made up by macOS. Choosing one is not possible yet.
+- **`ColorSyncProfileCopyHeader` gives each 32-bit field in the Mac's byte order**: the class of the system's sRGB profile reads "rtnm" and its space " BGR", where the file holds "mntr" and "RGB ". The app accepts both. 9 of the 14 system profiles are RGB display or color space profiles.
+
 **Prepared and not run, by the owner's choice: a virtual screen with HDR modes** (`spikes/virtual-hdr-write-probe.swift`). `CGVirtualDisplayMode` takes a transfer function per mode (`initWithWidth:height:refreshRate:transferFunction:`, typed). The probe makes the v0.3 probe's screen again, with the same identity so macOS has no reason to keep a new color profile, with one mode at transfer function 0 and one at 2 (the PQ code of CTA-861, which the framebuffer registry also uses), and reads whether macOS then offers HDR for it. Carried forward: until it runs, which transfer function codes macOS accepts is not known.
 
 **A link color mode change was not prepared**: no interface with a known shape can choose one, and a guessed call on the owner's monitor is not a check worth its risk. Reference presets need an Apple display.

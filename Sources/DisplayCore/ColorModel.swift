@@ -218,8 +218,10 @@ public struct LinkColorMode: Sendable, Equatable {
     public var isVirtual: Bool
     /// Offered at the display's preferred timing. Nil when the framebuffer does not say.
     public var offered: Bool?
+    /// macOS's own ranking of the mode, higher first. Nil when the framebuffer gives none.
+    public var score: Int?
 
-    public init(id: Int, depth: Int, encoding: PixelEncoding, limitedRange: Bool, transfer: TransferCode, colorimetry: Int, isVirtual: Bool = false, offered: Bool? = nil) {
+    public init(id: Int, depth: Int, encoding: PixelEncoding, limitedRange: Bool, transfer: TransferCode, colorimetry: Int, isVirtual: Bool = false, offered: Bool? = nil, score: Int? = nil) {
         self.id = id
         self.depth = depth
         self.encoding = encoding
@@ -228,6 +230,7 @@ public struct LinkColorMode: Sendable, Equatable {
         self.colorimetry = colorimetry
         self.isVirtual = isVirtual
         self.offered = offered
+        self.score = score.flatMap { $0 >= 0 ? $0 : nil }
     }
 
     /// "10-bit RGB, full range, PQ".
@@ -265,10 +268,12 @@ public struct LinkReport: Sendable, Equatable {
         self.dithering = dithering
     }
 
-    /// Modes the monitor can take at its own timing, best first: more depth, RGB before
-    /// YCbCr, full range before limited, SDR before HDR.
+    /// Modes the monitor can take at its own timing, in macOS's own order: by its score, then
+    /// more depth, RGB before YCbCr, full range before limited, SDR before HDR. Which one is in
+    /// use is not reported.
     public var offeredModes: [LinkColorMode] {
         modes.filter { !$0.isVirtual && $0.offered != false }.sorted { lhs, rhs in
+            if lhs.score != rhs.score { return (lhs.score ?? -1) > (rhs.score ?? -1) }
             if lhs.depth != rhs.depth { return lhs.depth > rhs.depth }
             if (lhs.encoding == .rgb) != (rhs.encoding == .rgb) { return lhs.encoding == .rgb }
             if lhs.limitedRange != rhs.limitedRange { return !lhs.limitedRange }
@@ -277,13 +282,17 @@ public struct LinkReport: Sendable, Equatable {
         }
     }
 
-    /// The rates the link offers at a size that the mode list does not, the "connection-only
-    /// rates". Sizes are compared in pixels.
+    /// The rates the link offers at a size the mode list has, and the mode list does not offer
+    /// at that size: the "connection-only rates". On the desk the Lenovo's link offers
+    /// 3840 × 2160 at 24 and 25 Hz, and its mode list has 30, 50 and 60. Sizes are compared in
+    /// pixels and rates to the nearest hertz, so 59.94 counts as 60.
     public func connectionOnlyRates(listed: [ModeDescriptor]) -> [LinkTiming] {
         let known = Set(listed.map { RateKey(width: $0.pixelWidth, height: $0.pixelHeight, rate: Int($0.refreshRate.rounded())) })
+        let sizes = Set(known.map { RateKey(width: $0.width, height: $0.height, rate: 0) })
         var seen: Set<RateKey> = []
         return timings.filter { timing in
             let key = RateKey(width: timing.width, height: timing.height, rate: Int(timing.refreshRate.rounded()))
+            guard sizes.contains(RateKey(width: timing.width, height: timing.height, rate: 0)) else { return false }
             guard !known.contains(key), timing.refreshRate > 0, !seen.contains(key) else { return false }
             seen.insert(key)
             return true
