@@ -13,6 +13,9 @@ final class KeyCapture {
     private var source: CFRunLoopSource?
     /// Keys we claimed on the way down, so their release is swallowed too.
     private var claimed: Set<Int> = []
+    /// Routes a key instead of the key coordinator, for example to reach a mirror set.
+    /// Returns true when the key was claimed.
+    var handler: (@MainActor (MediaKey, Bool) -> Bool)?
 
     // Key types of the system-defined media key event, from IOKit's HID headers.
     private static let soundUp = 0
@@ -105,7 +108,7 @@ final class KeyCapture {
 
     private func route(_ key: MediaKey, identifier: Int, isDown: Bool, fine: Bool) -> Bool {
         if isDown {
-            if keys.handle(key, fine: fine) {
+            if handler?(key, fine) ?? keys.handle(key, fine: fine) {
                 claimed.insert(identifier)
                 return true
             }

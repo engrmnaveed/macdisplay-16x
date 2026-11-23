@@ -208,3 +208,51 @@ public final class ShortcutService {
         gathered[key] = (command, total, work)
     }
 }
+
+/// Key names for shortcuts typed as text, such as `ctrl+opt+1` or `cmd+shift+F13`. Key
+/// codes are the hardware codes of an ANSI keyboard, the same on every layout.
+public enum KeyNames {
+    public static let codes: [String: UInt16] = {
+        var table: [String: UInt16] = [
+            "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12,
+            "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22, "5": 23,
+            "=": 24, "9": 25, "7": 26, "-": 27, "8": 28, "0": 29, "]": 30, "o": 31, "u": 32, "[": 33, "i": 34,
+            "p": 35, "return": 36, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43, "/": 44,
+            "n": 45, "m": 46, ".": 47, "tab": 48, "space": 49, "`": 50, "delete": 51, "escape": 53,
+            "left": 123, "right": 124, "down": 125, "up": 126, "home": 115, "end": 119, "pageup": 116, "pagedown": 121,
+        ]
+        let functionCodes: [UInt16] = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111, 105, 107, 113, 106, 64, 79, 80, 90]
+        for (index, code) in functionCodes.enumerated() { table["f\(index + 1)"] = code }
+        return table
+    }()
+
+    /// Parses `ctrl+opt+1`. Modifiers: ctrl or control, opt, option or alt, shift, cmd or command.
+    public static func combo(parsing text: String) -> KeyCombo? {
+        let parts = text.lowercased().split(separator: "+").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard let key = parts.last, !key.isEmpty else { return nil }
+        var modifiers: KeyModifiers = []
+        for word in parts.dropLast() {
+            switch word {
+            case "ctrl", "control", "⌃": modifiers.insert(.control)
+            case "opt", "option", "alt", "⌥": modifiers.insert(.option)
+            case "shift", "⇧": modifiers.insert(.shift)
+            case "cmd", "command", "⌘": modifiers.insert(.command)
+            default: return nil
+            }
+        }
+        guard let code = codes[key] else { return nil }
+        return KeyCombo(keyCode: code, modifiers: modifiers, keyLabel: key.count > 1 ? key.uppercased() : key)
+    }
+
+    /// The text form of a combo, which `combo(parsing:)` reads back.
+    public static func text(for combo: KeyCombo) -> String {
+        var parts: [String] = []
+        if combo.modifiers.contains(.control) { parts.append("ctrl") }
+        if combo.modifiers.contains(.option) { parts.append("opt") }
+        if combo.modifiers.contains(.shift) { parts.append("shift") }
+        if combo.modifiers.contains(.command) { parts.append("cmd") }
+        let name = codes.first { $0.value == combo.keyCode }?.key ?? combo.keyLabel.lowercased()
+        parts.append(name)
+        return parts.joined(separator: "+")
+    }
+}

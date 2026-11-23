@@ -56,6 +56,24 @@ dist/display16x features                   # every feature and its operations
 
 `probe` is read-only and runs on its own, which makes it the thing to attach to a bug report. Every other command is sent to the running app over a socket only your user can open, with a timeout and a clear message when the app is not running. Each display gets one line: `confirmed` (read back from the device), `accepted` (sent or stored, not proven) or `failed` with the reason.
 
+Layout, from v0.2 (built and unit-tested, not yet run on hardware):
+
+```sh
+dist/display16x arrangement                                   # where every display is
+dist/display16x set main on --tag 2 --try                     # asks Keep or Revert
+dist/display16x set placement left:end --tag 2 --of-tag 1     # next to another display
+dist/display16x set mirror on --tag 2 --of-tag 1
+dist/display16x disconnect --tag 2 --try                      # out of use without unplugging
+dist/display16x reconnect --all
+dist/display16x preset save Desk && dist/display16x preset apply Desk
+dist/display16x shortcut add ctrl+opt+1 set preset Desk       # a global shortcut
+dist/display16x set protectLayout on                          # put the saved layout back after wake
+dist/display16x settings export backup.json
+dist/display16x help placement                                # values and an example for any feature
+```
+
+Every change to the arrangement, the main display, mirroring or a connection is recorded first, so `display16x revert` (with no display named) puts the last one back. A disconnect lasts for the login session only, and the app reconnects what it disconnected when it quits.
+
 ## What works today
 
 | Area | State |

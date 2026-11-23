@@ -8,6 +8,7 @@ import SwiftUI
 /// The panel under the menu bar item: one card per display, then app-wide controls.
 struct PanelView: View {
     @ObservedObject var model: PanelModel
+    var layoutModel: LayoutPanelModel?
     let quit: () -> Void
     var expandDetails = false
 
@@ -27,6 +28,9 @@ struct PanelView: View {
             }
             if !model.remembered.isEmpty {
                 RememberedSection(model: model)
+            }
+            if let layoutModel {
+                LayoutSection(model: layoutModel)
             }
             ForEach(model.advice) { advice in
                 AdviceRow(advice: advice, model: model)

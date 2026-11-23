@@ -163,3 +163,8 @@ public final class SystemLid: LidSensor {
         bus.publish(state ? .lidClosed : .lidOpened)
     }
 }
+
+extension HardwareProbe {
+    /// The Mac's model identifier, such as `Mac17,9`, for the connection policy's model rules.
+    public static var macModel: String? { sysctlString("hw.model") }
+}

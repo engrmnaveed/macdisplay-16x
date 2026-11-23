@@ -19,6 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var panelModel: PanelModel?
     private var keyCapture: KeyCapture?
     private var confirmations: ConfirmationWindowPresenter?
+    private var layoutConfirmations: LayoutConfirmationPresenter?
+    private let notices = NoticePresenter()
+    private var hotKeys: HotKeyCenter?
+    private var layoutPanelModel: LayoutPanelModel?
     private let indicatorPresenter = IndicatorWindowPresenter()
     private var subscription: EventBus.Subscription?
     private var accessibilityObserver: NSObjectProtocol?
@@ -66,10 +70,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         context.startServer()
         context.indicator.presenter = indicatorPresenter
         confirmations = ConfirmationWindowPresenter(context: context)
+        layoutConfirmations = LayoutConfirmationPresenter(context: context)
+        context.protection.onNotice = { [notices] notice in notices.show(notice) }
+        context.layoutCommands.reservedShortcuts = { HotKeyCenter.systemShortcuts() }
         keyCapture = KeyCapture(keys: context.keys, settings: context.settings)
+        keyCapture?.handler = { [weak context] key, fine in
+            guard let context else { return false }
+            return MirrorAwareKeys.handle(key, fine: fine, context: context)
+        }
         makeStatusItem()
         context.start()
         updateKeyCapture()
+        let hotKeys = HotKeyCenter(shortcuts: context.shortcuts)
+        hotKeys.start()
+        self.hotKeys = hotKeys
+        context.settings.onChange { [weak hotKeys] in hotKeys?.update() }
 
         subscription = context.bus.subscribe { [weak self] event in
             if event == .permissionsChanged { self?.updateKeyCapture() }
@@ -102,7 +117,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         keyCapture?.stop()
+        hotKeys?.stop()
         context?.shutdown()
+    }
+
+    /// `display16x://` links. macOS sends them here once the app's bundle declares the scheme.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let context else { return }
+        for url in urls where url.scheme?.lowercased() == URLCommandParser.scheme {
+            LinkHandler.handle(url, context: context)
+        }
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
@@ -144,7 +168,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let context, let button = statusItem?.button else { return }
         // The panel's content is built now and released when it closes.
         let model = PanelModel(context: context)
-        let hosting = NSHostingController(rootView: PanelView(model: model, quit: { NSApp.terminate(nil) }))
+        let layoutModel = LayoutPanelModel(context: context, hotKeys: hotKeys)
+        let hosting = NSHostingController(rootView: PanelView(model: model, layoutModel: layoutModel, quit: { NSApp.terminate(nil) }))
         hosting.sizingOptions = [.preferredContentSize]
         let popover = NSPopover()
         popover.behavior = .transient
@@ -152,6 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = hosting
         self.popover = popover
         panelModel = model
+        layoutPanelModel = layoutModel
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         hosting.view.window?.makeKey()
@@ -162,6 +188,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
         panelModel?.close()
         panelModel = nil
+        layoutPanelModel?.close()
+        layoutPanelModel = nil
         popover?.contentViewController = nil
         popover = nil
     }
@@ -172,7 +200,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 enum PanelSnapshot {
     static func write(context: AppContext, to path: String, expandDetails: Bool) {
         let model = PanelModel(context: context)
-        let view = PanelView(model: model, quit: {}, expandDetails: expandDetails)
+        let layoutModel = LayoutPanelModel(context: context, hotKeys: nil)
+        let view = PanelView(model: model, layoutModel: layoutModel, quit: {}, expandDetails: expandDetails)
             .background(Color(nsColor: .windowBackgroundColor))
         let hosting = NSHostingView(rootView: view)
         let size = hosting.fittingSize
@@ -192,5 +221,6 @@ enum PanelSnapshot {
             Log.app.error("The panel snapshot could not be written: \(error.localizedDescription)")
         }
         model.close()
+        layoutModel.close()
     }
 }

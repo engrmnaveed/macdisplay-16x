@@ -2,6 +2,8 @@ import Foundation
 
 // MARK: Feature identifiers
 
+// The names users type are kept under 20 characters, so the generated help can show them
+// in full.
 extension FeatureID {
     // Arrangement, main display and mirroring
     public static let main = FeatureID(rawValue: "main")
@@ -18,15 +20,15 @@ extension FeatureID {
     public static let protectMode = FeatureID(rawValue: "protectMode")
     public static let protectRotation = FeatureID(rawValue: "protectRotation")
     public static let protectionNotices = FeatureID(rawValue: "protectionNotices")
-    public static let allowMirrorTargetModes = FeatureID(rawValue: "allowMirrorTargetModes")
+    public static let allowMirrorTargetModes = FeatureID(rawValue: "mirrorTargetSizes")
     // Connection
     public static let connected = FeatureID(rawValue: "connected")
     public static let reconnectAll = FeatureID(rawValue: "reconnectAll")
-    public static let disconnectAllButMain = FeatureID(rawValue: "disconnectAllButMain")
+    public static let disconnectAllButMain = FeatureID(rawValue: "keepOnlyMain")
     public static let makeOnly = FeatureID(rawValue: "makeOnly")
     public static let allowDisconnectAll = FeatureID(rawValue: "allowDisconnectAll")
-    public static let autoDisconnectBuiltIn = FeatureID(rawValue: "autoDisconnectBuiltIn")
-    public static let triggersAutoDisconnect = FeatureID(rawValue: "triggersAutoDisconnect")
+    public static let autoDisconnectBuiltIn = FeatureID(rawValue: "autoBuiltInOff")
+    public static let triggersAutoDisconnect = FeatureID(rawValue: "turnsBuiltInOff")
     // Presets
     public static let preset = FeatureID(rawValue: "preset")
     public static let savePreset = FeatureID(rawValue: "savePreset")
@@ -45,6 +47,9 @@ extension FeatureID {
     public static let settingsReset = FeatureID(rawValue: "settingsReset")
     public static let commandLineAccess = FeatureID(rawValue: "commandLineAccess")
     public static let urlScheme = FeatureID(rawValue: "urlScheme")
+    // Shortcuts
+    public static let shortcuts = FeatureID(rawValue: "shortcuts")
+    public static let removeShortcut = FeatureID(rawValue: "removeShortcut")
 }
 
 // MARK: Registry
@@ -130,6 +135,10 @@ extension FeatureRegistry {
                           scope: .global, kind: .boolean, operations: flagOps),
         FeatureDescriptor(.urlScheme, title: "Links", summary: "Whether display16x:// links may send commands. Each link needs the token the panel shows.",
                           scope: .global, kind: .boolean, operations: flagOps),
+        FeatureDescriptor(.shortcuts, title: "Shortcuts", summary: "Global keyboard shortcuts. Get lists them. Use display16x shortcut add KEYS COMMAND to add one.",
+                          scope: .global, kind: .choice, operations: [.get, .set]),
+        FeatureDescriptor(.removeShortcut, title: "Remove shortcut", summary: "Removes the shortcut on the keys named, for example ctrl+opt+1.",
+                          scope: .global, kind: .choice, operations: [.set]),
     ]
 
     /// Every feature of v0.1 and v0.2. Resolution can also step along the size strip, and
@@ -212,6 +221,9 @@ public final class LayoutCommands: CommandExtension {
     public let transfer: SettingsTransferService
     /// Draws the indicator for "indicator by command".
     public weak var indicator: IndicatorCoordinator?
+    public weak var shortcuts: ShortcutService?
+    /// The shortcuts macOS reserves, for conflict warnings. Supplied by the app.
+    public var reservedShortcuts: (@MainActor () -> [(combo: KeyCombo, name: String)])?
 
     public init(
         registry: DisplayRegistry,
@@ -689,6 +701,25 @@ public final class LayoutCommands: CommandExtension {
         case .settingsReset:
             transfer.reset()
             return CommandResult(report: "settings reset to their defaults")
+        case .shortcuts:
+            guard let shortcuts else { return .failure("shortcuts are not available here") }
+            if command.operation == .get {
+                let lines = shortcuts.bindings.map { "\($0.combo.description) (\(KeyNames.text(for: $0.combo))): \($0.displayTitle)" }
+                return CommandResult(report: lines.isEmpty ? "no shortcuts" : lines.joined(separator: "\n"))
+            }
+            guard case .choice(let text)? = command.value, let binding = try? JSONDecoder().decode(ShortcutBinding.self, from: Data(text.utf8)) else {
+                return .failure("shortcuts needs a shortcut. Use display16x shortcut add KEYS COMMAND")
+            }
+            let conflicts = shortcuts.add(binding, reserved: reservedShortcuts?() ?? [])
+            if let refusal = conflicts.first(where: { $0.refuses }) { return .failure(refusal.message) }
+            let warnings = conflicts.map(\.message)
+            return CommandResult(report: (["shortcut \(binding.combo.description) runs: \(binding.displayTitle)"] + warnings).joined(separator: "\n"))
+        case .removeShortcut:
+            guard let shortcuts else { return .failure("shortcuts are not available here") }
+            guard case .choice(let text)? = command.value, let combo = KeyNames.combo(parsing: text) else {
+                return .failure("name the keys, for example ctrl+opt+1")
+            }
+            return shortcuts.remove(combo) ? CommandResult(report: "removed \(combo.description)") : .failure("no shortcut uses \(combo.description)")
         default:
             return .failure("\(feature.id) is not available yet")
         }
