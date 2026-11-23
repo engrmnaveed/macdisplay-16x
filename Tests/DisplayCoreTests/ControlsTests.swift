@@ -167,6 +167,28 @@ struct BrightnessTests {
         #expect(notBlack.clamp(0, origin: .keyboard) == 0)
     }
 
+    @Test("An automatic change gets the floor of a restore, and never lands on black unasked")
+    func automationSafety() {
+        let guarded = BrightnessSafety(restoreFloor: 0.15, allowBlackAtZero: false, zeroIsBlack: true)
+        // The floor, exactly as for a restore: software dimming only.
+        for value in [0.0, 0.02, 0.18, 0.4, 1.0] {
+            #expect(guarded.clamp(value, origin: .automation, softwareRange: 0.2) == guarded.clamp(value, origin: .restore, softwareRange: 0.2), "\(value)")
+        }
+        #expect(guarded.clamp(0.02, origin: .automation) == 0.02)
+        // A restore puts back a value that was checked when it was chosen. A rule's value
+        // was not, so zero is held just above black, as it is for a command.
+        #expect(guarded.clamp(0, origin: .restore) == 0)
+        #expect(guarded.clamp(0, origin: .automation) == guarded.clamp(0, origin: .command))
+        #expect(guarded.clamp(0, origin: .automation) > 0)
+
+        let allowed = BrightnessSafety(restoreFloor: 0.15, allowBlackAtZero: true, zeroIsBlack: true)
+        #expect(allowed.clamp(0, origin: .automation) == 0, "black is there once the user allowed it")
+        #expect(allowed.clamp(0, origin: .automation, softwareRange: 0.2) == 0.15, "but not for someone coming back")
+
+        let notBlack = BrightnessSafety(restoreFloor: 0.15, allowBlackAtZero: false, zeroIsBlack: false)
+        #expect(notBlack.clamp(0, origin: .automation) == 0)
+    }
+
     @Test("Keys move along 16 segments, with fine steps of a quarter segment")
     func steps() {
         let scale = StepScale.standard

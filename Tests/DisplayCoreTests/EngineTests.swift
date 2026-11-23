@@ -401,6 +401,67 @@ struct CommandEngineTests {
         #expect(ddc.values[.hardwareBrightness] == 50)
     }
 
+    @Test("An automatic change passes the gate as a restore does, and safe mode refuses it")
+    func gateBlocksAutomation() async {
+        let safe = Rig(safeMode: true)
+        let untouched = safe.plug(Fixture.lenovo())!
+        await safe.start()
+        let blocked = await safe.run(.set, .brightness, on: .tag(1), value: .absolute(0.5), origin: .automation)
+        #expect(blocked.error == "automatic changes are paused: safe mode is on")
+        #expect(untouched.writes.isEmpty)
+        #expect(await safe.run(.get, .brightness, on: .tag(1), origin: .automation).error == nil)
+
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        #expect(await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.5), origin: .automation).succeeded)
+        #expect(ddc.values[.hardwareBrightness] == 50)
+
+        // Asleep, the gate is closed for it and stays open for a command.
+        rig.bus.publish(.willSleep)
+        let asleep = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.3), origin: .automation)
+        #expect(asleep.error == "automatic changes are paused: the Mac is asleep")
+        #expect(ddc.values[.hardwareBrightness] == 50)
+    }
+
+    @Test("A value an automatic change wrote is not the user's choice, and leaves an earlier choice standing")
+    func automationIsNotAChoice() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        let tag = DisplayTag(1)
+        #expect(!rig.controls.isChosen(.brightness, for: tag))
+
+        #expect(await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.4), origin: .automation).succeeded)
+        #expect(ddc.values[.hardwareBrightness] == 40)
+        #expect(rig.controls.trackedValue(.brightness, for: tag)?.isClose(to: 0.4) == true)
+        #expect(!rig.controls.isChosen(.brightness, for: tag), "a rule's value is tracked, and it is nobody's choice")
+        let announced = rig.events.compactMap { event -> ValueChange? in
+            if case .valueChanged(let change) = event, change.control == .brightness { return change }
+            return nil
+        }
+        #expect(announced.last?.origin == .automation)
+
+        // The same as a restore: what the user chose by hand stays a choice.
+        #expect(await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.6), origin: .interface).succeeded)
+        #expect(rig.controls.isChosen(.brightness, for: tag))
+        #expect(await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.3), origin: .automation).succeeded)
+        #expect(rig.controls.isChosen(.brightness, for: tag))
+        #expect(rig.controls.trackedValue(.brightness, for: tag)?.isClose(to: 0.3) == true)
+    }
+
+    @Test("An automatic volume change leaves a muted monitor muted, as a restore does")
+    func automationKeepsMute() async {
+        let rig = Rig()
+        let ddc = rig.plug(Fixture.lenovo())!
+        await rig.start()
+        _ = await rig.run(.set, .mute, on: .tag(1), value: .flag(true))
+        #expect(rig.controls.isMuted(DisplayTag(1)))
+        #expect(await rig.run(.set, .volume, on: .tag(1), value: .absolute(0.5), origin: .automation).succeeded)
+        #expect(ddc.values[.volume] == 50)
+        #expect(rig.controls.isMuted(DisplayTag(1)))
+    }
+
     @Test("Putting values back after sleep is switched per display through the engine, also for a remembered display")
     func restoreAfterWakeSetting() async {
         let rig = Rig()

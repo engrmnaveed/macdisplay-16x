@@ -14,6 +14,24 @@ The owner ended the v0.2 build session after the hardware checks. Left open, to 
 2. The offer of decision 13, built and unit-tested, not yet seen on screen.
 3. The built-in panel coming back when the last external display goes away, unit-tested only, and the owner's decision on turning it off automatically at all (entry below).
 
+## 23 November 2026 · A change origin for automation, and what comes with it
+
+Asked for by the planning thread, built by the core session on a branch cut from the v0.2 line. Unit tests only, nothing was run on hardware.
+
+Until now the app's own rule-driven writes (layout protection, turning the built-in panel off) called themselves a restore. They now have an origin of their own, **automation**. A restore puts back what was there before. Automation acts on a rule the user set up.
+
+- **It is automatic.** It passes the automation gate exactly as a restore does: closed while the app starts, while the Mac sleeps, in another user's session, and for the whole run in safe mode.
+- **Nothing from outside can claim it.** Commands from the command line tool and from links always run as commands, and shortcuts as keys.
+- **Everywhere else it behaves as a restore does,** with one exception below: no Keep or Revert countdown, no on-screen indicator, a muted monitor stays muted, and a write the monitor ignores is not counted as evidence against the control.
+- **The exception: an automatic brightness change never lands on black unasked.** A restore puts back a value that was checked when the user chose it. A rule's value was not, and nobody is watching it arrive. So it gets the restore floor and, like a command, stops just above black unless the user allowed black at zero. No rule writes brightness yet, so this changes nothing today. **Decision needed:** confirm, or say that automation should match a restore here too.
+- **A value a rule wrote is tracked and is nobody's choice,** and it leaves an earlier choice standing, as a restore does. One consequence to settle before the first rule writes a value: with "Put my values back after sleep" on, what is put back is the last value written, so the rule's value and not the one the user chose by hand.
+
+**What an older build does with the new word.** No file holds an origin for its own sake. The recovery store has none and the log is text. The released 0.1.0 can meet an origin only in a request on the command socket, where an unknown word makes it refuse the whole request ("the request could not be read") and change nothing. No build sends automation there.
+
+From v0.2 on the settings file holds commands, in presets and shortcuts, and each carries an origin. The app stores only "command" and "keyboard" there and replaces the origin when the command is run, so the new word never reaches the file. **Rule: keep it that way.** **Decision needed:** one stored command a build cannot read, whether for an origin, an operation or a value added later, makes that build set the whole settings file aside and start from defaults. It should cost that one preset or shortcut. This is worth closing before v0.2 ships, because afterwards v0.2 builds are the older builds.
+
+**The gate is checked before each automatic write, not once per pass.** Restored values do this already, because each one goes through the command engine. Layout protection checks once and then changes the mode of each display in turn, waiting for the system to settle each time, so a write can go out after the Mac has begun to sleep. Reported to the planning thread for the v0.2 session.
+
 ## 23 November 2026 · The owner checks: what macOS does when a layout changes, and two bugs they found
 
 Mac17,9, macOS 27.2.1, the Lenovo P32p-20 on HDMI and the LG SDQHD on DisplayPort, with the owner at the desk. Every result is in the feasibility notes. What matters for the product:

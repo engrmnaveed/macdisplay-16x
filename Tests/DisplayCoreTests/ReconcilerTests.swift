@@ -49,15 +49,18 @@ struct EventTests {
         let rig = Rig()
         #expect(!rig.gate.isOpen)
         #expect(rig.gate.check(.restore) == .blocked("automatic changes are paused: the app is still starting"))
+        #expect(rig.gate.check(.automation) == rig.gate.check(.restore))
         #expect(rig.gate.check(.interface) == .allowed)
         #expect(rig.gate.check(.keyboard) == .allowed)
 
         await rig.start()
         #expect(rig.gate.isOpen)
         #expect(rig.gate.check(.restore) == .allowed)
+        #expect(rig.gate.check(.automation) == .allowed)
 
         rig.bus.publish(.willSleep)
         #expect(rig.gate.closedReason == "the Mac is asleep")
+        #expect(rig.gate.check(.automation) == .blocked("automatic changes are paused: the Mac is asleep"))
         rig.bus.publish(.didWake)
         #expect(rig.gate.isOpen)
 
@@ -77,11 +80,15 @@ struct EventTests {
         #expect(!rig.gate.isOpen)
         #expect(rig.gate.isSafeMode)
         #expect(rig.gate.closedReason == "safe mode is on")
+        for origin in ChangeOrigin.allCases {
+            #expect(rig.gate.check(origin) == (origin.isAutomatic ? .blocked("automatic changes are paused: safe mode is on") : .allowed), "\(origin)")
+        }
     }
 
     @Test("Every origin is either manual or automatic")
     func origins() {
-        #expect(ChangeOrigin.allCases.filter(\.isAutomatic) == [.sync, .restore, .startup])
+        #expect(ChangeOrigin.allCases.filter(\.isAutomatic) == [.sync, .restore, .automation, .startup])
+        #expect(ChangeOrigin.allCases.filter { !$0.isAutomatic } == [.interface, .keyboard, .command, .outsideChange])
     }
 }
 
