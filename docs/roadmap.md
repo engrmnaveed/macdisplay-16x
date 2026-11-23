@@ -123,6 +123,8 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 
 **0.2.0 was tagged on 23 November 2026**, at the merge of [pull request 9](https://github.com/engrmnaveed/macdisplay-16x/pull/9), by the owner with `scripts/tag-release 0.2.0 --push`. It is the first run of the release workflow. From here a release is two steps: `scripts/prepare-release X.Y.Z` through a pull request, then `scripts/tag-release X.Y.Z --push`.
 
+**0.2.0 was published on 23 November 2026**, after the owner's approval, as the first release. **0.3.0 was tagged on 24 November 2026.** Both are signed ad hoc.
+
 **Signing, until the project certificate exists.** The workflow signs with what the `release-signing` environment holds. It holds nothing yet, so 0.2.0 is signed ad hoc: the first launch has to be allowed by hand, and every update costs the Accessibility grant. The owner's certificate, its three secrets and the tap's deploy key change that from the release after they are added.
 
 ### Interface pass
@@ -214,7 +216,7 @@ Set by the owner on 23 November 2026: the next milestones are built in new sessi
 
 Flexible HiDPI scaling and custom resolutions through generated overrides, with a preview of what will be written, administrator authorization, and a one-click removal. Virtual screens for headless and remote use. Mirror-based HiDPI for panels that cannot get it natively, labelled with its GPU cost.
 
-**Built on 23 November 2026** on the branch `claude/v0-3-scaling-bb2160`, not pushed, with 440 unit tests passing. All 33 inventory rows are built at unit-test level, in new files, with small additive edits to nine existing ones and no change needed from the core session.
+**Built on 23 November 2026, on `main` as [pull request 10](https://github.com/engrmnaveed/macdisplay-16x/pull/10) and tagged `v0.3.0` on 24 November**, with 440 unit tests passing. Its first CI build failed on one line the runner's older compiler read differently, a local constant named like the method it calls. All 33 inventory rows are built at unit-test level, in new files, with small additive edits to nine existing ones and no change needed from the core session.
 
 - **Proven on hardware, with the owner at the desk:** macOS 27 reads an override file from `/Library/Displays` when the display connects, and the app's own disconnect and reconnect is enough to apply it. Removing the file and reconnecting restores the exact mode list. A virtual screen can be created and released in a running process, is gone within three seconds, and never outlives the process.
 - **What macOS does with an override:** entries are backing-store sizes. An 8-byte entry gives the low-density size and its half as HiDPI, a 12-byte entry gives its half as HiDPI, and a 16-byte entry is ignored. The LG's full grid as HiDPI was left out twice, so the app checks the mode list after activation and says what did not appear.

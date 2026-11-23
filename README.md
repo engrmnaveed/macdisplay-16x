@@ -192,6 +192,10 @@ The menu, the keys and the CLI all build a command and hand it to one command en
 - [AGENTS.md](AGENTS.md): rules for working on the project
 - [THIRD_PARTY.md](THIRD_PARTY.md): references and credits
 
+## How it is built
+
+Display 16X is designed and directed by its maintainer at 16X Brains, who decides what gets built, approves every change before it reaches `main`, and tests the app in daily use on real monitors. The code is written by Claude, Anthropic's AI model, working as a coding agent under that direction. Every change runs through the unit tests and CI, and the [feasibility notes](docs/feasibility.md) and each release's notes say what was checked on hardware and what was only unit-tested.
+
 ## Where your data lives
 
 Settings are one JSON file in `~/Library/Application Support/com.16xbrains.macdisplay16x/`. Nothing leaves your Mac: there are no accounts and no telemetry. Deleting that folder resets the app.
