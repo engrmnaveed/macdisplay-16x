@@ -67,6 +67,8 @@ The interface is drawn in three layers, so that a new look is a small change:
 | The pieces | `Sources/Display16XApp/Design/Primitives.swift` | How a bar, a text-size stop, a chip, a card or a banner is drawn from those values. |
 | The surfaces | `Sources/Display16XApp/Surfaces/` | Which pieces a surface is made of, and its words. A surface has no color, font, radius, distance or symbol of its own, and a test fails when one does. |
 
+The app icon is one square picture of 1024 pixels. `scripts/make-icon.sh MASTER.png` makes `packaging/AppIcon.icns` from it with `sips` and `iconutil`, and the packaging script puts that file into the bundle when it is there.
+
 To check a change, run `scripts/render-surfaces.sh` and look at `renders/surfaces/sheets/skin-light.png` and `skin-dark.png`, which show every value and piece on one picture, then at the other sheets in that folder. `DISPLAY16X_COMPARE=before:after swift test --filter RenderHarness/compare` lists the pictures that differ between two runs.
 
 ## Command line

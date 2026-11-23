@@ -1,3 +1,4 @@
+import AppKit
 import DisplayCore
 import SwiftUI
 
@@ -288,13 +289,24 @@ enum AboutLinks {
     static let company = URL(string: "https://16xbrains.com/")
 }
 
-/// The app's mark until the icon is chosen: a display with its menu bar, in the accent color.
+/// The app's icon when the bundle carries one, and the drawn mark otherwise.
 struct AppMark: View {
+    private var icon: NSImage? {
+        Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap { NSImage(contentsOf: $0) }
+    }
+
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Skin.radius.card, style: .continuous)
-        return ScreenGlyph(aspect: 16.0 / 10.0, isMain: true, tint: Skin.color.hudAccent)
-            .frame(width: Skin.size.aboutMark, height: Skin.size.aboutMark)
-            .background(Skin.color.hud, in: shape)
-            .accessibilityHidden(true)
+        if let icon {
+            Image(nsImage: icon)
+                .resizable()
+                .frame(width: Skin.size.aboutMark, height: Skin.size.aboutMark)
+                .accessibilityHidden(true)
+        } else {
+            let shape = RoundedRectangle(cornerRadius: Skin.radius.card, style: .continuous)
+            ScreenGlyph(aspect: 16.0 / 10.0, isMain: true, tint: Skin.color.hudAccent)
+                .frame(width: Skin.size.aboutMark, height: Skin.size.aboutMark)
+                .background(Skin.color.hud, in: shape)
+                .accessibilityHidden(true)
+        }
     }
 }

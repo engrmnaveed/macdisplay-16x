@@ -42,6 +42,14 @@ cp "$BIN/Display16XApp" "$APP/Contents/MacOS/${PRODUCT_NAME}"
 cp "$BIN/display16x" "$APP/Contents/MacOS/display16x"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
 
+# The icon, when one has been made with scripts/make-icon.sh.
+ICON_KEYS=""
+if [[ -f packaging/AppIcon.icns ]]; then
+    cp packaging/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+    ICON_KEYS="    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>"
+fi
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -53,6 +61,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <string>${PRODUCT_NAME}</string>
     <key>CFBundleExecutable</key>
     <string>${PRODUCT_NAME}</string>
+${ICON_KEYS}
     <key>CFBundleIdentifier</key>
     <string>${BUNDLE_ID}</string>
     <key>CFBundleInfoDictionaryVersion</key>
