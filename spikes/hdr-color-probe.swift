@@ -271,11 +271,12 @@ if let cls = NSClassFromString("CBBlueLightClient") as? NSObject.Type {
     let client = cls.init()
     let selector = NSSelectorFromString("getBlueLightStatus:")
     if class_respondsToSelector(cls, selector), let implementation = class_getMethodImplementation(cls, selector) {
-        // {active, enabled, sunSchedulePermitted, mode, schedule, disableFlags, available}, padded.
+        // {BBBi{{ii}{ii}}QB}: the second flag is "on now", the one setEnabled: changes. The first
+        // flag's meaning is not known. Mode 0 is "no schedule". The last flag reads "available".
         var status = [UInt8](repeating: 0, count: 64)
         let ok = status.withUnsafeMutableBytes { unsafeBitCast(implementation, to: StatusFunction.self)(client, selector, $0.baseAddress!) }
         let mode = status.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 4, as: Int32.self) }
-        print("  Night Shift: read \(ok), active \(status[0] != 0), enabled \(status[1] != 0), schedule mode \(mode), available \(status[32] != 0)")
+        print("  Night Shift: read \(ok), on \(status[1] != 0), first flag \(status[0] != 0), schedule mode \(mode), available \(status[32] != 0)")
     }
 } else {
     print("  Night Shift: client class missing")

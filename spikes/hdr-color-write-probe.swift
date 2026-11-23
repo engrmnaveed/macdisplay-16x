@@ -4,7 +4,7 @@
 //   swiftc -O spikes/hdr-color-write-probe.swift -o /tmp/hdr-color-write-probe
 //   /tmp/hdr-color-write-probe hdr <display> --yes                 HDR on (or off) and back
 //   /tmp/hdr-color-write-probe profile <display> [NAME] --yes      assign a system profile and back
-//   /tmp/hdr-color-write-probe nightshift --yes                    Night Shift off (or on) and back
+//   /tmp/hdr-color-write-probe nightshift --yes                    Night Shift on (or off) and back
 //
 //   --hold SECONDS   how long the change stays before it is put back (default 10)
 //
@@ -198,13 +198,16 @@ func setCustom(_ id: CGDirectDisplayID, _ entries: [String: Any]) -> Bool {
 typealias StatusFunction = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Bool
 let blueLight: NSObject? = (NSClassFromString("CBBlueLightClient") as? NSObject.Type)?.init()
 
-/// active (on now), enabled, schedule mode.
-func nightShift() -> (active: Bool, enabled: Bool, mode: Int32)? {
+/// The status struct the runtime describes as {BBBi{{ii}{ii}}QB}. The second flag is "on now":
+/// it is the one `setEnabled:` changes (checked on 24 November 2026). The first stayed 1
+/// throughout and its meaning is not known. Mode 0 is "no schedule", and the schedule's hours
+/// are kept even then.
+func nightShift() -> (on: Bool, firstFlag: Bool, mode: Int32)? {
     guard let blueLight, let (function, selector) = implementation(blueLight, "getBlueLightStatus:") else { return nil }
     var status = [UInt8](repeating: 0, count: 64)
     let ok = status.withUnsafeMutableBytes { unsafeBitCast(function, to: StatusFunction.self)(blueLight, selector, $0.baseAddress!) }
     guard ok else { return nil }
-    return (status[0] != 0, status[1] != 0, status.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 4, as: Int32.self) })
+    return (status[1] != 0, status[0] != 0, status.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 4, as: Int32.self) })
 }
 
 func setNightShift(_ on: Bool) -> Bool {
@@ -277,17 +280,17 @@ case "nightshift":
         print("Night Shift's status could not be read. Nothing was changed.")
         exit(1)
     }
-    print("\(stamp()) before: active \(before.active), enabled \(before.enabled), mode \(before.mode)")
-    putBack = { _ = setNightShift(before.active) }
-    print("\(stamp()) Night Shift \(before.active ? "off" : "on"): \(setNightShift(!before.active))")
+    print("\(stamp()) before: on \(before.on), first flag \(before.firstFlag), schedule mode \(before.mode)")
+    putBack = { _ = setNightShift(before.on) }
+    print("\(stamp()) Night Shift \(before.on ? "off" : "on"): \(setNightShift(!before.on))")
     RunLoop.main.run(until: Date().addingTimeInterval(1))
-    if let during = nightShift() { print("\(stamp()) during: active \(during.active), enabled \(during.enabled), mode \(during.mode)") }
+    if let during = nightShift() { print("\(stamp()) during: on \(during.on), first flag \(during.firstFlag), schedule mode \(during.mode)") }
     wait(hold)
-    print("\(stamp()) back \(before.active ? "on" : "off"): \(setNightShift(before.active))")
+    print("\(stamp()) back \(before.on ? "on" : "off"): \(setNightShift(before.on))")
     RunLoop.main.run(until: Date().addingTimeInterval(1))
     if let after = nightShift() {
-        print("\(stamp()) after: active \(after.active), enabled \(after.enabled), mode \(after.mode)")
-        print("\(stamp()) back as it was: \(after.active == before.active && after.mode == before.mode)")
+        print("\(stamp()) after: on \(after.on), first flag \(after.firstFlag), schedule mode \(after.mode)")
+        print("\(stamp()) back as it was: \(after.on == before.on && after.mode == before.mode)")
     }
 
 default:

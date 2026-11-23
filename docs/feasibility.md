@@ -862,7 +862,7 @@ Each needs the owner at the desk, a development build or the build in daily use 
 
 The Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, rotated 270°. The MacBook's lid is closed, so its XDR panel is out of use. Run at 01:20, with the owner's copy of Display 16X running and other display utilities left as they were.
 
-**What stays unproven** until a writing check runs with the owner: what switching HDR does to the LG (whether it leaves and returns, its headroom in HDR, what happens to the color table), whether a profile assigned through ColorSync takes effect and comes off cleanly, and turning Night Shift off and back. Nothing about the built-in XDR panel can be learned with the lid closed beyond what the registry says, and no reference preset exists on this desk.
+**What stays unproven:** choosing a link color mode and switching dithering (no interface with a known shape), everything about the built-in XDR panel beyond what the registry says (the lid is closed), reference presets (no Apple display), and anything the app itself does: the writing checks below were run by the probe, not by the app.
 
 ### What macOS reports (read-only, `spikes/hdr-color-probe.swift`)
 
@@ -887,17 +887,42 @@ The Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, rotated 270°. The MacBook
 - **Dithering is reported as on for all five framebuffers**, the three without a display included. Reading it is public IOKit. CoreDisplay exports `CGXDisplayGetDither` and `CGXDisplaySetDither`, again with no documented arguments.
 - **The closed built-in panel's headroom is in the registry:** `EDRPotentialHeadroom` reads 16.0 (16.16 fixed point) on its backlight entries. That is the only fact about the XDR panel this desk gives with the lid closed.
 - **Reference presets** are offered through `MPDisplay` (`hasPresets`, `presets`, `activePreset`, `setActivePreset:`, all typed) and SkyLight's preset functions. Neither monitor has any. They exist on Apple's own displays and XDR panels.
-- **Night Shift and True Tone** are read through CoreBrightness's `CBBlueLightClient` and `CBTrueToneClient`, both typed. At 01:20 Night Shift was active (on its schedule) and not manually enabled. True Tone reads supported and enabled, and not available, because no display that has it is in use.
+- **Night Shift and True Tone** are read through CoreBrightness's `CBBlueLightClient` and `CBTrueToneClient`, both typed. Night Shift was off, with no schedule (mode 0); the hours of a custom schedule are kept even so. Of the status struct's first two flags, the second is "on now": it is the one `setEnabled:` changes. The first stayed set throughout and its meaning is not known. True Tone reads supported and enabled, and not available, because no display that has it is in use.
 - **Installed profiles:** 14 in the system folder (sRGB, Display P3, ITU-709, ITU-2020, AdobeRGB and the generic ones), 7 for all users, 4 in the displays folder (the monitors' own and the one v0.3's probe left), none for this user.
 - No custom profile is assigned anywhere, so the gamma-table backend still reports itself safe.
 
-### The writing checks, as prepared (`spikes/hdr-color-write-probe.swift`)
+### The writing checks, with the owner (01:27 to 01:29)
 
-Each one prints the state, makes one change, logs every reconfiguration callback, prints the state again, holds for 10 seconds, puts back what it recorded and checks it. Ctrl-C puts it back too.
+`spikes/hdr-color-write-probe.swift`. Each check prints the state, makes one change, logs every reconfiguration callback, prints the state again, holds for 10 seconds, puts back what it recorded and checks it. Ctrl-C puts it back too.
 
-1. `hdr 5 --yes`: HDR on for the LG through the System Settings switch, and off again. Prints the window server's and System Settings' state, the headroom, the color space, the mode and the color table before, during and after.
-2. `profile 5 --yes`: `sRGB Profile.icc` as the LG's custom profile through public ColorSync, then the factory profile back (`kCFNull`, which the header documents as the reset). Prints the custom profiles, the profile in use and the color table.
-3. `nightshift --yes`: Night Shift off if it is on, and back. This is the rule "turn off only what it changed" seen from the system's side.
+**HDR on the LG and off again** (`hdr 5 --yes`), through the System Settings switch:
+
+| | Before | HDR on | After |
+| --- | --- | --- | --- |
+| Window server and System Settings | off, off | on, on | off, off |
+| Headroom now, potential, reference | 1.0, 1.0, 0.0 | 1.2, 2.95, 0.0 | 1.0, 1.0, 0.0 |
+| Mode | 2304 × 2048 HiDPI, 60 Hz | the same | the same |
+| Color table | 1024 entries, plain ramp | plain ramp | plain ramp |
+| Color space | unnamed, not extended | unchanged | unchanged |
+
+- **The switch returns after about 0.75 seconds and the reconfiguration happens inside the call**: a "begin" and an empty end for both displays, 0.7 seconds after it was sent, with no add, remove, mode or move flag. The LG did not leave the system, and the Lenovo got the same pair of callbacks though nothing changed for it.
+- **The owner saw the LG go black briefly** at each switch, **and the picture looked washed out** while HDR was on. macOS shows ordinary windows at the SDR level inside the HDR range, so this is expected, and it is why a switch to HDR needs Keep and Revert in the interface.
+- **The potential headroom is the monitor's peak over the reference white**: 2.95 is the 295 nits of its EDID over 100. The current headroom rose only to 1.2, because nothing on screen asked for more.
+- **The color table stayed a plain ramp in HDR.** macOS does not put its own table in place for HDR on this monitor.
+- Back as it was: yes.
+
+**The sRGB profile on the LG and back** (`profile 5 --yes`), through public ColorSync:
+
+- Assigned to the LG's factory profile ID "1". **It took effect at once, with no reconfiguration callback**: the profile in use read "sRGB IEC61966-2.1" a second later. Passing `kCFNull` for the same ID put the factory profile back, and the custom profile list was empty again.
+- The color table stayed a plain ramp with either profile.
+- **While the custom profile was assigned, the core's color table check would have called table writes unsafe for every display** (`GammaTableBackend.safety()` treats any custom profile as unsafe). Choosing a profile through the app therefore switches software dimming off everywhere for as long as the profile is assigned. See the domain log.
+- Back as it was: yes.
+
+**Night Shift on and off again** (`nightshift --yes`):
+
+- The first run read the wrong flag as "on now". Night Shift was off, so it sent "off" (no change), then "back on", which turned Night Shift on. It was turned off again by hand at 01:28:50, and the status matched the one before the run. The spike was corrected to read the second flag.
+- The corrected run turned Night Shift on and then off, read back each time, with the schedule mode unchanged. `setEnabled:` is a clean switch in both directions.
+- Back as it was: yes.
 
 **A link color mode change was not prepared**: no interface with a known shape can choose one, and a guessed call on the owner's monitor is not a check worth its risk. Reference presets need an Apple display.
 
