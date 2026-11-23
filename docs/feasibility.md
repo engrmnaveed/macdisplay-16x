@@ -924,6 +924,8 @@ The Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, rotated 270°. The MacBook
 - The corrected run turned Night Shift on and then off, read back each time, with the schedule mode unchanged. `setEnabled:` is a clean switch in both directions.
 - Back as it was: yes.
 
+**Prepared and not run, by the owner's choice: a virtual screen with HDR modes** (`spikes/virtual-hdr-write-probe.swift`). `CGVirtualDisplayMode` takes a transfer function per mode (`initWithWidth:height:refreshRate:transferFunction:`, typed). The probe makes the v0.3 probe's screen again, with the same identity so macOS has no reason to keep a new color profile, with one mode at transfer function 0 and one at 2 (the PQ code of CTA-861, which the framebuffer registry also uses), and reads whether macOS then offers HDR for it. Carried forward: until it runs, which transfer function codes macOS accepts is not known.
+
 **A link color mode change was not prepared**: no interface with a known shape can choose one, and a guessed call on the owner's monitor is not a check worth its risk. Reference presets need an Apple display.
 
 ## Running the probes
@@ -951,6 +953,7 @@ swiftc -O spikes/override-write-probe.swift -o /tmp/override-write-probe        
 swiftc -O spikes/virtual-display-write-probe.swift -o /tmp/virtual-display-write-probe  # creates a display: see its header
 swiftc -O spikes/hdr-color-probe.swift -o /tmp/hdr-color-probe && /tmp/hdr-color-probe
 swiftc -O spikes/hdr-color-write-probe.swift -o /tmp/hdr-color-write-probe            # writes: see its header
+swiftc -O spikes/virtual-hdr-write-probe.swift -o /tmp/virtual-hdr-write-probe        # creates a display: see its header
 ```
 
 The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `connection-probe` is read-only, sends nothing to a monitor, and prints no serial number or UUID. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header. `override-probe` and `virtual-display-probe` are read-only and create nothing. `override-write-probe.swift` writes a file as administrator and `virtual-display-write-probe.swift` creates a display: both are run only with the owner present, see their headers. `hdr-color-probe` is read-only, calls private interfaces only where their shape is known, and prints no serial number or UUID. `hdr-color-write-probe.swift` switches HDR, a color profile or Night Shift for a few seconds and puts it back: run only with the owner present.
