@@ -83,6 +83,9 @@ public enum DisplayEvent: Sendable, Equatable {
     case valueChanged(ValueChange)
     /// A mode change started or stopped waiting for Keep or Revert.
     case modeConfirmationChanged(DisplayTag)
+    /// A change to arrangement, mirroring, the main display or a connection started or
+    /// stopped waiting for Keep or Revert. Added in v0.2.
+    case layoutConfirmationChanged
     case gateChanged
     case permissionsChanged
     case settingsChanged

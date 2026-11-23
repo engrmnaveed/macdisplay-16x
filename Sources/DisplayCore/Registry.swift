@@ -53,6 +53,9 @@ public final class DisplayRegistry {
     private let settings: SettingsStore
     private let scheduler: any Scheduler
     public private(set) var live: [DisplayTag: LiveDisplay] = [:]
+    /// Lets connection management name the state of a display that is not connected, such
+    /// as one the app took out of use. Nil, or a nil answer, leaves the plain state.
+    public var stateOverride: (@MainActor (DisplayTag) -> DisplayState?)?
 
     public init(settings: SettingsStore, scheduler: any Scheduler) {
         self.settings = settings
@@ -68,7 +71,8 @@ public final class DisplayRegistry {
     }
 
     public func state(of tag: DisplayTag) -> DisplayState {
-        live[tag] != nil ? .connected : .remembered
+        if live[tag] != nil { return .connected }
+        return stateOverride?(tag) ?? .remembered
     }
 
     public func liveDisplay(for systemID: SystemDisplayID) -> LiveDisplay? {

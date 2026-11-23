@@ -6,6 +6,29 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.2 core: what it adds to the v0.1 core, and the rules it adopted
+
+**Where v0.2 touches the v0.1 core.** No existing behavior changed: every v0.1 test passes unchanged. Five additions, each a hook the architecture reserved or the smallest step that leaves v0.1 alone:
+
+1. `CommandEngine.extensions`: handlers that see a command after validation and the automation gate, and may answer it. Every v0.2 feature, and the new size steps, named sizes and rotation steps, go through it. A command no extension claims runs exactly as before.
+2. `DisplayRegistry.stateOverride`: lets connection management report `disconnectedByApp` and `disconnectedBySystem`, the two states v0.1 reserved.
+3. One event, `layoutConfirmationChanged`, for Keep and Revert on a layout or connection change.
+4. Optional `layout` sections in the settings document and in each record's settings, and three fields in the recovery store (the layout before a change, whether it waits for Keep, and the displays the app disconnected). The settings version stays 1. A v0.1 build reads the file and ignores the new keys, and a higher version would make it set the whole file aside. The cost: a v0.1 build that saves the file drops the v0.2 sections. That only happens when two builds share one settings folder, as during development on this Mac.
+5. The v0.1 test rig takes the feature registry as a parameter.
+
+**A change for the session that owns the core, not needed now:** automatic layout, protection and connection writes carry the origin `restore`. A distinct origin such as `automation` would read better in logs and let a later consumer tell a restore from an automatic disconnect. Adding one touches three exhaustive switches in v0.1 code, so v0.2 did not.
+
+**Rules adopted where the documents left room:**
+
+- **Configuration restore acts only on a target the user asked to protect.** Mode and rotation protection are switches per display, and the arrangement, main display and mirroring are protected together by one switch with a saved layout. All are off by default. The target follows every change made through the app. This follows the v0.1 rule that only what the user set through the app is desired state, and macOS already put the arrangement back by itself after every cable test on this desk. **Decision needed:** whether layout protection should switch itself on once the user arranges displays through the app, which the PRD's "Layout: on" could be read to mean.
+- **Protection stops after three attempts within two minutes for one target** and says so on screen. It starts again when the target changes. A mode the display no longer offers is skipped and said once.
+- **Presets apply without Keep and Revert,** as the architecture says for presets. A click in the panel counts as a command inside a preset, so one preset does not open one countdown per display. `--try` on the command that applies it gives the countdown.
+- **A disconnect lasts for the session only,** so logging out brings the display back even if the app is gone. Displays the app disconnected are reconnected at quit without waiting for the gate, the same as color tables are cleared at quit, because that undoes the app's own change. At the next start after a crash they are reconnected through the gate.
+- **When the last display in use goes away by itself** and the app holds others disconnected, they are reconnected, through the gate. **Decision needed:** in safe mode the gate stays closed, so a Mac could be left with no picture until logout. The options are to let this one reconnect pass the gate, or to leave it as built and rely on the session-only disconnect.
+- **Reset keeps the displays known under their tags.** Names and every setting go back to defaults, so a script that names a tag keeps working. Export leaves out the link token and values waiting for a display.
+- **The model safeguard list is empty.** Nothing is known about a Mac where turning the built-in panel off is risky. The rule and its override switch exist, and a hardware report adds a model.
+- **Turning the built-in panel off automatically pauses after the user brings it back by hand,** until an external display is attached or detached.
+
 ## 23 November 2026 · v0.2: Shortcuts actions are left out, because the Command Line Tools cannot build them
 
 **Decision, as the brief asked.** An App Intent compiles and links with the Command Line Tools. The step that turns the intents into the metadata Shortcuts reads, `appintentsmetadataprocessor`, ships with Xcode only. An app bundle without that metadata offers Shortcuts nothing. The project builds with the Command Line Tools alone, so v0.2 has no Shortcuts actions. Measured in the feasibility notes.

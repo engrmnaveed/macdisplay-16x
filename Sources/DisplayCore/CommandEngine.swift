@@ -30,6 +30,14 @@ extension ModeRequest {
     }
 }
 
+/// A handler for features the engine does not know itself. It returns nil for a command it
+/// does not handle, and must fail a command with a missing or ambiguous target before any
+/// side effect, the same as the engine.
+@MainActor
+public protocol CommandExtension: AnyObject {
+    func execute(_ command: Command, feature: FeatureDescriptor, engine: CommandEngine) async -> CommandResult?
+}
+
 /// The one engine every surface hands its commands to. The interface never calls a
 /// controller directly.
 @MainActor
@@ -45,6 +53,9 @@ public final class CommandEngine {
     /// Extra lines for the `status` report, supplied by the app.
     public var statusProvider: (@MainActor () -> [String])?
     public var stepScale = StepScale.standard
+    /// Handlers added by later milestones. Each sees a command after validation and the
+    /// automation gate, and may answer it whole. A command no extension claims runs as before.
+    public var extensions: [any CommandExtension] = []
 
     public init(
         registry: DisplayRegistry,
@@ -72,6 +83,9 @@ public final class CommandEngine {
         // Every automatic write passes the gate. Reading is always allowed.
         if command.operation != .get, case .blocked(let reason) = gate.check(command.origin) {
             return .failure(reason)
+        }
+        for handler in extensions {
+            if let result = await handler.execute(command, feature: feature, engine: self) { return result }
         }
         if feature.scope == .global { return global(feature) }
 
