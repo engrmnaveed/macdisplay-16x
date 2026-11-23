@@ -575,11 +575,13 @@ The layout was recorded at 12:17 (the Lenovo, display 4, main at 0,0, 3200 × 18
 | 8 | Mirroring with the countdown | **Failed at first**: the revert was refused as an overlap and the LG stayed mirrored until it was put back by hand. Fixed (the saved size is used for a display that stops mirroring). The rerun reverted in one transaction |
 | 9 | Disconnect, unanswered, then quit | Back 1.35 seconds after the countdown ended, under tag 2. Disconnected again and the app quit: reconnected at quit, nothing left in the recovery store |
 | 10 | The panel | Make Main, a canvas drag (snapped to 3200,−248, bottoms aligned), Mirror and Disconnect, each with Revert in the Keep window: all four worked, confirmed by the owner and the log |
-| 11 | Saved layout across a long sleep | **Not run.** The displays did sleep for about an hour afterwards (to 14:11) with the v0.2 build running and protection off: the LG left and returned in 3.5 seconds and the app wrote nothing |
+| 11 | Saved layout across a long sleep | **Not run, deferred by the owner** to a later version, which verifies it with its improvements. The displays did sleep for about an hour afterwards (to 14:11) with the v0.2 build running and protection off: the LG left and returned in 3.5 seconds and the app wrote nothing |
 | 12 | Moving the LG in System Settings with protection on | Put back after each of the owner's two drags, with the notice |
 | 13 | A preset from ⌃⌥1 | The menu bar moved back to the Lenovo. The press arrived without the Accessibility permission |
 | 14 | Idle budget | 0.02 s of CPU in 610 seconds (0.003% of a core), 1 idle wakeup, 3 threads, a 47 MB footprint after a heavy session (50 MB at the start of the ten minutes). Within the budget; memory is 6 MB above v0.1's measurement |
 | 15 | Lid, with the built-in panel turned off automatically | The lid event arrived, macOS added the panel 1.3 seconds later and the app turned it off 1.2 seconds after that. **Turning the panel back on with the lid closed lit it up**: macOS made it the main display, ran the Lenovo at 1920 × 1080 and the LG at 2560 × 2880 unrotated. Opening and closing the lid put everything back. Fixed: a built-in panel now comes back only once the lid is open |
+
+Still to do, for a later version: check 11 as planned above (layout protection on, a display sleep of ten minutes or more, the LG leaving and returning, and nothing written), the offer of decision 13 seen on screen, and turning the built-in panel back on when the last external display goes away. Afterwards the owner's 0.1.0 copy was started again from the main checkout as before; its settings and recovery files were unchanged.
 
 Also seen: `AppleClamshellCausesSleep` read 1 at 11:12 and 12:17 and 0 from about 12:50, after the built-in panel had been turned off, and stayed 0 after it came back. Whether the app caused it is not known.
 

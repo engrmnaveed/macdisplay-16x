@@ -6,6 +6,14 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.2 Layout closed by the owner with three things left for a later version
+
+The owner ended the v0.2 build session after the hardware checks. Left open, to be picked up and verified by a later version's improvements:
+
+1. Check 11: the saved layout across a display sleep of ten minutes or more, with layout protection on. A long sleep with protection off wrote nothing.
+2. The offer of decision 13, built and unit-tested, not yet seen on screen.
+3. The built-in panel coming back when the last external display goes away, unit-tested only, and the owner's decision on turning it off automatically at all (entry below).
+
 ## 23 November 2026 · The owner checks: what macOS does when a layout changes, and two bugs they found
 
 Mac17,9, macOS 27.2.1, the Lenovo P32p-20 on HDMI and the LG SDQHD on DisplayPort, with the owner at the desk. Every result is in the feasibility notes. What matters for the product:
