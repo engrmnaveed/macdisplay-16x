@@ -203,6 +203,16 @@ Left out of v0.2, both moved to Later in the inventory:
 - **Shortcuts actions.** The step that produces what the Shortcuts app reads ships with Xcode only. The CLI and the link scheme reach every feature from a shortcut in the meantime. See decision 15.
 - **Asking macOS to look for displays again.** The private call exists, and no permitted reference documents its arguments.
 
+### After the interface pass
+
+Set by the owner on 23 November 2026: the next milestones are built in new sessions on the Opus model, one milestone at a time, and two at once only where they touch different files.
+
+1. **The interface pass lands first.** Later panels are built on its design system, so nothing starts before it is on `main`.
+2. **v0.3 Advanced scaling**, as below. Its first stage is spikes. The read-only ones run unattended. The ones that write an override file or create a virtual screen need the owner for a short check, and are carried forward when the owner is away.
+3. **Release groundwork, alongside v0.3.** It touches documents and `.github` only, so it can run at the same time: the tested-hardware list, the contribution guide and issue templates, the note on running next to other display utilities, and a pass over the README and the install guide for the new interface.
+4. **v0.4 HDR and color**, after v0.3, because both change the core and the app.
+5. **A verification round** for what earlier milestones carried forward. Daily use of the latest build covers part of it.
+
 ### v0.3 Advanced scaling
 
 Flexible HiDPI scaling and custom resolutions through generated overrides, with a preview of what will be written, administrator authorization, and a one-click removal. Virtual screens for headless and remote use. Mirror-based HiDPI for panels that cannot get it natively, labelled with its GPU cost.
