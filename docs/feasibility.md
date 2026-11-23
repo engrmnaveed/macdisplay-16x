@@ -237,7 +237,7 @@ A refresh-rate change was chosen because it does not move windows. Size changes 
 - The displays woke at 00:05. The app saw the LG leave and return four seconds later. The Lenovo stayed connected.
 - Display IDs (4 and 5) and system UUIDs were the same before the display sleep, during it and after the wake, including across the LG's reconnect.
 - The first version of the wake probe was a bare command-line process, which never receives sleep or wake notifications, so it missed that wake. The app's own probe one second after the LG returned got no answer, and that proves nothing, because it sent its query once and the LG never answers a single query. The fixed probe caught the next wake, below.
-- Not tested: full system sleep, unplugging a cable, and moving a monitor to another port. The wake from a long standby was measured later, below.
+- Not tested: full system sleep. The wake from a long standby and the cable checks came later, below.
 
 #### A short display sleep, measured (01:38)
 
@@ -350,6 +350,23 @@ The displays were off from 09:07:58 to 09:17:49, which is 9 minutes 51 seconds (
 
 Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 
+### Cables: unplug, replug and another port (09:41 to 09:44, done by the owner)
+
+Four steps, with Display 16X running. After each reconnect a watcher saved what `display16x list` and the system's display list said, and compared them with a record taken before.
+
+| Step | Away for | Check of the monitor after its return | Tag, system UUID, display ID | Arrangement, mode, rotation, main display |
+| --- | --- | --- | --- | --- |
+| LG unplugged and plugged back into the same port | 23 s | 1.0 s, all five controls | Same | Same |
+| Lenovo (HDMI, the main display) unplugged and plugged back | 20 s | 1.4 s, all four controls | Same | Same |
+| LG moved to another port on the Mac | 10 s | 1.0 s, all five controls | Same | Same |
+| LG moved back to its first port | 7 s | 1.0 s, all five controls | Same | Same |
+
+- **The system UUID did not change in any step, also not on another port.** Neither did the display ID. Each monitor came back under its own tag, and no second record was created: there are still two records.
+- **macOS put the arrangement back by itself each time**: the same origins, the LG still at 270°, the Lenovo main again after its own replug.
+- **Nothing was written to a monitor.** After every return the app read the monitor, every value matched, and the verbose log says so ("After the display returned, #2 LG SDQHD still has its brightness, contrast, volume, mute").
+- The check of a monitor right after a cable reconnect took about a second, twice as long as at a start with the monitor already connected.
+- Not tested: a monitor that was powered off while unplugged, a dock or adapter in between, and a second unit of the same model.
+
 ### Rotation through the timed revert (09:30, with the owner present)
 
 One run, on the Lenovo, which was at 0° and is the main display. The LG stayed at its 270°. Command: `display16x set rotation 90 --tag 1 --try`.
@@ -407,7 +424,7 @@ Three things the toolchain does not do on its own, each worked around in the rep
 
 ### Where v0.1 Core stands at the end of 23 November
 
-Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, one rotation with the revert on its own, DDC replies with and without other display utilities, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
+Checked on this desk, by measurement or by the owner's own hands: display records and tags, the mode list and the text-size strip with Keep and Revert, refresh rate, DDC brightness, contrast, volume and mute, the brightness and volume keys with the indicator, software dimming while awake and across a lock, one rotation with the revert on its own, DDC replies with and without other display utilities, identity across a cable replug and a change of port, reading the monitors at start and after wake, the idle and memory budgets, and the build with the Command Line Tools alone.
 
 Built and unit-tested, and not run on hardware:
 
@@ -419,7 +436,6 @@ Built and unit-tested, and not run on hardware:
 Not measured:
 
 - A full system sleep, as opposed to a display sleep.
-- Unplugging a cable and moving a monitor to another port, to see whether the system UUID stays.
 - Any Mac other than the M5 Pro, in particular the MacBook Air M1 the PRD sets the budgets for.
 
 ## Running the probes

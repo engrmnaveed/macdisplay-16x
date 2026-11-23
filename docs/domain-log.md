@@ -20,6 +20,12 @@ Still unknown from this desk, and worth a hardware report from anyone who has th
 
 For the planning documents: the roadmap still describes v0.1 as in progress. Build work does not edit it.
 
+Update, 23 November, 09:45: the owner then stayed at the desk and gave the go-ahead for the remaining checks. All three are done and in the feasibility notes.
+
+- **Decision 7, the rotation run: done.** 90° on the Lenovo with the countdown, left unanswered, back on its own after 15 seconds, arrangement unchanged. The private write path works on this Mac and so does the way back.
+- **Decision 9, DDC without another display utility: done.** The owner quit BetterDisplay and the prototype. Both monitors answered exactly as they had with everything running. The LG refuses a single query on a quiet channel too, so sending queries twice is this monitor's need and not a side effect of company on the channel. Idle utilities cost no replies. A program that is reading at that moment does.
+- **Cables: done.** Each monitor kept its tag, its system UUID and its display ID across an unplug and replug, and the LG also on another port of the Mac. macOS restored the arrangement by itself. For the product this means the system UUID is a dependable match key on this Mac for these two monitors, across ports as well. It says nothing yet about docks, adapters or two units of one model.
+
 ## 23 November 2026 · The after-wake default and the restore floor are built as decided, with three things to confirm
 
 Built to the decisions recorded this morning (core architecture, sections 5 and 7). Unit-tested. The first run on hardware is the next wake of the displays.

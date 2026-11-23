@@ -46,7 +46,7 @@ dist/display16x features                   # every feature and its operations
 
 | Area | State |
 | --- | --- |
-| Display records with stable tags, matched across reconnects and restarts | Built, unit-tested, checked on hardware |
+| Display records with stable tags, matched across reconnects and restarts | Built, unit-tested, checked on hardware: each monitor kept its tag across restarts, sleeps, a cable replug and a move to another port |
 | Resolution list, text-size strip, refresh rate, Keep and Revert with a timed revert | Verified on hardware: size changes from the strip, Keep, Revert, and the revert on its own when unanswered. The list includes the scaled sizes macOS hides from its public mode list |
 | DDC brightness, contrast, volume and input, one serial queue per display | Brightness verified on a Lenovo P32p-20 and an LG SDQHD by an independent read. Volume, contrast and mute are read on hardware and written only in unit tests. Input switching is never run on hardware |
 | Native brightness for built-in and Apple displays | Built. No such display was available to test |
