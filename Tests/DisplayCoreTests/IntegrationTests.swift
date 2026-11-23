@@ -146,6 +146,20 @@ struct IntegrationTests {
         #expect(!oldRecovery.layoutUnconfirmed)
     }
 
+    @Test("A development build can keep its files in a folder of its own, and a normal launch is unchanged")
+    func developmentFolder() {
+        let normal = AppPaths(environment: [:])
+        #expect(normal.supportDirectory == AppPaths.standardDirectory)
+        #expect(!normal.isDevelopmentDirectory)
+        let blank = AppPaths(environment: [AppPaths.developmentDirectoryVariable: "  "])
+        #expect(!blank.isDevelopmentDirectory)
+        let development = AppPaths(environment: [AppPaths.developmentDirectoryVariable: "/tmp/d16x-dev"])
+        #expect(development.isDevelopmentDirectory)
+        #expect(development.settingsFile.path == "/tmp/d16x-dev/settings.json")
+        #expect(development.socketPath == "/tmp/d16x-dev/ipc.sock")
+        #expect(AppPaths.standard.supportDirectory == AppPaths.standardDirectory)
+    }
+
     @Test("Keys reach every display that mirrors the one they target")
     func mirrorExpansion() {
         let layout = LayoutSnapshot(entries: [

@@ -124,7 +124,7 @@ final class AppContext {
             await connection.reconnectAtStartup()
             await layout.recoverUnconfirmed()
         }
-        Log.app.info("Display 16X \(AppPaths.version) started\(gate.isSafeMode ? " in safe mode" : "").")
+        Log.app.info("Display 16X \(AppPaths.version) started\(gate.isSafeMode ? " in safe mode" : "")\(paths.isDevelopmentDirectory ? ", with its files in \(paths.supportDirectory.path)" : "").")
     }
 
     func shutdown() {
@@ -150,9 +150,12 @@ final class AppContext {
 
     // MARK: IPC
 
-    /// True when another copy of the app already answers on the socket.
+    /// True when another copy of the app already answers on the socket. A development
+    /// build with a folder of its own also stops when the copy in daily use is running,
+    /// because both would drive the same monitors.
     var isAnotherInstanceRunning: Bool {
-        UnixSocketClient(path: paths.socketPath).isServerAlive
+        if UnixSocketClient(path: paths.socketPath).isServerAlive { return true }
+        return paths.isDevelopmentDirectory && UnixSocketClient(path: AppPaths.standard.socketPath).isServerAlive
     }
 
     func startServer() {
