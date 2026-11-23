@@ -1,0 +1,40 @@
+#!/bin/sh
+# Print the Homebrew cask for a published Display 16X release.
+#
+#   scripts/render-cask VERSION ZIP_SHA256 [SIGNING]
+#
+# SIGNING says how the app in the ZIP is signed, which decides the caveats users see:
+#   developer-id   Developer ID, notarized and stapled: no caveats
+#   certificate    the project's own certificate, not notarized: allow the first launch once
+#   adhoc          ad hoc (the default): allow the first launch and grant Accessibility
+#                  again after every update
+set -eu
+
+if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
+    echo "Usage: $0 VERSION ZIP_SHA256 [developer-id|certificate|adhoc]" >&2
+    exit 1
+fi
+version=${1#v}
+digest=$2
+signing=${3:-adhoc}
+
+# The bundle version is three numbers, so the cask's is too.
+printf '%s\n' "$version" | LC_ALL=C grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+    { echo "Use a release version such as 0.1.0." >&2; exit 1; }
+# grep works line by line. Check the entire value before substituting it.
+case "$version" in *[!0-9.]*) echo "Invalid characters in VERSION." >&2; exit 1 ;; esac
+case "$digest" in *[!0-9a-fA-F]*|'') echo "Use a 64-character SHA-256 digest." >&2; exit 1 ;; esac
+[ "${#digest}" -eq 64 ] || { echo "Use a 64-character SHA-256 digest." >&2; exit 1; }
+digest=$(printf '%s' "$digest" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+case "$signing" in
+    developer-id|certificate|adhoc) ;;
+    *) echo "SIGNING is developer-id, certificate or adhoc." >&2; exit 1 ;;
+esac
+
+template="$(dirname "$0")/../packaging/homebrew/display16x.rb.in"
+# Keep the caveats between "@begin SIGNING@" and "@end@", drop the others.
+awk -v signing="$signing" '
+    /^@begin [a-z-]+@$/ { name = substr($2, 1, length($2) - 1); keep = (name == signing); inside = 1; next }
+    /^@end@$/ { inside = 0; next }
+    !inside || keep { print }
+' "$template" | sed -e "s/@VERSION@/$version/g" -e "s/@SHA256@/$digest/g"
