@@ -61,7 +61,7 @@ One small probe per risky mechanism, each recording Mac model, macOS build, moni
 - [x] Gamma-table dimming while awake
 - [ ] Gamma-table dimming across a lock and unlock (the blind rewrite needs to be watched once), with Night Shift, and with a custom color profile on any connected display
 - [x] DDC readiness after a short display sleep: both monitors answer within a second, and bad replies stop within 3.4 seconds
-- [x] DDC readiness after a long display sleep (37 minutes, and five and a half hours): the DisplayPort monitor leaves the system and returns 3.3 seconds later, answers before it is listed, and gives "not ready" replies on and off for at least 16 seconds. Both monitors kept their values
+- [x] DDC readiness after a display sleep of ten minutes or more (measured at 10 minutes, 37 minutes, and five and a half hours): the DisplayPort monitor leaves the system and returns 3.3 seconds later, answers before it is listed, and gives "not ready" replies on and off for at least 16 seconds. Both monitors kept their values
 - [ ] DDC readiness after a full system sleep and a cable reconnect
 - [ ] The same DDC timings with no other display utility running
 - [ ] Key capture without Accessibility permission
