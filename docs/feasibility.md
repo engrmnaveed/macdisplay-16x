@@ -301,6 +301,23 @@ The build with the two later decisions (the floor only after a long absence, and
 - Nothing was written to either monitor.
 - Not seen yet on hardware: the floor after a long absence, because software dimming is switched off, and a value taken over from a monitor that was changed elsewhere.
 
+#### The first wake with the same build (09:17)
+
+The displays were off from 09:07:58 to 09:17:49, which is 9 minutes 51 seconds (macOS's own power log). No probe was on the DDC channel. BetterDisplay and the earlier prototype were running. From the app's verbose log, in seconds after the wake:
+
+| Seconds after the wake | What the app did |
+| --- | --- |
+| 0.0 | Saw the reconfiguration begin |
+| 1.3 | Reconfiguration settled. "Display #2 disconnected": the LG had left again |
+| 3.5 | "After wake, #1 LEN P32p-20 still has its brightness, contrast." The wake settled at 3.0 and the two reads took half a second |
+| 4.7 | Second reconfiguration settled. "Display #2 connected: LG SDQHD" |
+| 5.2 | The check of the LG finished in 0.49 seconds with all five controls. "After the display returned, #2 LG SDQHD still has its brightness, contrast, volume, mute." |
+| Afterwards | Nothing. No write to either monitor |
+
+- **Both paths of one wake ran as designed**: "after wake" for the Lenovo, which stayed, and "the display returned" for the LG, which left. Neither wrote anything. The LG was not asked twice.
+- **The LG leaves after less than ten minutes of display sleep.** Sleeps measured so far: 74 and 88 seconds (stayed), 9 minutes 51 seconds, 37 minutes and five and a half hours (left each time).
+- **Both monitors kept every value again.** That is five measured wakes without a lost value.
+
 Other things the probe's log showed while the owner was using the panel earlier: a size change on the LG is reported with the "mode", "moved" and "desktop shape" flags for the LG and with "desktop shape" alone for the Lenovo. So one display changing size is announced as a move, although nobody changed the arrangement.
 
 ### Interfaces and modes

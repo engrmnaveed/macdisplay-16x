@@ -45,7 +45,7 @@ What it means for the product:
 - These two monitors do not need a restore after wake at all. Whether any common monitor does is still unknown from this desk.
 - "Is the monitor ready" cannot be read from the system's display list. The LG was answering before it was listed and unreliable after.
 
-Update, 23 November, 08:54: the LG left and returned again at a wake after 37 minutes of display sleep. It stayed through sleeps of 74 and 88 seconds. So it leaves somewhere between a minute and a half and 37 minutes, which is ordinary use, not only overnight. This was also the first run of the read-and-adopt rule on hardware: the app wrote nothing at the wake or at the LG's return, and both monitors still held every value the app had.
+Update, 23 November, 08:54: the LG left and returned again at a wake after 37 minutes of display sleep. It stayed through sleeps of 74 and 88 seconds. So it leaves somewhere between a minute and a half and 37 minutes, which is ordinary use, not only overnight. (At 09:17 it left after a sleep of 9 minutes 51 seconds, so the line is below ten minutes.) This was also the first run of the read-and-adopt rule on hardware: the app wrote nothing at the wake or at the LG's return, and both monitors still held every value the app had.
 
 ## 23 November 2026 · No reply is not the same as no control
 
