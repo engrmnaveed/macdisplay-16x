@@ -122,7 +122,7 @@ struct DeskTile: View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return ZStack(alignment: .top) {
             shape.fill(isMarked ? Skin.color.accent.opacity(0.22) : Skin.color.tile)
-            shape.strokeBorder(isMarked ? Skin.color.accent : Skin.color.tileEdge, lineWidth: isMarked ? Skin.size.edgeStrong : Skin.size.hairline)
+            shape.edge(isMarked ? Skin.color.accent : Skin.color.tileEdge, width: isMarked ? Skin.size.edgeStrong : Skin.size.hairline)
             if isMain {
                 Capsule()
                     .fill(isMarked ? Skin.color.accent : Skin.color.tileEdge)

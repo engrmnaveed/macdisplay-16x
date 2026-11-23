@@ -7,6 +7,30 @@ import SwiftUI
 // In the macOS 27 SDK the attribute is a macro, and its plugin ships with Xcode only, so
 // the attribute does not compile with the Command Line Tools. The type behaves the same.
 
+// MARK: Edges
+
+extension InsettableShape {
+    /// A fine edge inside the shape. Joins are round: with the default join a capsule's
+    /// outline grows a small tick where its two half circles meet.
+    func edge<S: ShapeStyle>(_ style: S, width: CGFloat) -> some View {
+        strokeBorder(style, style: StrokeStyle(lineWidth: width, lineJoin: .round))
+    }
+}
+
+/// A capsule with an edge, made of two fills. A stroked capsule is drawn with a small tick
+/// at each end, so the edge is the outer fill showing around the inner one.
+struct EdgedCapsule: View {
+    let fill: Color
+    let edge: Color
+
+    var body: some View {
+        ZStack {
+            Capsule().fill(edge)
+            Capsule().inset(by: Skin.size.hairline).fill(fill)
+        }
+    }
+}
+
 // MARK: Containers
 
 /// A card: the surface color with a fine edge. A strong edge marks the card that is
@@ -21,7 +45,7 @@ struct SkinBlock<Content: View>: View {
             .padding(Skin.space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Skin.color.surface, in: shape)
-            .overlay(shape.strokeBorder(isMarked ? Skin.color.accent : Skin.color.hairline, lineWidth: isMarked ? Skin.size.edgeStrong : Skin.size.hairline))
+            .overlay(shape.edge(isMarked ? Skin.color.accent : Skin.color.hairline, width: isMarked ? Skin.size.edgeStrong : Skin.size.hairline))
     }
 }
 
@@ -106,7 +130,7 @@ struct ScreenGlyph: View {
         let inset: CGFloat = Skin.radius.glyph
         return ZStack(alignment: .top) {
             RoundedRectangle(cornerRadius: Skin.radius.glyph, style: .continuous)
-                .strokeBorder(tint, lineWidth: Skin.size.glyphLine)
+                .edge(tint, width: Skin.size.glyphLine)
             if isMain {
                 Capsule().fill(tint).frame(height: Skin.size.glyphLine * 2).padding(.horizontal, inset).padding(.top, inset)
             }
@@ -136,7 +160,7 @@ struct SentTag: View {
             .foregroundStyle(Skin.color.textSecondary)
             .padding(.horizontal, Skin.space.xs)
             .padding(.vertical, Skin.space.hair)
-            .overlay(Capsule().strokeBorder(Skin.color.hairline, lineWidth: Skin.size.hairline))
+            .overlay(RoundedRectangle(cornerRadius: Skin.space.xs, style: .continuous).edge(Skin.color.hairline, width: Skin.size.hairline))
             .help("Display 16X sent this value. The display cannot be asked what it shows.")
             .accessibilityLabel("Sent, not read back")
     }
@@ -346,8 +370,7 @@ struct ChipStyle: ButtonStyle {
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, Skin.space.l)
             .frame(minWidth: Skin.size.chip, minHeight: Skin.size.chip)
-            .background(Skin.color.surface, in: Capsule())
-            .overlay(Capsule().strokeBorder(Skin.color.hairline, lineWidth: Skin.size.hairline))
+            .background(EdgedCapsule(fill: Skin.color.surface, edge: Skin.color.hairline))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .contentShape(Capsule())
     }
@@ -395,7 +418,7 @@ struct RoundStyle: ButtonStyle {
             .foregroundStyle(Skin.color.textSecondary)
             .frame(width: Skin.size.chip, height: Skin.size.chip)
             .background(onCard ? Skin.color.track : Skin.color.surface, in: Circle())
-            .overlay(Circle().strokeBorder(onCard ? Skin.color.track : Skin.color.hairline, lineWidth: Skin.size.hairline))
+            .overlay(Circle().edge(onCard ? Skin.color.track : Skin.color.hairline, width: Skin.size.hairline))
             .opacity(configuration.isPressed ? 0.7 : 1)
             .contentShape(Circle())
     }
@@ -519,7 +542,7 @@ struct Banner<Actions: View>: View {
         .padding(Skin.space.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(fill, in: shape)
-        .overlay(shape.strokeBorder(tint.opacity(0.35), lineWidth: Skin.size.hairline))
+        .overlay(shape.edge(tint.opacity(0.35), width: Skin.size.hairline))
     }
 }
 
@@ -622,7 +645,7 @@ struct HUD<Content: View>: View {
             .frame(width: width, alignment: .leading)
             .background(Skin.color.hud.opacity(reduceTransparency ? 1 : 0.96), in: shape)
             .background(reduceTransparency ? Color.black : Color.clear, in: shape)
-            .overlay(shape.strokeBorder(Skin.color.hudEdge, lineWidth: Skin.size.hairline))
+            .overlay(shape.edge(Skin.color.hudEdge, width: Skin.size.hairline))
     }
 }
 
