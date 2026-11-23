@@ -2,14 +2,16 @@
 
 ## Unreleased
 
-Advanced scaling. Each feature below is off until you turn it on, in Settings under Advanced or with `display16x set overridesEnabled on`, `virtualScreens on` and `mirrorHiDPI on`, and each says what it costs next to its switch.
+## 0.3.0
+
+Advanced scaling: sizes macOS does not offer, screens that exist only in the Mac, and HiDPI for a panel that has none of its own. Every feature in this release is off until you turn it on, in Settings under Advanced or with `display16x set overridesEnabled on`, `virtualScreens on` and `mirrorHiDPI on`, and each says what it costs next to its switch. Until then Display 16X does what 0.2.0 did. The app has not yet used any of these features on a real display: they are unit-tested, and what was proven on hardware is listed below.
 
 ### More sizes through display overrides
 
 - Add sizes macOS does not offer, for any model of display: fine HiDPI steps across the panel's range (`display16x override flexible --tag 2`), sizes of your own at either density (`display16x override add 2592x2304 --tag 2`), and the panel size, the size macOS picks first, the name macOS shows and whether the display counts as a television. Sizes are typed as the display shows them, turned or not.
 - Nothing is written until you have seen it. The preview names every display the file reaches (an override is for a model, so every unit of it), every step, and the file byte for byte. Writing asks for your administrator password in macOS's own dialog.
 - Display 16X then reconnects the display so macOS reads the file, and reads back which sizes macOS offers: macOS 27 leaves out some sizes without saying so, and the app tells you which. The main display is not reconnected by the app; replug its cable or log out.
-- Remove one override, undo the last change to one, or remove every one the app wrote, from the panel or with `display16x override delete all`. That works without the app too, after a crash or once the app is gone: every file the app writes carries a marker, so it finds its files from the files themselves. A full reset can also move macOS's saved display arrangements aside, from where `display16x override put-back` restores them.
+- Remove one override, undo the last change to one, or remove every one the app wrote, from the panel or with `display16x override delete all`. That works while the app is not running too, after a crash for example: every file the app writes carries a marker, so it finds its files from the files themselves. A full reset can also move macOS's saved display arrangements aside, from where `display16x override put-back` restores them. Removing the app leaves overrides and virtual screens' color profiles in place, so remove them first, as the installation guide describes.
 
 ### Virtual screens
 
@@ -24,7 +26,14 @@ Advanced scaling. Each feature below is off until you turn it on, in Settings un
 
 ### What was checked on hardware
 
-On an Apple M5 Pro Mac with macOS 27.2.1, with probes and not yet through the app: an override for the LG SDQHD written to `/Library/Displays`, read by macOS after a reconnect, and removed again with the list exactly as before; one virtual screen created and removed while the probe kept running. The app's own write, the preview, virtual screens from the app and mirror-based HiDPI have run in unit tests only.
+On an Apple M5 Pro Mac with macOS 27.2.1 and an LG SDQHD, with small test programs and not yet through the app:
+
+- macOS reads an override file in `/Library/Displays` when the display connects, and not before. Taking the display out of use for a few seconds and back, the way the app reconnects it, is enough.
+- Removing the file and reconnecting brings back exactly the sizes the display offered before: 42, with nothing new and nothing gone.
+- macOS took some of the sizes the file asked for and left others out without saying why, among them the LG's full panel size as HiDPI. That is why the app reads the list back after writing.
+- A virtual screen was created and released while the program kept running. It was gone within 3 seconds, and the displays went back to where they were.
+
+Unit-tested only, and not yet run from the app on hardware: the app's own override write with its preview, its removal from the panel and from the command line, an override for the main display (a cable replug or a logout to make macOS read it was not tried), virtual screens made by the app, across sleep and when the app starts, mirror-based HiDPI, and the override settings other than sizes: the panel size, the size macOS picks first, the name and the television flag.
 
 ## 0.2.0
 

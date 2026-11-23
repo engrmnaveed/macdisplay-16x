@@ -6,7 +6,7 @@ A free, open-source menu bar utility for the display controls macOS leaves out: 
 
 It targets Apple silicon, and it is built to do nothing when nothing is happening: no timers, no polling, and nothing that renders frames unless you turn a feature on.
 
-**Status: 0.2.0, the first release, with v0.2 Layout and a redesigned interface (23 November 2026).** It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
+**Status: 0.3.0, with v0.3 Advanced scaling, after 0.2.0 brought v0.2 Layout and a redesigned interface (24 November 2026).** The scaling features are off until you switch them on, and the app's own use of them has run in unit tests only. It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
 
 ## Install
 
@@ -16,7 +16,7 @@ Releases are published as a Homebrew cask and as a ZIP on the [releases page](ht
 brew install --cask engrmnaveed/tap/display16x
 ```
 
-0.2.0 is ad hoc signed and not notarized by Apple. macOS asks you to allow the first launch in Privacy & Security, and after every update you allow it again and give the Accessibility permission for the brightness and volume keys again. Later releases are to be signed with the project's own certificate, which keeps that permission and Homebrew's first-launch approval from one release to the next.
+Every release so far is ad hoc signed and not notarized by Apple. macOS asks you to allow the first launch in Privacy & Security, and after every update you allow it again and give the Accessibility permission for the brightness and volume keys again. Later releases are to be signed with the project's own certificate, which keeps that permission and Homebrew's first-launch approval from one release to the next.
 
 The [installation guide](docs/install.md) covers Homebrew, the direct download with its checksum and attestation, allowing the first launch, the Accessibility permission, and removal. The [release runbook](docs/release.md) is how a release is made.
 
