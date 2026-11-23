@@ -148,7 +148,15 @@ Every change to arrangement, mirroring, the main display or a connection is reve
 
 Ready when the four layout features work from the CLI and the panel on the test monitors and come back after a revert, a saved layout returns after wake and reconnect without a loop, a preset applies from a shortcut, and the budgets still hold.
 
-**Status on 23 November 2026.** All five stages are built on the branch `claude/v0-2-layout-14c08e`, with 309 unit tests passing, not pushed. Nothing in v0.2 has written to hardware. Fifteen checks wait for the owner at the desk, listed in order in the branch's feasibility notes: the layout writes one by one, each put back, then the same through the CLI and the panel, a saved layout across a wake, a preset from a shortcut, the budgets, and the lid.
+**Status on 23 November 2026.** All five stages are built on the branch `claude/v0-2-layout-14c08e`, with 315 unit tests passing, not pushed. Fourteen of the fifteen owner checks ran on the test desk, and the layout matched its record after every one. The four layout features work from the CLI and the panel and come back after a revert. A layout moved in System Settings is put back once, with a notice. A preset applies from a shortcut. The idle budget holds: 0.003% of a core over ten minutes, one idle wakeup, and a 47 MB footprint against 41 MB for v0.1. The checks found two bugs, both fixed on the branch: undoing a mirror was refused as an overlap, and the built-in panel was turned back on behind a closed lid. Decisions 13 and 14 are built.
+
+Open before v0.2 can merge:
+
+- **Check 11.** A saved layout across a display sleep of ten minutes or more, with protection on. The displays did sleep for an hour with protection off, and the app wrote nothing.
+- **The offer of layout protection after Keep** has not been seen on screen yet.
+- **Decision 16**, on turning the built-in panel off automatically.
+- **The lid-sleep reading.** `AppleClamshellCausesSleep` in the power management root read 1 before the app first turned the built-in panel off, and has read 0 since. macOS may change this value by itself with power and attached displays, so the reading alone proves nothing. It is read again after a logout with the app not running, and around one more turn-off, before any build that turns the panel off is released. A Mac that no longer sleeps when its lid closes would be a fault we cannot ship.
+- **The automation origin** from the core session, in the last table of this document.
 
 Left out of v0.2, both moved to Later in the inventory:
 
@@ -178,6 +186,7 @@ HDR switching, XDR brightness on capable hardware, color profile and color mode 
 | Override-based scaling may behave differently on current macOS | Probe it before building interface for it. Keep mirror-based scaling as the fallback. |
 | Hardware coverage | Publish a tested-hardware list and accept probe output in issues. |
 | Scope | BetterDisplay is years of full-time work. Ship the core well before starting the next group. |
+| A display the app turned off stays off while the app is not running | The app reconnects what it disconnected when it quits, and at its next start after a crash. It reconnects at once when no display is left in use. A disconnect lasts for the login session only. The automatic turn-off of the built-in panel is the case this does not cover fully, see decision 16. |
 | An app that is not notarized is blocked at first launch, and Homebrew has tightened its rules | Publish through our own tap and install by the cask's full name, which trusts that one cask. Homebrew can no longer skip quarantine, so document the first launch. It keeps the approval across upgrades only for the same signer, so sign with one stable identity. It unpacks with `unzip`, so the archive carries no extended attributes and CI verifies the signature after unpacking. Move to a Developer ID when the membership is there. |
 
 ## 5. Open decisions
@@ -210,6 +219,7 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 6 | A stable signing identity for development builds | Ad hoc, so the Accessibility grant is lost on every rebuild. The packaging script takes a certificate name | A local code-signing certificate on each developer's Mac, separate from the project certificate, whose key stays with the owner and the release secrets | Next development round |
 | 8 | Identical monitors and DDC pairing | Paired in a stable order and marked as a guess | A "which monitor is this?" confirmation step, in preference to another private lookup | Public release |
 | 15 | Shortcuts actions | Left out, because the Command Line Tools cannot produce their metadata | Leave them out for now. Revisit at the public release: building releases with Xcode on CI would bring them back and would end "builds with the Command Line Tools alone" for releases only | Public release |
+| 16 | Turning the built-in panel off automatically | Built, and off by default. The panel comes back when the app quits and when the last external display goes away, and only once the lid is open, because turned on behind a closed lid it becomes the main display. If the app is not running at that moment, the panel stays dark until the user logs out | Hold the switch back from the v0.2 release and keep the code. Closing the lid already gives the same result at a desk. Bring the switch back when there is a way back that works without the app running, and the lid-sleep reading is explained. The owner's view, given at the desk: the built-in display should not be left dark | v0.2 release |
 
 ### Core changes waiting for the core session
 
@@ -217,4 +227,4 @@ Changes to what v0.1 built are made by the session that built it, on the line of
 
 | Change | Why | Lands on | Status |
 | --- | --- | --- | --- |
-| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Approved by planning. To be sent together with whatever the v0.2 hardware checks turn up |
+| A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Sent to the core session on 23 November 2026. The hardware checks asked for no other core change. It is built on a branch of its own, cut from the v0.2 branch. The v0.2 session then merges it and moves its automatic writes to the new origin |
