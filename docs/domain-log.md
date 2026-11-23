@@ -6,6 +6,28 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 23 November 2026 · v0.2: Shortcuts actions are left out, because the Command Line Tools cannot build them
+
+**Decision, as the brief asked.** An App Intent compiles and links with the Command Line Tools. The step that turns the intents into the metadata Shortcuts reads, `appintentsmetadataprocessor`, ships with Xcode only. An app bundle without that metadata offers Shortcuts nothing. The project builds with the Command Line Tools alone, so v0.2 has no Shortcuts actions. Measured in the feasibility notes.
+
+What a Shortcuts user has instead, without any new code: the "Run Shell Script" action calling `display16x`, which reaches every feature, and once the URL scheme is registered, the "Open URLs" action with a `display16x://` link.
+
+What would bring them back, for the maintainer: build the release with Xcode on CI (the runner has it), which gives up "builds with the Command Line Tools alone" for releases only, or wait for Apple to ship the tool with the Command Line Tools.
+
+## 23 November 2026 · This Mac has a built-in panel: it is a laptop with the lid closed
+
+The planning notes describe the test Mac as having no built-in panel. The power management root of Mac17,9 reports `AppleClamshellState` 1 and `AppleClamshellCausesSleep` 1, so it is a laptop running closed with two external monitors. macOS keeps the built-in panel out of the display list while the lid is closed.
+
+What it means for v0.2:
+
+- The built-in panel rules (turning it off when an external display is attached, the exceptions, the pause after a manual override) can be tried on this desk, but only by opening the lid. Opening it brings the panel into the layout, so it is a connection change and needs the owner at the desk.
+- Lid events can be observed here by opening and closing the lid, with the same caution.
+- The connection policy must treat a closed lid as "the built-in panel is already out of use", not as a display the app can take away. It is reported as disconnected by the system, never counted as an eligible display, and never offered for disconnect.
+
+## 23 November 2026 · v0.2: asking macOS to look for displays again is left out
+
+SkyLight exports `SLSDetectDisplays` on macOS 27.2.1. None of the permitted references documents what it takes, and calling a private function with a guessed signature can corrupt the caller's state or crash it. The feature "Redetect displays" is therefore not built. The button the system once had for this is a reasonable thing to send users to instead. It can be added later in `DisplayPrivate` if an MIT, BSD or Apache project or Apple documentation describes the call.
+
 ## 23 November 2026 · v0.1 Core is complete, with a short list held for later
 
 The owner called the core done on 23 November and asked for the branch to be pushed. All four stages are built, 224 unit tests pass, and everything the owner could check at the desk has been checked. The full list of what was and was not run on hardware is at the end of the 23 November section of the feasibility notes.

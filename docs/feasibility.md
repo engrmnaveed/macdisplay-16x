@@ -459,6 +459,56 @@ Not measured:
 - A full system sleep, as opposed to a display sleep.
 - Any real Mac other than the M5 Pro, in particular the MacBook Air M1 the PRD sets the budgets for. The CI runner is a virtual M1 on macOS 26 with no monitor.
 
+## 23 November 2026 · v0.2 Layout spikes · Apple M5 Pro (Mac17,9) · macOS 27.2.1 (26B131)
+
+Same Mac and monitors as above. Display 16X 0.1.0 from the main checkout, BetterDisplay and the earlier prototype were running and were left alone. Everything in this section is read-only unless it says otherwise.
+
+### What macOS reports about the layout (11:12, displays asleep)
+
+`spikes/layout-probe.swift`, with nobody at the Mac:
+
+| | Lenovo P32p-20 (HDMI) | LG SDQHD (DisplayPort) |
+| --- | --- | --- |
+| Display ID | 4 | 5 |
+| Global frame, top-left origin | (0, 0), 3200 × 1800 | (−2304, −248), 2304 × 2048 |
+| Screen frame, bottom-left origin | (0, 0), 3200 × 1800 | (−2304, 0), 2304 × 2048 |
+| Main display | Yes | No |
+| Rotation | 0° | 270° |
+| Mirroring | None, not in a mirror set | None, not in a mirror set |
+
+- **The main display is the one at the global origin.** The LG sits to the left of the Lenovo with the bottom edges aligned: −248 + 2048 = 1800. The two coordinate systems differ only in where y starts, so an arrangement is stored in the global, top-left frame and converted once for the panel.
+- **The sizes are logical sizes in the rotated frame.** The LG's 2304 × 2048 at 270° is its HiDPI mode turned on its side. A rotation or a size change moves the frame, which is why macOS reports a size change as a move.
+- **While the displays sleep, the active display list is empty** and the online list still has both. The inventory reads the online list, which is right. Anything that looks at "active" displays during a display sleep sees none.
+- **The lid is closed.** `AppleClamshellState` is 1 and `AppleClamshellCausesSleep` is 1 in the power management root. This Mac is a laptop in clamshell mode, so it does have a built-in panel. macOS leaves it out of the online list while the lid is closed. See the domain log.
+- **Private symbols present** (looked up, never called): `SLSConfigureDisplayEnabled` and its older name `CGSConfigureDisplayEnabled`, `SLSDetectDisplays`, `SLSConfigureDisplayMirrorOfDisplay`. Origins, mirroring and the main display need only the public configuration transaction (`CGConfigureDisplayOrigin`, `CGConfigureDisplayMirrorOfDisplay`).
+
+### What a configuration transaction announces
+
+Not yet seen for an arrangement, main display or mirroring change, because making one needs the owner. What earlier logs already show:
+
+- A size change on the LG arrives as "mode, moved, desktop shape" for the LG and "desktop shape" for the Lenovo (v0.1 notes above). Arrangement protection therefore cannot treat "moved" as an outside change of the arrangement. It compares origins after the reconfiguration settles.
+- At a wake after a long sleep the LG leaves with "removed, disabled, desktop shape" and returns with "added, enabled, mode, moved, desktop shape".
+
+`spikes/layout-probe.swift --watch` was left running from 11:13 to log every callback and the layout one second after the last one, so the next wake on this desk is recorded without anyone touching the layout.
+
+### Prepared, not run: the checks that change the layout
+
+`spikes/layout-write-probe.swift` holds one step per check. Each records the layout, applies one transaction "for this session" (logging out undoes it too), logs the callbacks, holds for 8 seconds, puts the recorded layout back and compares. Ctrl-C also puts it back. It refuses to disconnect the main display or the only display.
+
+| Step | Command | What it answers |
+| --- | --- | --- |
+| Empty transaction | `layout-write-probe noop --yes` | Whether a transaction with no change announces a reconfiguration |
+| Move a display and back | `layout-write-probe move 5 --yes` | The flags of a real move, and whether macOS keeps a 100-point slide along the edge |
+| Main display and back | `layout-write-probe main 5 --yes` | The flags of a main change, and that shifting every origin is how it is done |
+| Mirror and unmirror | `layout-write-probe mirror 5 4 --yes` | The flags, what the mirror target's frame and mode become, and the way back |
+| Disconnect and reconnect | `layout-write-probe disconnect 5 --yes` | Whether a disabled display leaves the online list, keeps its display ID, and comes back with the same tag, mode, rotation and place |
+
+None of them has run. Each needs the owner at the desk and a yes in the session.
+
+### Shortcuts actions and the Command Line Tools
+
+An App Intent with a parameter and an App Shortcuts provider compiles and links with Swift 6.4.2 from the Command Line Tools: the AppIntents framework and its Swift module are in the SDK. The build step that extracts the intents' metadata into the app bundle, `appintentsmetadataprocessor`, ships with Xcode only. The Command Line Tools hold its build specification and not the tool. Shortcuts discovers an app's actions from that metadata, so an app built without it offers none. This was not tried against the Shortcuts app, because that means registering a test app with the system. Shortcuts actions are left out of v0.2 (see the domain log).
+
 ## Running the probes
 
 The hardware report is part of the command line tool. It is read-only and needs no app:
@@ -476,9 +526,10 @@ swiftc -O spikes/ddc-wake-probe.swift -o /tmp/ddc-wake-probe && /tmp/ddc-wake-pr
 swiftc -O spikes/gamma-table-write-probe.swift -o /tmp/gamma-probe && /tmp/gamma-probe
 swiftc -O spikes/ddc-write-probe.swift -o /tmp/ddc-write-probe && /tmp/ddc-write-probe "P32p"
 swiftc -O spikes/ddc-reliability-probe.swift -o /tmp/ddc-reliability-probe && /tmp/ddc-reliability-probe
+swiftc -O spikes/layout-probe.swift -o /tmp/layout-probe && /tmp/layout-probe   # add --watch to follow changes
 ```
 
-The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back.
+The first four change nothing unless asked: `gamma-table-write-probe` only writes with `--apply`. `ddc-write-probe` always writes: it moves one monitor's brightness a few steps and puts it back. `layout-probe` is read-only. `layout-write-probe.swift` changes the layout and is run only with the owner present: see its header.
 
 To list the display-related functions a system framework exports on a given macOS version:
 
