@@ -10,6 +10,8 @@ final class SettingsWindowPresenter: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var model: PanelModel?
     private var layoutModel: LayoutPanelModel?
+    private var advancedModel: AdvancedPanelModel?
+    private let previewPresenter = SystemFilePreviewPresenter()
 
     init(context: AppContext, hotKeys: HotKeyCenter?) {
         self.context = context
@@ -24,7 +26,9 @@ final class SettingsWindowPresenter: NSObject, NSWindowDelegate {
         }
         let model = PanelModel(context: context)
         let layoutModel = LayoutPanelModel(context: context, hotKeys: hotKeys)
-        let view = SettingsView(model: model, layoutModel: layoutModel, openLink: { NSWorkspace.shared.open($0) })
+        let advancedModel = AdvancedPanelModel(context: context)
+        advancedModel.presentPreview = { [previewPresenter] in previewPresenter.present($0) }
+        let view = SettingsView(model: model, layoutModel: layoutModel, advanced: advancedModel, openLink: { NSWorkspace.shared.open($0) })
         let hosting = NSHostingView(rootView: view)
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: hosting.fittingSize), styleMask: [.titled, .closable], backing: .buffered, defer: true)
         window.title = "Display 16X Settings"
@@ -35,14 +39,17 @@ final class SettingsWindowPresenter: NSObject, NSWindowDelegate {
         self.window = window
         self.model = model
         self.layoutModel = layoutModel
+        self.advancedModel = advancedModel
         window.makeKeyAndOrderFront(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
         model?.close()
         layoutModel?.close()
+        advancedModel?.close()
         model = nil
         layoutModel = nil
+        advancedModel = nil
         window?.contentView = nil
         window?.delegate = nil
         window = nil

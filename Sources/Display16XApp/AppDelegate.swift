@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var confirmations: ConfirmationWindowPresenter?
     private var layoutSurfaces: LayoutSurfaceSet?
     private var layoutPanelModel: LayoutPanelModel?
+    private var advancedPanelModel: AdvancedPanelModel?
+    private let previewPresenter = SystemFilePreviewPresenter()
     private var settingsWindow: SettingsWindowPresenter?
     private var iconState = MenuBarIcon.State.normal
     private let indicatorPresenter = IndicatorWindowPresenter()
@@ -174,12 +176,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // The panel's content is built now and released when it closes.
         let model = PanelModel(context: context)
         let layoutModel = LayoutPanelModel(context: context, hotKeys: layoutSurfaces?.hotKeys)
+        let advancedModel = AdvancedPanelModel(context: context)
+        advancedModel.presentPreview = { [previewPresenter] in previewPresenter.present($0) }
         let modelsBuilt = clock.now
         // The panel scrolls inside the screen it hangs from instead of growing past it.
         let screenHeight: CGFloat = (button.window?.screen ?? NSScreen.main)?.visibleFrame.height ?? Skin.size.panelMaxHeight
         let view = PanelView(
             model: model, layoutModel: layoutModel, maxHeight: screenHeight * Skin.size.panelScreenShare,
-            openSettings: { [weak self] in self?.openSettings() }, quit: { NSApp.terminate(nil) }
+            advanced: advancedModel, openSettings: { [weak self] in self?.openSettings() }, quit: { NSApp.terminate(nil) }
         )
         let hosting = NSHostingController(rootView: view)
         hosting.sizingOptions = [.preferredContentSize]
@@ -190,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         self.popover = popover
         panelModel = model
         layoutPanelModel = layoutModel
+        advancedPanelModel = advancedModel
         let viewsBuilt = clock.now
         NSApp.activate(ignoringOtherApps: true)
         let activated = clock.now
@@ -217,6 +222,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         panelModel = nil
         layoutPanelModel?.close()
         layoutPanelModel = nil
+        advancedPanelModel?.close()
+        advancedPanelModel = nil
         popover?.contentViewController = nil
         popover = nil
     }

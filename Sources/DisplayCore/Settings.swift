@@ -337,6 +337,9 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
     /// Layout, presets, shortcuts and integrations. Added in v0.2. An older version of the
     /// app ignores the section.
     public var layout: LayoutSettings
+    /// Scaling, virtual screens and mirror-based HiDPI. Added in v0.3. An older version of
+    /// the app ignores the section.
+    public var advanced: AdvancedSettings
 
     public init() {
         schemaVersion = SettingsDocument.currentSchemaVersion
@@ -346,6 +349,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         displays = []
         pendingRestores = []
         layout = LayoutSettings()
+        advanced = AdvancedSettings()
     }
 
     public init(from decoder: Decoder) throws {
@@ -357,6 +361,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         displays = try container.decodeIfPresent([StoredRecord].self, forKey: .displays) ?? []
         pendingRestores = try container.decodeIfPresent([PendingRestore].self, forKey: .pendingRestores) ?? []
         layout = try container.decodeIfPresent(LayoutSettings.self, forKey: .layout) ?? LayoutSettings()
+        advanced = try container.decodeIfPresent(AdvancedSettings.self, forKey: .advanced) ?? AdvancedSettings()
         // A tag is never reused, whatever the file says.
         let highest = displays.map(\.record.tag.rawValue).max() ?? 0
         nextTag = max(nextTag, highest + 1)

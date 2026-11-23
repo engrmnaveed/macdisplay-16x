@@ -10,6 +10,8 @@ struct DisplayDetail: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var layoutModel: LayoutPanelModel
     let back: () -> Void
+    /// v0.3: more sizes through an override. Nil leaves the page as it was.
+    var advanced: AdvancedPanelModel? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: Skin.space.l) {
@@ -23,6 +25,7 @@ struct DisplayDetail: View {
             if let item {
                 DeskSection(card: card, item: item, layoutModel: layoutModel)
             }
+            if let advanced { ScalingSection(tag: card.tag, advanced: advanced) }
             OptionsSection(card: card, item: item, model: model, layoutModel: layoutModel)
             AboutDisplaySection(card: card, model: model)
         }

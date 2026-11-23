@@ -193,8 +193,24 @@ jobs:
       - name: Same signer as the last release
         id: signer
         run: |
-          previous="$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty')"
-          if [[ -z "$previous" || "$previous" == "$GITHUB_REF_NAME" ]]; then
+          # The nearest version below this one, read from tag names on standard input.
+          below() {
+            { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; echo "$GITHUB_REF_NAME"; } | sed 's/^v//' |
+              sort -t. -k1,1n -k2,2n -k3,3n -u |
+              awk -v this="${GITHUB_REF_NAME#v}" '$0 == this { if (last != "") print "v" last; exit } { last = $0 }'
+          }
+          previous="$(gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName' | below)"
+          # A tag below this one with no release is a run that waits for approval, or was rejected.
+          tagged="$(gh api "repos/$GH_REPO/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/")' | below)"
+          if [[ -n "$tagged" && "$tagged" != "$previous" ]]; then
+            message="$tagged is tagged but has no published release, so this release is compared with ${previous:-no earlier release}. If the run for $tagged waits for approval, approve or reject it before this one, so the releases come out in order."
+            if [[ "$SIGNING" != adhoc ]]; then
+              message="$message If $tagged is published and signed differently from this release, these notes do not tell its users that the update costs them the Accessibility grant. Add that by editing the notes, as docs/release.md describes."
+            fi
+            echo "::warning::$message"
+            echo "- **Earlier version not published:** $message" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -z "$previous" ]]; then
             echo "No earlier release to compare with."
             exit 0
           fi
@@ -276,7 +292,17 @@ jobs:
       - name: Publish the release
         run: |
           cd "$RELEASE_DIR"
-          gh release create "$GITHUB_REF_NAME" --verify-tag \
+          # A version approved after a later one was published is not the latest release, and
+          # the tap keeps the later cask.
+          newest="$( { gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName'; echo "$GITHUB_REF_NAME"; } |
+            grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
+          latest=true
+          if [[ "v$newest" != "$GITHUB_REF_NAME" ]]; then
+            latest=false
+            echo "NEWER_RELEASE=v$newest" >> "$GITHUB_ENV"
+            echo "- v$newest is published already, so $GITHUB_REF_NAME is not marked as the latest release, and the tap keeps v$newest." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --latest="$latest" \
             --title "Display 16X $GITHUB_REF_NAME" \
             --notes-file "$RUNNER_TEMP/release-notes.md" \
             display16x-*-macos-arm64.zip display16x-*-macos-arm64.zip.sha256 \
@@ -288,6 +314,10 @@ jobs:
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           TAP_REPO: engrmnaveed/homebrew-tap
         run: |
+          if [[ -n "${NEWER_RELEASE:-}" ]]; then
+            echo "The tap keeps $NEWER_RELEASE, which is later than $GITHUB_REF_NAME."
+            exit 0
+          fi
           if [[ -z "$HOMEBREW_TAP_DEPLOY_KEY" ]]; then
             message="HOMEBREW_TAP_DEPLOY_KEY is not set, so the tap was not updated and brew install does not find this version. Commit display16x.rb from the release to $TAP_REPO as Casks/display16x.rb by hand."
             echo "::warning::$message"

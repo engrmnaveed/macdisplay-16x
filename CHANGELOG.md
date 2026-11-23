@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+## 0.3.0
+
+Advanced scaling: sizes macOS does not offer, screens that exist only in the Mac, and HiDPI for a panel that has none of its own. Every feature in this release is off until you turn it on, in Settings under Advanced or with `display16x set overridesEnabled on`, `virtualScreens on` and `mirrorHiDPI on`, and each says what it costs next to its switch. Until then Display 16X does what 0.2.0 did. The app has not yet used any of these features on a real display: they are unit-tested, and what was proven on hardware is listed below.
+
+### More sizes through display overrides
+
+- Add sizes macOS does not offer, for any model of display: fine HiDPI steps across the panel's range (`display16x override flexible --tag 2`), sizes of your own at either density (`display16x override add 2592x2304 --tag 2`), and the panel size, the size macOS picks first, the name macOS shows and whether the display counts as a television. Sizes are typed as the display shows them, turned or not.
+- Nothing is written until you have seen it. The preview names every display the file reaches (an override is for a model, so every unit of it), every step, and the file byte for byte. Writing asks for your administrator password in macOS's own dialog.
+- Display 16X then reconnects the display so macOS reads the file, and reads back which sizes macOS offers: macOS 27 leaves out some sizes without saying so, and the app tells you which. The main display is not reconnected by the app; replug its cable or log out.
+- Remove one override, undo the last change to one, or remove every one the app wrote, from the panel or with `display16x override delete all`. That works while the app is not running too, after a crash for example: every file the app writes carries a marker, so it finds its files from the files themselves. A full reset can also move macOS's saved display arrangements aside, from where `display16x override put-back` restores them. Removing the app leaves overrides and virtual screens' color profiles in place, so remove them first, as the installation guide describes.
+
+### Virtual screens
+
+- Make screens that exist only in the Mac, for headless and remote use: `display16x virtual create Studio 16:9 2560x1440 hidpi @60 connect`. Sizes are generated from an aspect, a step and a limit, or listed by hand, at refresh rates up to 240 Hz, up to the window server's limit of 16384 pixels a side. A screen can copy the shape of a connected display, stand in portrait, and report its own name, serial number and size.
+- Connect, disconnect, reconnect or discard one screen or all of them. A disconnected screen keeps its definition. Discarding also removes the color profile macOS made for it.
+- Saved screens come back when the app starts and after a wake. A screen linked to a display connects and disconnects with it, and can turn with it. Automatic connects stop after three in two minutes and say so. macOS moves your displays aside when a screen appears; the app puts them back.
+- A virtual screen is never counted as a physical display, so the last real display in use is never taken out because a virtual one is there.
+
+### Mirror-based HiDPI
+
+- For a panel macOS gives no HiDPI size of its own, a matched HiDPI virtual screen can be shown on it: `display16x virtual create "LG HiDPI" match mirror=on connect --tag 2`. This keeps the GPU busy with a copy of the whole screen at every refresh, so it has its own switch, starts only for a screen you linked this way, ends when the switch is turned off, and `display16x status` says while it runs.
+
+### What was checked on hardware
+
+On an Apple M5 Pro Mac with macOS 27.2.1 and an LG SDQHD, with small test programs and not yet through the app:
+
+- macOS reads an override file in `/Library/Displays` when the display connects, and not before. Taking the display out of use for a few seconds and back, the way the app reconnects it, is enough.
+- Removing the file and reconnecting brings back exactly the sizes the display offered before: 42, with nothing new and nothing gone.
+- macOS took some of the sizes the file asked for and left others out without saying why, among them the LG's full panel size as HiDPI. That is why the app reads the list back after writing.
+- A virtual screen was created and released while the program kept running. It was gone within 3 seconds, and the displays went back to where they were.
+
+Unit-tested only, and not yet run from the app on hardware: the app's own override write with its preview, its removal from the panel and from the command line, an override for the main display (a cable replug or a logout to make macOS read it was not tried), virtual screens made by the app, across sleep and when the app starts, mirror-based HiDPI, and the override settings other than sizes: the panel size, the size macOS picks first, the name and the television flag.
+
 ## 0.2.0
 
 The first published release of Display 16X. It brings display layout and a redesigned interface, and it includes everything in 0.1.0 below, which was not published on its own. It needs an Apple silicon Mac with macOS 14 or later.

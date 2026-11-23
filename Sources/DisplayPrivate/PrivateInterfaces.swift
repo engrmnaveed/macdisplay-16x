@@ -52,6 +52,8 @@ public struct PrivateCapabilities: Sendable, Equatable {
     public var displayConnection: Bool = DisplayConnection.isAvailable
     /// The registry's description of the Mac's ports, which names how a display is attached.
     public var portLinks: Bool = PortLinkDirectory.isAvailable
+    /// Virtual displays the app owns. Added in v0.3.
+    public var virtualDisplays: Bool = VirtualDisplayFactory.isAvailable
 
     public static let current = PrivateCapabilities(
         avServiceI2C: AVServiceDirectory.isAvailable,
@@ -68,6 +70,7 @@ public struct PrivateCapabilities: Sendable, Equatable {
             "Window server mode list: \(windowServerModes ? "available" : "missing")",
             "Display connection: \(displayConnection ? "available" : "missing")",
             "Port descriptions (connection type): \(portLinks ? "available" : "missing")",
+            "Virtual displays: \(virtualDisplays ? "available" : "missing")",
         ]
     }
 }

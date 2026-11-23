@@ -4,7 +4,7 @@ Display 16X needs an Apple silicon Mac with macOS 14 or later. Each release on t
 
 How a release is signed decides what you do when you install it and at every update. The release notes of each version say how it is signed.
 
-**Display 16X 0.2.0, the first release, is ad hoc signed** and not notarized by Apple. What that means for you:
+**Every release so far is ad hoc signed** and not notarized by Apple. What that means for you:
 
 - **Once:** macOS blocks the first launch until you allow it in Privacy & Security, and the brightness and volume keys need the Accessibility permission. Both are described below.
 - **At every update:** macOS sees each ad hoc signed version as a new app. You allow the first launch again, and you give the Accessibility permission again by removing the old entry and adding the app. Homebrew warns about it during the upgrade.
@@ -32,17 +32,17 @@ The cask puts **Display 16X.app** in Applications and links the `display16x` com
 
 ## Install the release ZIP
 
-Download `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file from the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) into one folder. Check the download and unpack it there. The commands use version 0.2.0 as an example.
+Download `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file from the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) into one folder. Check the download and unpack it there. The commands use version 0.3.0 as an example.
 
 ```sh
-shasum -a 256 -c display16x-0.2.0-macos-arm64.zip.sha256
-ditto -x -k display16x-0.2.0-macos-arm64.zip .
+shasum -a 256 -c display16x-0.3.0-macos-arm64.zip.sha256
+ditto -x -k display16x-0.3.0-macos-arm64.zip .
 ```
 
 The SHA-256 file only shows that the download is complete, since it comes from the same place. Each release also has a GitHub build-provenance attestation, which shows that the ZIP was built by this repository's release workflow from the tagged commit. Check it with the [GitHub CLI](https://cli.github.com/):
 
 ```sh
-gh attestation verify display16x-0.2.0-macos-arm64.zip \
+gh attestation verify display16x-0.3.0-macos-arm64.zip \
   --repo engrmnaveed/macdisplay-16x \
   --signer-workflow engrmnaveed/macdisplay-16x/.github/workflows/release.yml
 ```
@@ -89,7 +89,7 @@ The brightness and volume keys need the Accessibility permission. Everything els
 
 macOS gives the permission to the app's signature.
 
-**After an update where either version is ad hoc signed, as 0.2.0 is:** the list still shows Display 16X switched on, but the permission belongs to the version you replaced, so the keys do nothing. Select the **Display 16X** entry, remove it with **−**, add the app again with **+**, then close and open the panel. The same goes for builds you make yourself.
+**After an update where either version is ad hoc signed, as every release so far is:** the list still shows Display 16X switched on, but the permission belongs to the version you replaced, so the keys do nothing. Select the **Display 16X** entry, remove it with **−**, add the app again with **+**, then close and open the panel. The same goes for builds you make yourself.
 
 **Between releases signed with the project certificate:** every one has the same signature, so the permission carries over and there is nothing to do. If the keys stop working after such an update although Display 16X is still switched on, remove the entry and add the app again as above, and please [open an issue](https://github.com/engrmnaveed/macdisplay-16x/issues), because this should not happen.
 
@@ -104,17 +104,21 @@ A requirement that starts with `identifier "com.16xbrains.macdisplay16x" and cer
 ## Remove Display 16X
 
 1. If you switched on opening at login in the app's settings window, switch it off there first, so macOS has no login item left pointing at a missing app.
-2. Quit Display 16X from its panel. Changes made over DDC, such as brightness and volume, stay in the monitor.
-3. Remove the app:
+2. If you used the Advanced features, remove what they left outside the app's folder while the app still runs. Removing the app does not do it, and `brew uninstall --zap` does not either. Each command prints what it will do, and asks for your administrator password with `--confirm`:
+   - `display16x virtual discard all --confirm` discards your virtual screens and the color profiles macOS made for them.
+   - `display16x override delete all --confirm` removes every display override Display 16X wrote. Then replug those displays, or log out and in, so macOS stops offering the added sizes. This one also works when the app is not running, as long as the app is still installed.
+   - If a full reset moved macOS's saved display arrangements aside, `display16x override put-back --confirm` puts them back.
+3. Quit Display 16X from its panel. Changes made over DDC, such as brightness and volume, stay in the monitor.
+4. Remove the app:
    - **Homebrew:** `brew uninstall --cask display16x`. Add `--zap` to also remove the settings folder.
    - **ZIP:** move **Display 16X.app** from Applications to the Trash, and remove the link you made, for example `rm ~/.local/bin/display16x`.
-4. The settings are one folder. To remove them by hand:
+5. The settings are one folder. To remove them by hand:
 
    ```sh
    rm -rf ~/Library/Application\ Support/com.16xbrains.macdisplay16x
    ```
 
-5. In **System Settings → Privacy & Security → Accessibility**, select **Display 16X** and remove it with **−**.
+6. In **System Settings → Privacy & Security → Accessibility**, select **Display 16X** and remove it with **−**.
 
 ## Build from source
 

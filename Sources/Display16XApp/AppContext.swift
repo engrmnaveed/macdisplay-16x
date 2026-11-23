@@ -23,6 +23,10 @@ struct SystemAdapters {
     var connectionSystem: (any ConnectionSystem)?
     var lid: any LidSensor
     var permissionProbe: any PermissionProbe
+    /// v0.3: files outside the app's folders, the list of what was written, and virtual screens.
+    var systemFiles: (any SystemFileWriter)? = nil
+    var systemFilesLedger: any DocumentPersistence = MemoryPersistence()
+    var virtualScreens: (any VirtualScreenSystem)? = nil
     var macModel: String?
     /// What listens to the system once the app starts, in starting order: sleep, wake and
     /// reconfiguration, then the lid.
@@ -50,6 +54,9 @@ struct SystemAdapters {
             connectionSystem: SystemConnection(),
             lid: lid,
             permissionProbe: SystemPermissionProbe(loginItem: loginItem),
+            systemFiles: SystemFileAdministrator(staging: paths.systemFilesStaging),
+            systemFilesLedger: FilePersistence(url: paths.systemFilesLedger),
+            virtualScreens: SystemVirtualScreens(),
             macModel: HardwareProbe.macModel,
             listeners: { sequencer in [SystemEventSource(sequencer: sequencer, bus: bus), lid] }
         )
@@ -97,6 +104,12 @@ final class AppContext {
     let shortcuts: ShortcutService
     let automation: ConnectionAutomation
     let lid: any LidSensor
+    // v0.3 Advanced scaling
+    let systemFileLedger: SystemFileLedger
+    let overrides: OverrideService
+    let virtualScreens: VirtualScreenService
+    let advancedCommands: AdvancedCommands
+    private let virtualInventory: VirtualScreenInventory
 
     private let listeners: [any SystemListener]
     private var server: UnixSocketServer?
@@ -116,11 +129,14 @@ final class AppContext {
             registry: registry, system: adapters.modeSystem, rotationSystem: adapters.rotationSystem,
             settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate
         )
-        engine = CommandEngine(registry: registry, features: .full, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
+        engine = CommandEngine(registry: registry, features: .complete, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
         engine.selectorContext = adapters.selectorContext
         reconciler = Reconciler(engine: engine, registry: registry, controls: controls, settings: settings, gate: gate, scheduler: scheduler)
+        // The app's own virtual screens are reported as virtual, so they are never counted
+        // as a physical display.
+        virtualInventory = VirtualScreenInventory(base: adapters.inventory)
         coordinator = DisplayCoordinator(
-            registry: registry, settings: settings, bus: bus, gate: gate, inventory: adapters.inventory,
+            registry: registry, settings: settings, bus: bus, gate: gate, inventory: virtualInventory,
             provider: adapters.provider, colorBackend: colorBackend,
             controls: controls, modes: modes, reconciler: reconciler, scheduler: scheduler
         )
@@ -148,14 +164,28 @@ final class AppContext {
         shortcuts = ShortcutService(settings: settings, scheduler: scheduler)
         shortcuts.engine = engine
         layoutCommands.shortcuts = shortcuts
-        engine.extensions = [layoutCommands]
+        systemFileLedger = SystemFileLedger(persistence: adapters.systemFilesLedger)
+        overrides = OverrideService(registry: registry, settings: settings, modes: modes, connection: connection, ledger: systemFileLedger, writer: adapters.systemFiles, scheduler: scheduler)
+        overrides.backupFolder = paths.systemFilesBackup
+        virtualScreens = VirtualScreenService(registry: registry, settings: settings, bus: bus, gate: gate, scheduler: scheduler, system: adapters.virtualScreens, layout: layout)
+        virtualScreens.panelOf = { [overrides] tag in overrides.panel(for: tag)?.turned(by: overrides.rotation(of: tag)) }
+        virtualScreens.runPlan = { [overrides] plan in await overrides.run(plan) }
+        virtualInventory.ownedDisplays = { [virtualScreens] in virtualScreens.ownedDisplays }
+        advancedCommands = AdvancedCommands(registry: registry, settings: settings, overrides: overrides, virtualScreens: virtualScreens, layout: layout)
+        engine.extensions = [layoutCommands, advancedCommands]
         automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
         listeners = adapters.listeners(sequencer)
         permissions = PermissionBroker(probe: adapters.permissionProbe, bus: bus, settings: settings)
-        engine.statusProvider = { [permissions, colorBackend, loginItem] in
+        engine.statusProvider = { [permissions, colorBackend, loginItem, virtualScreens, overrides] in
             var lines = ["version: \(AppPaths.version)"]
             lines.append(contentsOf: permissions.statusLines)
             lines.append("login item service: \(loginItem.systemStatus)")
+            let mirrors = virtualScreens.activeMirrors
+            lines.append("virtual screens: \(virtualScreens.live.count) connected, \(virtualScreens.definitions.count) saved")
+            if !mirrors.isEmpty {
+                lines.append("mirror-based HiDPI running, the GPU copies a whole screen at every refresh: " + mirrors.map { "\($0.screen) on \($0.display)" }.joined(separator: ", "))
+            }
+            lines.append("overrides written: \(overrides.written().count)")
             switch colorBackend.safety() {
             case .safe: lines.append("color tables: safe to use")
             case .unsafe(let reason): lines.append("color tables: blocked. \(reason)")
@@ -175,18 +205,23 @@ final class AppContext {
             coordinator.reattachAll()
         }
         for listener in listeners { listener.start() }
+        // What a crash left half done outside the app's folders is settled from the disk first.
+        overrides.settle()
         coordinator.start()
         // Displays the last run left disconnected come back first, then an unconfirmed
         // layout change is undone. Both pass the gate.
-        Task { @MainActor [connection, layout] in
+        Task { @MainActor [connection, layout, virtualScreens] in
             await connection.reconnectAtStartup()
             await layout.recoverUnconfirmed()
+            // Saved virtual screens that were connected come back, through the gate.
+            await virtualScreens.start()
         }
         Log.app.info("Display 16X \(AppPaths.version) started\(gate.isSafeMode ? " in safe mode" : "")\(paths.isDevelopmentDirectory ? ", with its files in \(paths.supportDirectory.path)" : "").")
     }
 
     func shutdown() {
         server?.stop()
+        virtualScreens.shutdown()
         connection.reconnectAtQuit()
         for listener in listeners.reversed() { listener.stop() }
         coordinator.shutdown()

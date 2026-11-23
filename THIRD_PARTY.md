@@ -8,6 +8,8 @@ Display 16X is written from scratch and has no third-party dependencies. No code
 | [m1ddc](https://github.com/waydabber/m1ddc) · [AppleSiliconDDC](https://github.com/waydabber/AppleSiliconDDC) | MIT | That some monitors need input switching sent to host address `0x50` with feature code `0xF4`. |
 | [displayplacer](https://github.com/jakehilborn/displayplacer) | MIT | That rotation on Apple silicon goes through the `MPDisplay` class of the MonitorPanel framework, with `initWithCGSDisplayID:` and `setOrientation:`. Also the window server's mode list: the functions that count, describe and select modes by number, and the layout of a mode description (which displayplacer credits to Phoenix Dev). That a display is taken out of use and brought back with the window server's enable flag, `CGSConfigureDisplayEnabled` (`SLSConfigureDisplayEnabled` in SkyLight), inside an ordinary display configuration. |
 
-The DDC/CI packet format and the feature codes come from the public VESA DDC/CI and Monitor Control Command Set documents.
+| [DeskPad](https://github.com/Stengo/DeskPad) | MIT | The names of the `CGVirtualDisplayDescriptor`, `CGVirtualDisplayMode`, `CGVirtualDisplaySettings` and `CGVirtualDisplay` classes, their properties, `initWithDescriptor:`, `initWithWidth:height:refreshRate:` and `applySettings:`, and that a virtual display lives as long as its object. |
+
+The shape of a display override file's `scale-resolutions` entries was read from the override files macOS itself ships, and which shapes macOS 27 takes was measured (see the feasibility notes). The DDC/CI packet format and the feature codes come from the public VESA DDC/CI and Monitor Control Command Set documents.
 
 No proprietary application was opened, disassembled, traced or inspected, and no text, icon, screenshot or layout was copied from one. See [AGENTS.md](AGENTS.md) for the rules.

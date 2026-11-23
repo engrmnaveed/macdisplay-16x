@@ -6,6 +6,99 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · Release 0.3.0: releases can be approved out of order, and removing the app leaves v0.3's files behind
+
+**Prepared as the second release, ad hoc signed like 0.2.0**, while 0.2.0's run still waits at Publish for approval. Two things about releases as a process, and one about uninstalling, came out of it.
+
+- **A version approved late used to become the latest release.** Each run waits for its own approval, so a lower version can be published after a higher one. GitHub then marks the version published last as the latest release, and the tap would get the older cask. From 0.3.0's workflow on, a release published after a later version is not marked as the latest, and the tap keeps the later cask. A run uses the workflow at its own tag, so **0.2.0's run does not have this**: approve or reject it before 0.3.0 is published. **Update, 24 November:** 0.2.0 was approved and published at 19:42 UTC on 23 November, before 0.3.0 was tagged, so the case did not arise. The signer check, run against the published 0.2.0, compares 0.3.0 with it and finds it ad hoc signed, as it should.
+- **The signer check now compares with the release just below the new version**, not the one published last, and says when a lower version is tagged but not published. It cannot read the signature of a version that has no release yet. So if the first certificate-signed release is approved before the last ad hoc one, its notes lack the sentence about the Accessibility grant, and the run tells the reviewer to add it. The rule that avoids all of this is to approve releases in version order. The runbook says so.
+- **Uninstalling does not remove what v0.3 wrote outside the app's folder**: override files in `/Library/Displays`, and the color profiles macOS made for virtual screens in `/Library/ColorSync/Profiles/Displays`. The cask's uninstall and `--zap` remove the app and its settings folder only. The installation guide now lists the commands to run first. `display16x override delete all` also works without the running app, but not once the app, with the tool inside it, is gone. **Decision needed:** whether the cask's uninstall should remove the overrides itself. It would ask for an administrator password while `brew uninstall` runs, and that has not been tried. Recommendation: keep the documented steps for 0.3.0, and decide after the check of the app's own removal on hardware.
+
+## 23 November 2026 · v0.3 built at unit-test level: decisions for the maintainer, and what the app has not done on hardware
+
+All five stages are built on the branch, with 440 unit tests passing. The writing checks proved macOS's side with probes. **The app's own override write, its virtual screens and mirror-based HiDPI have not run on hardware.** The checks for a later round are listed in order in the feasibility notes.
+
+**Decisions needed:**
+
+1. **Administrator rights** (raised with the spikes): the system's prompt through AppleScript, each time, as built; or a privileged helper once the project certificate exists. Recommendation: the prompt for 0.3.0.
+2. **Mirror-based HiDPI at launch.** As built, a screen the user linked with mirroring comes back with its mirror at launch and after wake, through the gate, so the GPU cost resumes without a click. Safe mode skips it. The alternative is to bring the screen back and wait for a click before mirroring. Recommendation: keep it as built, because the user set it up on purpose and the status line says while it runs. Revisit if the check on the desk shows trouble.
+3. **The made-up vendor number for virtual screens.** Screens report vendor `0x1616`, which read as a manufacturer code is the letters "EPV". Nothing is known to use it. A screen's identity can be set per screen. Recommendation: keep it, and note it in the user guide.
+4. **Full reset on a Mac in use.** It is built to move the system's saved display arrangements aside and to put them back. It has never run, and running it makes macOS forget every arrangement it saved. Recommendation: ship it behind its preview as built, and run its check on a spare Mac or a test account, never on the owner's.
+5. **For the interface session:** the v0.3 surfaces and the four optional entry points in its files (see the entry on v0.3 surfaces below). It may want to place or word them differently. Nothing it built draws differently when they are absent.
+
+**Rules adopted in the last stages:**
+
+- **A display showing a virtual screen gets its own picture back before the screen goes**, so it returns to its own mode and place the way v0.2 ends a mirror. The switch off ends every such mirror and leaves the screens.
+- **The status report says while mirror-based HiDPI runs**, and on which display, because that is the one Advanced feature that costs while idle.
+- **A screen copies a display's shape as it is seen**, turned with the display, so a screen made for the turned LG is 2880 × 2560 and not its panel's 2560 × 2880.
+
+## 23 November 2026 · v0.3 surfaces: where they plug into the interface pass's surfaces, and what they say
+
+**For the interface session, through the planning thread.** The v0.3 surfaces are new files built from the skin's values and pieces only (`SkinBoundaryTests` passes): "More sizes" on a display's page, the preview of what will be written as a window of its own, and an Advanced tab in Settings. To reach them, four existing files got one optional entry point each, defaulting to nothing, so the panel and the settings window are drawn exactly as before when it is absent: `PanelView` and `DisplayDetail` take an optional advanced model, `SettingsView` has an `advanced` tab, and the render harness's sample desk carries sample stand-ins for the administrator step and virtual screens. The interface session may want to place or word these differently. Every picture is in the render harness, groups "scaling", "preview" and "settings".
+
+- **The preview is the only way to a write.** It names every display the file reaches, every step, what finishes it and the file byte for byte, and its button says "Write as Administrator". The command line prints the same preview and changes nothing without `--confirm`.
+- **A size is shown in the frame the display is turned to**, as the size strip shows it. Where the panel's own frame is meant, the text says so.
+- **What macOS made of a file is shown size by size**: "Offered", or "Written, and left out by macOS. It does not say why."
+- **Each switch says its cost next to it.** Mirror-based HiDPI cannot be switched on while virtual screens are off.
+- **Not seen on screen.** The app with these surfaces has not run on the desk yet. The pictures are from the harness.
+
+## 23 November 2026 · v0.3 core: what it adds to the core, and the rules it adopted
+
+**Where v0.3 touches what earlier milestones built.** No existing behavior changed, and every earlier test passes unchanged. Two additions:
+
+1. An optional `advanced` section in the settings document, next to v0.2's `layout`, with the three switches, the override changes waiting to be written and the saved virtual screens. The settings version stays 1, so a v0.2 build reads the file and ignores the section.
+2. The v0.2 test rig takes the feature list as a parameter, as v0.2 did for the v0.1 rig.
+
+Everything else is in new files: the override model and service, the virtual screen model and service, the v0.3 features and their command extension, and a list of files written outside the app's folders, kept in its own file next to the recovery store and never touched by reset, export or import.
+
+**Where the architecture did not fit, and what was done instead.**
+
+- **The reserved `virtual` kind had nothing to set it.** The inventory reports every display macOS lists as built in or external. The app now wraps the inventory and marks the displays it made itself as virtual, so the registry records them so and the connection policy, which counts only built-in and external displays as physical, never lets a virtual screen stand in for the last physical display. No core file changed for it.
+- **The reserved privileged path had no shape.** It is a plan: steps (create a folder, write, delete, delete a folder if empty, move aside, put back), the displays it reaches, notes, and what finishes it. The preview is the plan printed whole, every byte included, and the administrator step runs exactly its steps. The text of the shell commands is built in the core and unit-tested, quoting included.
+- **Virtual screen commands cannot use a display selector**, because a screen that is not connected has no record yet, and a new one has none at all. They are app-wide features that take the screen's name. A connected screen is also an ordinary display by its tag, for its mode, brightness and arrangement.
+
+**Rules adopted where the documents left room:**
+
+- **A write outside the app's folders without `--confirm` prints its preview and changes nothing.** The panel shows the same preview before the administrator prompt.
+- **Writing needs the feature switched on. Removing never does.** Turning a feature off must not trap the files it wrote.
+- **The main display is not reconnected to activate an override.** Its result says "accepted", with the advice to replug the cable or log out, because the file is written and not yet read.
+- **Sizes are typed as the display shows them**, in the frame it is turned to, as the size strip names them, and kept in the panel's own frame.
+- **Removal deletes only files carrying the app's marker, and only empty folders the app itself created.** A file found by its marker that this account's list does not hold, for example one written from another account, is listed and removable, and its folders are left alone.
+- **A full reset moves the system's saved display settings into the app's own folder instead of deleting them**, so "put back" can undo it. The backup folder is made by the app before the administrator step, so it belongs to the user and not to root.
+- **Virtual screens follow the automation rules of v0.2.** Restoring at launch and after wake is a restore, connecting with a linked display is automation, both pass the gate and stop after three in two minutes with a notice. A connect by hand starts them again. An automatic change is nobody's choice: it never changes whether the user wants the screen.
+- **A virtual screen's number is never reused**, also after a settings reset, because a new screen with an old serial number would bind to the old record and take its settings.
+
+## 23 November 2026 · v0.3 spikes: macOS 27 reads an override when the display reconnects, and a virtual screen lives only while the app holds it
+
+Apple M5 Pro (Mac17,9), macOS 27.2.1, the LG SDQHD on USB-C (rotated 270°) and the Lenovo P32p-20 on HDMI. Checked with the owner at the desk from 21:44 to 21:51, with three administrator prompts the owner answered. The measurements are in the feasibility notes.
+
+**What macOS does with an override file.**
+
+- **It reads `/Library/Displays/Contents/Resources/Overrides/DisplayVendorID-<hex>/DisplayProductID-<hex>` when the display connects, and not before.** The app's own disconnect and reconnect is enough, about 6 seconds per display. The folder did not exist on this Mac, and the install created the whole chain.
+- **A size is written as the backing store, in the panel's own frame before rotation.** The 8-byte entry (width, height) gives the size at low density where the panel can show it, and its half as HiDPI. The 12-byte entry (width, height, flags 1) gives its half as HiDPI. **The 16-byte entries are ignored**, with flags 1 and with flags 9, although a quarter of the system's own entries have that shape.
+- **macOS leaves out some sizes that are written correctly**, with no message. The LG's full grid as HiDPI (backing 5120 × 5760) was left out twice, while a step inside its range was taken. Nothing the app can read predicts it.
+- **A file carrying the app's own marker key is read like any other**, and deleting the file and reconnecting gives back exactly the list there was before.
+
+**What a virtual screen is.**
+
+- **It exists only while the process that made it holds it.** Releasing it removes it within 3 seconds, and so does the process ending, a crash included. Nothing is left on the system to clean up.
+- **It gets a new display ID every time it is created**, and reports the vendor, product and serial number the app gives it. The running 0.2.0 matched two creations to one record by those numbers.
+- **macOS places it next to the main display and moves other displays out of its way, and remembers that layout for the set of displays that includes it.** When it goes, the others return to the layout of the smaller set.
+- **macOS makes a color profile for it and keeps it after the screen is gone**, in `/Library/ColorSync/Profiles/Displays`, named after the screen and its system UUID, owned by root. Discarding a virtual screen therefore has a file outside the app's folders to remove, with administrator rights, which is the inventory's "remove generated profile". The check left one such profile on the owner's Mac.
+- macOS makes a list of 24 modes, at both densities, from the one mode the app gives it. The window server's limit for a virtual screen is 16384 × 16384 pixels, 0.25 to 4 pixels per point, and at least 24 Hz.
+
+**Rules the build adopts from this:**
+
+1. **An override belongs to a model, not a monitor.** Every unit of that vendor and product gets it. The preview lists every known display of the model, remembered ones included.
+2. **HiDPI sizes are written as 12-byte entries, low-density sizes as 8-byte entries, and nothing is written as a 16-byte entry.** The preview says that a low-density size also brings its half as HiDPI.
+3. **What was installed is checked after activation.** The app reconnects the display, reads the list and reports each size as offered or left out by macOS. A size is never shown as available because it was written.
+4. **The main display cannot be reconnected by the app**, because the connection policy refuses it. Its override is activated by a cable replug or a logout, and the app says so.
+5. **When macOS ships its own file for the model, the app's file starts from a copy of it.** Whether a file in `/Library` replaces the system's or adds to it was not tested, because neither test monitor has one. A copy is right in both cases.
+6. **Every file the app writes carries its marker key, and a list of what was written is kept in the app's own folder.** The app, and the command line without the app, find every such file by the marker alone, so a lost list loses nothing. Removal deletes only files with the marker and only empty folders the app created.
+7. **A virtual screen is a saved definition plus a live object.** Quitting removes the screens; starting again recreates the saved ones that were connected, through the gate. Its settings are keyed by its record tag, as for any display, never by its display ID.
+
+**Decision needed:** how the app gets administrator rights. Built: the system's own prompt for each install and removal, through AppleScript's `do shell script … with administrator privileges`, which is public and documented by Apple and works for an ad hoc signed app. The alternative, a privileged helper registered with the system, needs a signing identity the project does not have yet (decision 12) and an approval in System Settings. **Recommendation:** keep the prompt for v0.3, and look at a helper when the project certificate exists.
+
 ## 23 November 2026 · The first release is 0.2.0, ad hoc signed, and every milestone gets a release
 
 **Owner's word, through the planning thread:** "no release available on GitHub yet, please do release the latest version, and keep release cycle updated, every major version should have a release". So 0.1.0 is never published, 0.2.0 is the first release, and each milestone on `main` is released as its version (0.3.0 for v0.3). A release is two steps, prepare in a pull request and tag the merged commit, described in the release runbook.
