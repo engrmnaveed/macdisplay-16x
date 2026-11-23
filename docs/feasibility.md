@@ -684,6 +684,23 @@ The open time is from the click to the popover being shown and key. It is inside
 
 **The run ended at 19:55 when an uninstaller removed the copy in daily use.** App Cleaner removed the 0.1.0 bundle from the main checkout's `dist/` folder and the app's standard settings folder, and it quit the build under test, which has the same bundle identifier. The ten-minute idle measurement had run for one minute. The build under test in this worktree's own `dist/` and its settings folder were not touched.
 
+### The copy in daily use from 19:59 on: this branch at `897c40f`
+
+The owner removed the 0.1.0 copy and asked for the latest build to run in its place. The planning thread packaged this branch's tip (version 0.1.0, build 116, signed ad hoc) and started it at 19:59:31 from the main checkout's `dist/` with `--verbose` and the standard settings location, which was created fresh. Everything below was read from outside: the process was sampled with `top`, `ps` and `footprint`, and its log was read with `display16x get log`.
+
+- **Start:** both monitors connected, DDC working on both, values read and nothing written.
+- **Accessibility:** not granted at start, granted by the owner by 20:19.
+
+| Budget | Target | Measured here (M5 Pro) |
+| --- | --- | --- |
+| Panel open, warm | Under 100 ms | 81, 109, 103, 102, 96 and 77 ms |
+| Memory, panel closed, after about ten opens | At most 50 MiB | 52 MB physical footprint, peak 59 MB. 57 MB straight after a burst of opens |
+| Idle CPU and wakeups over 10 minutes | 0.1% of a core, no recurring wakeups | See below |
+
+**Two budgets are at or over the line on the fastest Mac we have.** The log splits an open: building the two models takes 33 to 51 ms, building the views 0, bringing the app forward 2 to 5, and showing the popover 36 to 61. Off screen, on made-up monitors, models and views together took about 20 ms, so on real displays it is the models that cost: what they ask the system for on every open has not been profiled yet. Memory was 41 MB for v0.1 and 47 MB for v0.2 by the same measure.
+
+**Idle.** The first ten-minute window (20:04:31 to 20:14:32) had four panel opens in it and was thrown away: 3.30 s of CPU and 23 idle wakeups with those opens. The second window started at 20:14:33. In its first five minutes the process used 0.04 s of CPU, which is 0.013% of a core.
+
 ### Still to be measured with the app running
 
 A development build in place of the copy in daily use: the panel's open time on screen, memory with the panel closed (at most 50 MiB), and wakeups when idle. And by eye: the popover's arrow against the skin's canvas, real blur, the feel of the bars, full keyboard access through the panel, VoiceOver, and Increase Contrast, Reduce Motion and Reduce Transparency switched on in System Settings.
