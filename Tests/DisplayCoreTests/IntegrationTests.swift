@@ -160,6 +160,57 @@ struct IntegrationTests {
         #expect(AppPaths.standard.supportDirectory == AppPaths.standardDirectory)
     }
 
+    @Test("A stored command this build cannot read costs only its preset or shortcut, never the settings file")
+    func unreadableEntries() throws {
+        let sink = CapturingLogSink()
+        LogCenter.shared.add(sink: sink)
+        var document = SettingsDocument()
+        document.layout.protectLayout = true
+        let good = Preset("Desk", commands: [Command(.set, .brightness, on: .tag(1), value: .absolute(0.5), origin: .command)])
+        document.layout.presets = [good]
+        let combo = KeyCombo(keyCode: 18, modifiers: [.control, .option], keyLabel: "1")
+        document.layout.shortcuts = [ShortcutBinding(combo: combo, command: Command(.set, .preset, value: .choice("Desk"), origin: .keyboard))]
+        var json = try #require(try JSONSerialization.jsonObject(with: DocumentCoding.encoder().encode(document)) as? [String: Any])
+        var layout = try #require(json["layout"] as? [String: Any])
+        let goodPreset = try #require((layout["presets"] as? [[String: Any]])?.first)
+        let goodCommand = try #require((goodPreset["commands"] as? [[String: Any]])?.first)
+
+        func preset(_ name: String, _ change: (inout [String: Any]) -> Void) -> [String: Any] {
+            var command = goodCommand
+            change(&command)
+            var copy = goodPreset
+            copy["name"] = name
+            copy["commands"] = [goodCommand, command]
+            return copy
+        }
+        let badOrigin = preset("Unknown origin") { $0["origin"] = "teleport" }
+        let badOperation = preset("Unknown operation") { $0["operation"] = "explode" }
+        let badValue = preset("Malformed value") { command in
+            var value = command["value"] as? [String: Any] ?? [:]
+            for key in value.keys { value[key] = ["_0": "not a number"] }
+            command["value"] = value
+        }
+        layout["presets"] = [goodPreset, badOrigin, badOperation, badValue]
+        var badShortcut = try #require((layout["shortcuts"] as? [[String: Any]])?.first)
+        var shortcutCommand = try #require(badShortcut["command"] as? [String: Any])
+        shortcutCommand["origin"] = "teleport"
+        badShortcut["command"] = shortcutCommand
+        badShortcut["combo"] = ["keyCode": 19, "modifiers": 3, "keyLabel": "2"]
+        layout["shortcuts"] = [layout["shortcuts"] as? [[String: Any]] ?? [], [badShortcut]].flatMap { $0 }
+        json["layout"] = layout
+
+        let store = SettingsStore(persistence: MemoryPersistence(try JSONSerialization.data(withJSONObject: json)), scheduler: ManualScheduler())
+        #expect(store.loadOutcome == .loaded)
+        #expect(store.document.layout.protectLayout == true)
+        #expect(store.document.layout.presets?.map(\.name) == ["Desk"])
+        #expect(store.document.layout.shortcuts?.map(\.combo.keyCode) == [18])
+        for name in ["Unknown origin", "Unknown operation", "Malformed value"] {
+            #expect(sink.messages(containing: "A stored preset could not be read and was left out: \"\(name)\"").count == 1)
+        }
+        #expect(!sink.messages(containing: "A stored shortcut could not be read and was left out: ⌃⌥2").isEmpty)
+        #expect(sink.messages(containing: "teleport").count >= 1)
+    }
+
     @Test("Keys reach every display that mirrors the one they target")
     func mirrorExpansion() {
         let layout = LayoutSnapshot(entries: [

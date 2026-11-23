@@ -558,6 +558,73 @@ public struct LayoutSettings: Codable, Sendable, Equatable {
     public var urlToken: String?
 
     public init() {}
+
+    /// Presets and shortcuts are read entry by entry. A stored command this build cannot
+    /// read, such as an origin, an operation or a value shape added later, or a hand-edited
+    /// import, costs only its own preset or shortcut, and is logged. The settings file is
+    /// never set aside for it.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        savedLayout = try container.decodeIfPresent(LayoutSnapshot.self, forKey: .savedLayout)
+        protectLayout = try container.decodeIfPresent(Bool.self, forKey: .protectLayout)
+        protectionNotices = try container.decodeIfPresent(Bool.self, forKey: .protectionNotices)
+        allowMirrorTargetModes = try container.decodeIfPresent(Bool.self, forKey: .allowMirrorTargetModes)
+        allowDisconnectAll = try container.decodeIfPresent(Bool.self, forKey: .allowDisconnectAll)
+        allowRiskyBuiltInDisconnect = try container.decodeIfPresent(Bool.self, forKey: .allowRiskyBuiltInDisconnect)
+        autoDisconnectBuiltIn = try container.decodeIfPresent(Bool.self, forKey: .autoDisconnectBuiltIn)
+        presets = try container.decodeIfPresent([StoredEntry<Preset>].self, forKey: .presets).map { StoredEntry.readable($0, kind: "preset") }
+        shortcuts = try container.decodeIfPresent([StoredEntry<ShortcutBinding>].self, forKey: .shortcuts).map { StoredEntry.readable($0, kind: "shortcut") }
+        commandLineAccess = try container.decodeIfPresent(Bool.self, forKey: .commandLineAccess)
+        urlScheme = try container.decodeIfPresent(Bool.self, forKey: .urlScheme)
+        urlToken = try container.decodeIfPresent(String.self, forKey: .urlToken)
+    }
+}
+
+/// One entry of a stored list, read on its own. Reading it never fails: an entry that
+/// cannot be read keeps what can be said about it, for the log.
+struct StoredEntry<Value: Decodable>: Decodable {
+    let value: Value?
+    let label: String?
+    let problem: String?
+
+    private struct Label: Decodable {
+        var name: String?
+        var combo: KeyCombo?
+    }
+
+    init(from decoder: Decoder) throws {
+        let label = try? Label(from: decoder)
+        self.label = label?.name.map { "\"\($0)\"" } ?? label?.combo.map(\.description)
+        do {
+            value = try Value(from: decoder)
+            problem = nil
+        } catch {
+            value = nil
+            problem = StoredEntry.describe(error)
+        }
+    }
+
+    static func describe(_ error: Error) -> String {
+        func path(_ context: DecodingError.Context) -> String {
+            let keys = context.codingPath.map { $0.intValue.map(String.init) ?? $0.stringValue }
+            return keys.isEmpty ? "" : " at " + keys.joined(separator: ".")
+        }
+        switch error as? DecodingError {
+        case .dataCorrupted(let context)?: return context.debugDescription + path(context)
+        case .typeMismatch(_, let context)?: return context.debugDescription + path(context)
+        case .valueNotFound(_, let context)?: return context.debugDescription + path(context)
+        case .keyNotFound(let key, let context)?: return "\(key.stringValue) is missing" + path(context)
+        default: return String(describing: error)
+        }
+    }
+
+    /// The entries that could be read. Each one left out is logged.
+    static func readable(_ entries: [StoredEntry<Value>], kind: String) -> [Value] {
+        for (index, entry) in entries.enumerated() where entry.value == nil {
+            Log.core.notice("A stored \(kind) could not be read and was left out: \(entry.label ?? "number \(index + 1)") (\(entry.problem ?? "unknown")). The other settings are kept.")
+        }
+        return entries.compactMap(\.value)
+    }
 }
 
 /// Layout and connection settings of one display.
