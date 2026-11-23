@@ -26,6 +26,8 @@ display16x \(AppPaths.version) — command line for Display 16X
 
   display16x probe [--capabilities] [--modes] [--with-log]
       Print a read-only hardware report. Works without the app.
+  display16x probe --interfaces
+      Only which private interfaces resolve. Looks at no display.
 
   display16x list                         Connected and remembered displays
   display16x status                       App state
@@ -227,6 +229,7 @@ case "probe":
     var probeOptions = ProbeOptions()
     probeOptions.includeCapabilities = arguments.flags.contains("--capabilities")
     probeOptions.includeAllModes = arguments.flags.contains("--modes")
+    probeOptions.interfacesOnly = arguments.flags.contains("--interfaces")
     let lines = await HardwareProbe.report(options: probeOptions)
     print(lines.joined(separator: "\n"))
     if arguments.flags.contains("--with-log") {

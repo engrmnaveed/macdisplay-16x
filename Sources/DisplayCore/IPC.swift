@@ -4,7 +4,8 @@ import Foundation
 public struct AppPaths: Sendable {
     public static let bundleIdentifier = "com.16xbrains.macdisplay16x"
     public static let productName = "Display 16X"
-    public static let version = "0.1.0"
+    /// From `scripts/release-version`, written into the build by the ReleaseVersion plugin.
+    public static let version = releaseVersion
 
     public let supportDirectory: URL
 
