@@ -2,7 +2,7 @@ import AppKit
 import DisplayCore
 import SwiftUI
 
-// The state behind the Look tab of the settings window. What is chosen is read from the skin
+// The state behind the Appearance tab of the settings window. What is chosen is read from the skin
 // store while the tab draws, so a skin chosen from the command line shows here at once.
 // Every choice builds a command for the engine with origin "interface".
 

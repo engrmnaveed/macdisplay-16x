@@ -337,8 +337,8 @@ extension Theme {
             ring: 54, ringLine: 4, countdownLine: 2, segment: 6, segmentCount: 16,
             mapHeight: 118, miniMap: CGSize(width: 72, height: 44),
             hudWidth: 280, noticeWidth: 400, keepWindowWidth: 380, offerWidth: 400,
-            settingsWidth: 540, previewWidth: 500, settingsHeight: 440, aboutMark: 64, menuBarIcon: 18,
-            swatch: CGSize(width: 114, height: 60), swatchColumns: 4, swatchMark: 7, swatchLine: 3
+            settingsWidth: 580, previewWidth: 500, settingsHeight: 440, aboutMark: 64, menuBarIcon: 18,
+            swatch: CGSize(width: 126, height: 64), swatchColumns: 4, swatchMark: 7, swatchLine: 3
         ),
         type: TypeScale(
             title: .system(size: 14, weight: .semibold),

@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The Look tab: the skins side by side, and the custom skin's two colors. A choice shows at
+/// The Appearance tab: the skins side by side, and the custom skin's two colors. A choice shows at
 /// once on every surface that is open.
-struct LookSettings: View {
+struct AppearanceSettings: View {
     @ObservedObject var skins: SkinPanelModel
 
     private var columns: [GridItem] {

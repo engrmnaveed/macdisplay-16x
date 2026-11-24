@@ -61,19 +61,25 @@ Captured hardware output that becomes a test fixture carries made-up serial numb
 
 ## The look
 
+Choose how the app looks in **Settings → Appearance**, or with `display16x skin`. There are six ready-made skins: **Studio** (the default, navy and aqua), **System** (the accent color chosen in System Settings, on neutral grey, and it follows a change of that color at once), **Graphite**, **Ember**, **Orchid** and **Moss**. **Custom** takes two colors of your own: an accent, and a color the surfaces lean towards. Every skin follows light and dark mode and Increase Contrast, and a choice shows at once on every surface that is open. The menu bar icon stays the system's color.
+
+Custom colors cannot make the interface hard to read. The surfaces keep the lightness of Studio's in each look and take only the hue of your surfaces color; text is moved until it stands out from what it sits on; and the accent moves lighter or darker only as far as it must to be read. An accent that is readable as picked is used as picked. When yours had to move, the Appearance tab says so, and `display16x get skin` gives the colors as drawn.
+
 The interface is drawn in three layers, so that a new look is a small change:
 
 | Layer | File | What it holds |
 | --- | --- | --- |
-| The skin | `Sources/Display16XApp/Design/Theme.swift` | Every color, distance, size, font, symbol name and duration, as values. A re-color or re-spacing ends here. |
+| The skin | `Sources/Display16XApp/Design/Theme.swift` | Every color, distance, size, font, symbol name and duration, as values: Studio written out, and every other skin as one line in `Theme.skins`. `Palette.swift` next to it works a skin's colors out from its two. |
 | The pieces | `Sources/Display16XApp/Design/Primitives.swift` | How a bar, a text-size stop, a chip, a card or a banner is drawn from those values. |
-| The surfaces | `Sources/Display16XApp/Surfaces/` | Which pieces a surface is made of, and its words. A surface has no color, font, radius, distance or symbol of its own, and a test fails when one does. |
+| The surfaces | `Sources/Display16XApp/Surfaces/` | Which pieces a surface is made of, and its words. A surface has no color, font, radius, distance or symbol of its own, and picks no skin of its own, and a test fails when one does. |
 
 The app icon is drawn by a script, the way the pieces are: `swift packaging/icon/draw-icon.swift packaging/AppIcon.png` draws the 1024-pixel picture, and `scripts/make-icon.sh packaging/AppIcon.png` makes `packaging/AppIcon.icns` from it with `sips` and `iconutil`. The packaging script puts that file into the bundle. The mark is the one the app draws in its panel and in the menu bar.
 
-A re-skin is held to two measures by the tests: `SkinContrastTests` measures the skin's color pairs in light, dark and both increased-contrast looks, and the render run fails when a control would reach VoiceOver without a name.
+A re-skin is held to two measures by the tests: `SkinContrastTests` measures the color pairs of Studio, every ready-made skin, every accent color macOS offers, awkward custom colors and two thousand random ones, in light, dark and both increased-contrast looks; and the render run fails when a control would reach VoiceOver without a name, or when a surface that is open does not take a new skin.
 
-To check a change, run `scripts/render-surfaces.sh` and look at `renders/surfaces/sheets/skin-light.png` and `skin-dark.png`, which show every value and piece on one picture, then at the other sheets in that folder. `DISPLAY16X_COMPARE=before:after swift test --filter RenderHarness/compare` lists the pictures that differ between two runs.
+**To add a ready-made skin**, add one line to `Theme.skins`: a name for settings and the command line, the name people see, an accent and a color for the surfaces. Then run `scripts/render-surfaces.sh` and look at `renders/surfaces/sheets/skins-light.png` and `skins-dark.png`, the panel in every skin side by side. The tests measure the new skin on their own.
+
+To check any other change, run `scripts/render-surfaces.sh` and look at `renders/surfaces/sheets/skin-light.png` and `skin-dark.png`, which show every value and piece on one picture, then at the other sheets in that folder. `DISPLAY16X_COMPARE=before:after swift test --filter RenderHarness/compare` lists the pictures that differ between two runs. Countdown rings and the "Last seen" time differ between any two runs.
 
 ## Command line
 
@@ -144,6 +150,14 @@ dist/display16x color modes --tag 2                           # how the link car
 dist/display16x probe --color                                 # HDR and color in the hardware report
 ```
 
+The look:
+
+```sh
+dist/display16x skin                                          # the skin in use, and every skin there is
+dist/display16x skin graphite
+dist/display16x skin custom accent=#D6336C surfaces=#E8D8C4   # your own colors, kept readable
+```
+
 ## What works today
 
 | Area | State |
@@ -167,6 +181,7 @@ dist/display16x probe --color                                 # HDR and color in
 | Color profiles with a fallback and a profile for HDR, reference presets | Assigning a profile and giving the monitor's own back was checked on hardware with a probe. The app's own use is unit-tested. No display with reference presets was available. Off by default |
 | The link's color modes, rates the mode list leaves out, dithering | Read on hardware through the app's own code. Shown only: macOS offers no documented way to choose them |
 | Brightness above SDR white | Built up to the color pipeline, which cannot write above white yet, so it does nothing and says so. Off by default |
+| Skins: six ready-made and a custom one, in Settings and from the command line | Unit-tested, contrast measured in all four looks, and drawn off screen on every main surface. Not yet used in the running app |
 
 The measurements behind this table are in [docs/feasibility.md](docs/feasibility.md).
 

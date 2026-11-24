@@ -41,7 +41,7 @@ enum SkinCatalog {
 
     /// The surfaces each skin is drawn on, by the name used in the file names.
     static let parts: [(id: String, title: String)] = [
-        ("panel", "The panel"), ("display", "A display's page"), ("arrange", "Arrange"), ("settings", "Settings: Look"),
+        ("panel", "The panel"), ("display", "A display's page"), ("arrange", "Arrange"), ("settings", "Settings: Appearance"),
         ("keep", "A Keep window"), ("indicator", "The indicator"), ("notice", "A notice"), ("sheet", "Every value and piece"),
     ]
 
@@ -75,7 +75,7 @@ enum SkinCatalog {
                 PanelView(model: model, layoutModel: layoutModel, maxHeight: 900, start: .arrange, openSettings: {}, quit: {})
             }
             try session.shoot(id("settings"), group: group, title: title("settings"), chrome: .window, dumpAccessibility: false, active: true) {
-                SettingsView(model: model, layoutModel: layoutModel, start: .look, skins: skinModel, openLink: { _ in })
+                SettingsView(model: model, layoutModel: layoutModel, start: .appearance, skins: skinModel, openLink: { _ in })
             }
             try session.shoot(id("keep"), group: group, title: title("keep"), chrome: .window, dumpAccessibility: false) {
                 ColorConfirmationView(name: "LG SDQHD", question: "Keep HDR on?", fallback: "HDR off", deadline: deadline, seconds: 86_400, keep: {}, revert: {})
@@ -118,7 +118,7 @@ enum SkinCatalog {
     // MARK: Live
 
     /// Opens every kind of surface in Studio: the panel, a display's page, Arrange, the
-    /// settings window's Look tab, a Keep window, the indicator and a notice. Then chooses
+    /// settings window's Appearance tab, a Keep window, the indicator and a notice. Then chooses
     /// another skin through the engine, as the settings window does, and checks that each
     /// open surface looks exactly like the same surface opened in the new skin.
     static func live(_ session: RenderSession) async throws {
@@ -140,7 +140,7 @@ enum SkinCatalog {
             ("panel", true, { AnyView(PanelView(model: model, layoutModel: layoutModel, maxHeight: 900, start: .home, openSettings: {}, quit: {})) }),
             ("display-page", true, { AnyView(PanelView(model: model, layoutModel: layoutModel, maxHeight: 1400, start: .display(lg), openSettings: {}, quit: {})) }),
             ("arrange", true, { AnyView(PanelView(model: model, layoutModel: layoutModel, maxHeight: 900, start: .arrange, openSettings: {}, quit: {})) }),
-            ("settings-look", true, { AnyView(SettingsView(model: model, layoutModel: layoutModel, start: .look, skins: skins, openLink: { _ in })) }),
+            ("settings-appearance", true, { AnyView(SettingsView(model: model, layoutModel: layoutModel, start: .appearance, skins: skins, openLink: { _ in })) }),
             ("keep-window", false, { AnyView(ColorConfirmationView(name: "LG SDQHD", question: "Keep HDR on?", fallback: "HDR off", deadline: deadline, seconds: 86_400, keep: {}, revert: {})) }),
             ("indicator", false, { AnyView(IndicatorView(payload: IndicatorPayload(tag: lg, control: .brightness, value: 0.62), name: "LG SDQHD")) }),
             ("notice", false, { AnyView(NoticeView(notice: notice)) }),

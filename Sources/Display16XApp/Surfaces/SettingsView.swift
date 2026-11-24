@@ -6,7 +6,7 @@ import SwiftUI
 struct SettingsView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case general = "General"
-        case look = "Look"
+        case appearance = "Appearance"
         case scenes = "Scenes"
         case shortcuts = "Shortcuts"
         case scripting = "Scripting"
@@ -23,7 +23,7 @@ struct SettingsView: View {
     let advanced: AdvancedPanelModel?
     /// v0.4: HDR and color switches under Advanced. Nil leaves the tab as it was.
     let color: ColorPanelModel?
-    /// The Look tab's state. Nil shows the tab without its controls.
+    /// The Appearance tab's state. Nil shows the tab without its controls.
     let skins: SkinPanelModel?
     private let tab: State<Tab>
 
@@ -64,8 +64,8 @@ struct SettingsView: View {
     @ViewBuilder private var page: some View {
         switch tab.wrappedValue {
         case .general: GeneralSettings(model: model)
-        case .look:
-            if let skins { LookSettings(skins: skins) }
+        case .appearance:
+            if let skins { AppearanceSettings(skins: skins) }
         case .scenes: SceneSettings(layoutModel: layoutModel)
         case .shortcuts: ShortcutSettings(layoutModel: layoutModel)
         case .scripting: ScriptingSettings(layoutModel: layoutModel)
