@@ -125,6 +125,8 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 
 **0.2.0 was published on 23 November 2026**, after the owner's approval, as the first release. **0.3.0 was tagged on 24 November 2026** and approved by the owner the same day, after its packaging job had twice waited for a macOS runner until GitHub cancelled it. Both are signed ad hoc.
 
+**A build is started on real hardware before its tag.** v0.4 crashed one second after start, and 495 unit tests, the local checks and CI all passed. CI now starts the packaged app at the end of the smoke test, which catches a crash at start in general. It would not have caught this one: the crashing commit ran clean on a GitHub runner, which has no real monitor for the HDR code to read. So the commit that is tagged, or code that contains it, has to have run as the owner's copy first. 0.4.0 was tagged on 24 November 2026 after its fix had run that way.
+
 **Signing, until the project certificate exists.** The workflow signs with what the `release-signing` environment holds. It holds nothing yet, so 0.2.0 is signed ad hoc: the first launch has to be allowed by hand, and every update costs the Accessibility grant. The owner's certificate, its three secrets and the tap's deploy key change that from the release after they are added.
 
 ### Interface pass
