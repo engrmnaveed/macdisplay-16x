@@ -188,6 +188,16 @@ jobs:
             echo "- SHA-256: \`$(cut -d ' ' -f 1 "$ARCHIVE.sha256")\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The app as users get it, signed and unpacked, started the way the smoke test starts
+      # CI's own build: in safe mode, with a settings folder of its own, for a few seconds.
+      # The release signature and the hardened runtime are the differences a crash could hide
+      # behind. The app is given no token.
+      - name: Start the signed app
+        timeout-minutes: 3
+        env:
+          GH_TOKEN: ''
+        run: scripts/start-check.sh "$UNPACKED_APP"
+
       # The Accessibility grant and Homebrew's first-launch approval both follow the
       # designated requirement. Say so before publishing when this release breaks them.
       - name: Same signer as the last release

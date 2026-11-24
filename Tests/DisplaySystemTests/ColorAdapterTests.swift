@@ -1,3 +1,4 @@
+import CoreGraphics
 import DisplayCore
 @testable import DisplayPrivate
 import Foundation
@@ -65,6 +66,32 @@ import Testing
         #expect(report.modes.first { $0.id == 6 }?.offered == false, "only the 1920 × 1080 timing lists it")
         #expect(report.offeredModes.map(\.summary) == ["10-bit RGB, full range, PQ"])
         #expect(report.dithering == true)
+    }
+
+    @Test("Reading HDR through System Settings' display model leaves the object's references balanced. Read-only")
+    func balancedReferences() {
+        // The first v0.4 build released the model once too often and crashed when an
+        // autorelease pool emptied. Emptying pools around repeated reads would crash here.
+        for _ in 0..<5 {
+            autoreleasepool {
+                _ = MonitorPanelDisplay.hdr(display: CGMainDisplayID())
+                _ = MonitorPanelDisplay.presets(display: CGMainDisplayID())
+                // A display that does not exist. MPDisplay answers it with an object too.
+                _ = MonitorPanelDisplay.hdr(display: 0x7FFF_FFF0)
+            }
+        }
+    }
+
+    @Test("An empty preset slot is left out, as the built-in XDR panel lists forty of them")
+    func presetSlots() {
+        let named = ["Apple XDR Display (P3-1600 nits)", "Apple Display (P3-600 nits)", "Internet & Web (sRGB)"]
+        var entries: [MonitorPanelDisplay.PresetEntry] = named.enumerated().map { .init(index: UInt64($0.offset), name: $0.element, valid: true) }
+        // What macOS gave for the empty slots: a name of its own and PresetValid 0.
+        entries += (11...50).map { .init(index: UInt64($0), name: "Preset #\($0)", valid: false) }
+        entries.append(.init(index: 51, name: " ", valid: nil))
+        let presets = MonitorPanelDisplay.named(entries, active: 0)
+        #expect(presets.map(\.name) == named)
+        #expect(presets.first?.isActive == true && presets.dropFirst().allSatisfy { !$0.isActive })
     }
 
     @Test("Only RGB profiles of the display or color space class can describe a display")

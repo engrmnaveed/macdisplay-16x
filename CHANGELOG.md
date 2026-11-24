@@ -20,6 +20,7 @@ HDR and color: switch HDR on the displays that have it, choose color profiles wi
 - `display16x hdr headroom --tag 2` says how far above SDR white the display can show, now and at most, and what sets the level of ordinary windows in HDR.
 - Protect HDR: the app puts it back after a wake, a reconnect and a change made elsewhere, and stops after three tries in two minutes, saying so.
 - Night Shift and True Tone can go off while a display shows HDR, and come back on afterwards. Only what was on is turned off, only what the app turned off is turned back on, and it is given back when the app quits or, after a crash, when it starts again.
+- A display that shows HDR at all times, such as a MacBook Pro's built-in XDR panel, reads as HDR always on, with how far above SDR white it can go. There is nothing to switch, and the app does not offer a switch.
 - Hardware brightness in HDR is a switch per display. Turned off, brightness leaves a monitor's backlight alone while HDR is on and says why.
 - A virtual screen can offer HDR modes next to its SDR ones, or only HDR: `display16x virtual create Studio 2560x1440 hdr=on connect`.
 
@@ -29,7 +30,7 @@ HDR and color: switch HDR on the displays that have it, choose color profiles wi
 - Choose a profile for HDR as well, and it goes on when HDR switches on and comes off when it switches off, whoever switched it.
 - Name profiles to fall back to when the chosen one goes missing; the monitor's own comes last. Protect the profile and the app puts it back, through the fallback if it must.
 - While a profile of your own is assigned, software dimming pauses on every display, and the panel says so.
-- Reference presets of Apple's own displays can be chosen by name. None was on the test desk.
+- Reference presets of Apple's own displays can be chosen by name. Only the real ones are listed: the built-in XDR panel shows its eleven, without the forty empty slots macOS keeps for custom presets.
 
 ### The link
 
@@ -53,6 +54,7 @@ On an Apple M5 Pro Mac with macOS 27.2.1, an LG SDQHD on USB-C and a Lenovo P32p
 - A color profile assigned to the LG took effect at once, and giving the monitor's own back removed it cleanly.
 - Night Shift was switched on and off.
 - The link's color modes, the rates the mode list leaves out, dithering and Night Shift's state read the same through the app's own code as through the test programs.
+- Through the app, with the MacBook's lid open: its built-in XDR panel read as HDR always on, up to 16 times SDR white, with its eleven reference presets and its own color profile.
 
 Unit-tested only: everything the app does on its own with these features, protection of HDR and profiles, the profile for HDR, Night Shift off in HDR, reference presets, virtual screens with HDR, and brightness above white.
 

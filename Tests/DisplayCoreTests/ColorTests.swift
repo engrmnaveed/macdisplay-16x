@@ -653,3 +653,38 @@ import Testing
         #expect(rig.rig.recovery.document.color == nil)
     }
 }
+
+@MainActor
+@Suite struct BuiltInPanelTests {
+    /// The MacBook's XDR panel as it read on 24 November 2026 with the lid open: no HDR switch,
+    /// potential headroom 16, its own reference presets, and no link details.
+    private func rig() async -> ColorRig {
+        let system = FakeColorSystem()
+        system.hdr[Fixture.lgID] = HDRStatus(offered: false, isOn: false)
+        system.links[Fixture.lgID] = nil
+        let rig = ColorRig(system: system)
+        await rig.startWithDesk()
+        return rig
+    }
+
+    @Test("A panel that shows HDR at all times says so instead of offering no HDR")
+    func alwaysHDR() async {
+        let rig = await rig()
+        rig.system.hdrHeadroomWhenOff = Headroom(current: 1, potential: 16)
+        let hdr = await rig.run(.get, .hdr, on: .tag(rig.lgTag.rawValue))
+        #expect(hdr.entries.first?.outcome == .confirmed && hdr.entries.first?.actual == .flag(true))
+        #expect(hdr.entries.first?.detail == "The display shows HDR content at all times, up to 16.00 times SDR white. It has no HDR switch.")
+        await rig.enable(.hdrControls)
+        let set = await rig.run(.set, .hdr, on: .tag(rig.lgTag.rawValue), value: .flag(false))
+        #expect(set.entries.first?.outcome == .failed)
+        let headroom = await rig.run(.get, .headroom, on: .tag(rig.lgTag.rawValue))
+        #expect(headroom.entries.first?.detail?.contains("The display shows HDR content without a switch") == true)
+    }
+
+    @Test("A display whose link macOS does not describe says that, not that the Mac cannot read it")
+    func linkNotReported() async {
+        let rig = await rig()
+        let modes = await rig.run(.get, .colorMode, on: .tag(rig.lgTag.rawValue))
+        #expect(modes.entries.first?.detail == ColorUnavailable.linkNotReported)
+    }
+}

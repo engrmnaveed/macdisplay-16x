@@ -51,6 +51,11 @@ public struct ColorCapabilities: Sendable, Equatable {
 public enum ColorUnavailable {
     public static let hdrSwitch = "This macOS does not offer the HDR switch Display 16X uses."
     public static let noHDR = "The display offers no HDR modes."
+    /// A panel such as the built-in XDR one: HDR content is always shown, and there is no switch.
+    public static func alwaysHDR(_ headroom: Headroom) -> String {
+        String(format: "The display shows HDR content at all times, up to %.2f times SDR white. It has no HDR switch.", headroom.potential)
+    }
+    public static let linkNotReported = "macOS reports no link details for this display, as for a built-in panel."
     public static let profiles = "Color profiles cannot be read on this Mac."
     public static let chooseLinkMode = "macOS offers no documented way to choose how the link carries the picture, so Display 16X only shows the modes."
     public static let setDithering = "macOS offers no documented way to switch dithering, so Display 16X only shows whether it is on."
