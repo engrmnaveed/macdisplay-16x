@@ -20,12 +20,15 @@ struct SettingsView: View {
     let openLink: (URL) -> Void
     /// v0.3: the Advanced tab's state. Nil shows the tab without its controls.
     let advanced: AdvancedPanelModel?
+    /// v0.4: HDR and color switches under Advanced. Nil leaves the tab as it was.
+    let color: ColorPanelModel?
     private let tab: State<Tab>
 
-    init(model: PanelModel, layoutModel: LayoutPanelModel, start: Tab = .general, advanced: AdvancedPanelModel? = nil, openLink: @escaping (URL) -> Void) {
+    init(model: PanelModel, layoutModel: LayoutPanelModel, start: Tab = .general, advanced: AdvancedPanelModel? = nil, color: ColorPanelModel? = nil, openLink: @escaping (URL) -> Void) {
         self.model = model
         self.layoutModel = layoutModel
         self.advanced = advanced
+        self.color = color
         self.openLink = openLink
         tab = State(initialValue: start)
     }
@@ -59,6 +62,7 @@ struct SettingsView: View {
         case .scripting: ScriptingSettings(layoutModel: layoutModel)
         case .advanced:
             if let advanced { AdvancedSettingsPane(advanced: advanced) }
+            if let color { ColorSettingsPane(color: color) }
         case .about: AboutPane(openLink: openLink)
         }
     }

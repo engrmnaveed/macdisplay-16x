@@ -19,6 +19,7 @@ enum SurfaceCatalog {
         try await floating(session)
         try await settings(session)
         try await AdvancedCatalog.render(session)
+        try await ColorCatalog.render(session)
         try menuBar(session)
     }
 

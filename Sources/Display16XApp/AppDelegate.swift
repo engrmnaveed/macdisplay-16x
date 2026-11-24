@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var layoutSurfaces: LayoutSurfaceSet?
     private var layoutPanelModel: LayoutPanelModel?
     private var advancedPanelModel: AdvancedPanelModel?
+    private var colorPanelModel: ColorPanelModel?
+    private var colorConfirmations: ColorConfirmationPresenter?
     private let previewPresenter = SystemFilePreviewPresenter()
     private var settingsWindow: SettingsWindowPresenter?
     private var iconState = MenuBarIcon.State.normal
@@ -60,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         indicatorPresenter.displayName = { [registry = context.registry] tag in registry.record(for: tag)?.displayName }
         context.indicator.presenter = indicatorPresenter
         confirmations = ConfirmationWindowPresenter(context: context)
+        colorConfirmations = ColorConfirmationPresenter(context: context)
         let layoutSurfaces = LayoutSurfaceSet(context: context)
         self.layoutSurfaces = layoutSurfaces
         settingsWindow = SettingsWindowPresenter(context: context, hotKeys: layoutSurfaces.hotKeys)
@@ -178,12 +181,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let layoutModel = LayoutPanelModel(context: context, hotKeys: layoutSurfaces?.hotKeys)
         let advancedModel = AdvancedPanelModel(context: context)
         advancedModel.presentPreview = { [previewPresenter] in previewPresenter.present($0) }
+        let colorModel = ColorPanelModel(context: context)
         let modelsBuilt = clock.now
         // The panel scrolls inside the screen it hangs from instead of growing past it.
         let screenHeight: CGFloat = (button.window?.screen ?? NSScreen.main)?.visibleFrame.height ?? Skin.size.panelMaxHeight
         let view = PanelView(
             model: model, layoutModel: layoutModel, maxHeight: screenHeight * Skin.size.panelScreenShare,
-            advanced: advancedModel, openSettings: { [weak self] in self?.openSettings() }, quit: { NSApp.terminate(nil) }
+            advanced: advancedModel, color: colorModel, openSettings: { [weak self] in self?.openSettings() }, quit: { NSApp.terminate(nil) }
         )
         let hosting = NSHostingController(rootView: view)
         hosting.sizingOptions = [.preferredContentSize]
@@ -195,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         panelModel = model
         layoutPanelModel = layoutModel
         advancedPanelModel = advancedModel
+        colorPanelModel = colorModel
         let viewsBuilt = clock.now
         NSApp.activate(ignoringOtherApps: true)
         let activated = clock.now
@@ -224,6 +229,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         layoutPanelModel = nil
         advancedPanelModel?.close()
         advancedPanelModel = nil
+        colorPanelModel?.close()
+        colorPanelModel = nil
         popover?.contentViewController = nil
         popover = nil
     }

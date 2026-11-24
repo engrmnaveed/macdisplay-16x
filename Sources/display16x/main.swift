@@ -28,6 +28,8 @@ display16x \(AppPaths.version) — command line for Display 16X
       Print a read-only hardware report. Works without the app.
   display16x probe --interfaces
       Only which private interfaces resolve. Looks at no display.
+  display16x probe --color
+      The private interfaces, then HDR and color only. Sends nothing to a monitor.
 
   display16x list                         Connected and remembered displays
   display16x status                       App state
@@ -78,6 +80,25 @@ display16x \(AppPaths.version) — command line for Display 16X
       OPTIONS: 16:9  2560x1440  hidpi|lodpi  @60,120  portrait  step=160  smallest=1280
       cap=12  modes=2560x1440,1920x1080  diagonal=27  match  connect  link  unlink
       with-display=on|off  mirror=on|off  follow-rotation=on|off  restore-layout=on|off
+      hdr=on|only|off
+
+  display16x hdr [show] <display>         Whether HDR is on
+  display16x hdr on|off|toggle <display> [--try]   Switch HDR, as System Settings does
+  display16x hdr headroom <display>       How far above SDR white the display can show
+  display16x hdr protect on|off <display>   Put HDR back after wake and outside changes
+  display16x hdr hardware-brightness [on|off] <display>   Brightness drives the backlight in HDR
+  display16x hdr night-shift [on|off]     Night Shift and True Tone off while HDR is on
+  display16x hdr controls [on|off]        The switch for everything HDR. Off by default
+
+  display16x color [profile] [NAME|factory] <display> [--try]   The profile in use, or choose one
+  display16x color hdr-profile [NAME|factory|none] <display>   The profile to use in HDR
+  display16x color fallback [NAME, NAME…|none] <display>   Profiles to try when one is missing
+  display16x color protect on|off <display>   Put the SDR or HDR profile back
+  display16x color profiles               Every display profile installed
+  display16x color preset [NAME] <display> [--try]   Reference presets of Apple displays
+  display16x color modes|dithering|rates <display>   The link: color modes, dithering, and
+                                          rates the mode list leaves out. Read only
+  display16x color controls [on|off]      The switch for profiles and presets. Off by default
 
   <display>   --tag N | --name "NAME" | --uuid UUID | --main | --pointer | --focused | --all
   <other>     --of-tag N | --of-name "NAME" | --of-uuid UUID | --of-main | --of-pointer
@@ -91,9 +112,10 @@ display16x \(AppPaths.version) — command line for Display 16X
               input, X,Y for position, left:end and the like for placement.
   KEYS        Modifiers and a key joined by +, for example ctrl+opt+1 or cmd+shift+f13
 
-  --try                              For resolution, refreshRate and rotation: ask Keep or
-                                     Revert on screen, and go back on its own after a few
-                                     seconds. Answer with "display16x keep" or "revert"
+  --try                              For resolution, refreshRate, rotation, HDR, a profile and
+                                     a preset: ask Keep or Revert on screen, and go back on its
+                                     own after a few seconds. Answer with "display16x keep" or
+                                     "revert" and the display
   --controller ddc|native|software   Address one controller instead of the control's owner
   --timeout SECONDS                  How long to wait for the app (default 10)
   --json                             Print the raw result
@@ -187,7 +209,7 @@ func parseValue(_ text: String, for feature: FeatureDescriptor) -> CommandValue 
 // MARK: Sending
 
 func send(_ command: Command, arguments: Arguments) -> Never {
-    if let problem = FeatureRegistry.complete.validate(command) { fail(problem, .usage) }
+    if let problem = FeatureRegistry.withColor.validate(command) { fail(problem, .usage) }
     let client = UnixSocketClient(path: AppPaths().socketPath)
     let result: CommandResult
     do {
@@ -213,7 +235,7 @@ func send(_ command: Command, arguments: Arguments) -> Never {
 
 func feature(named name: String?) -> FeatureDescriptor {
     guard let name else { fail("name a feature. Run \"display16x features\" for the list", .usage) }
-    let registry = FeatureRegistry.complete
+    let registry = FeatureRegistry.withColor
     guard let match = registry.ordered.first(where: { $0.id.rawValue.lowercased() == name.lowercased() }) else {
         fail("unknown feature \"\(name)\". Run \"display16x features\" for the list", .usage)
     }
@@ -248,19 +270,20 @@ switch verb {
 case "help":
     if let name = arguments.positional.dropFirst().first {
         let target = feature(named: name)
-        print(FeatureRegistry.complete.completeHelp(for: target.id) ?? usage)
+        print(FeatureRegistry.withColor.helpWithColor(for: target.id) ?? usage)
     } else {
         print(usage)
     }
 
 case "features":
-    print("Features\n" + FeatureRegistry.complete.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
+    print("Features\n" + FeatureRegistry.withColor.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
 
 case "probe":
     var probeOptions = ProbeOptions()
     probeOptions.includeCapabilities = arguments.flags.contains("--capabilities")
     probeOptions.includeAllModes = arguments.flags.contains("--modes")
     probeOptions.interfacesOnly = arguments.flags.contains("--interfaces")
+    probeOptions.colorOnly = arguments.flags.contains("--color")
     let lines = await HardwareProbe.report(options: probeOptions)
     print(lines.joined(separator: "\n"))
     if arguments.flags.contains("--with-log") {
@@ -391,7 +414,7 @@ case "shortcut":
         var bound = command(operation, target.id, value: value)
         bound.origin = .keyboard
         bound.options.confirmed = arguments.flags.contains("--confirm")
-        if let problem = FeatureRegistry.complete.validate(bound) { fail(problem, .usage) }
+        if let problem = FeatureRegistry.withColor.validate(bound) { fail(problem, .usage) }
         let binding = ShortcutBinding(combo: combo, command: bound)
         guard let data = try? JSONEncoder().encode(binding) else { fail("the shortcut could not be encoded", .failed) }
         send(Command(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)), origin: .command), arguments: arguments)
@@ -438,6 +461,12 @@ case "override":
 
 case "virtual":
     virtualVerb()
+
+case "hdr":
+    hdrVerb()
+
+case "color", "colour":
+    colorVerb()
 
 default:
     fail("unknown command \"\(verb)\". Run \"display16x help\"", .usage)

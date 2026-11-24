@@ -107,11 +107,16 @@ public final class SystemVirtualScreens: VirtualScreenSystem {
     }
 
     public func create(_ specification: VirtualScreenSpecification) -> Result<SystemDisplayID, VirtualScreenError> {
+        if specification.hdr != nil, !VirtualDisplayFactory.canMakeHDRModes {
+            return .failure(.refused("this macOS cannot give a virtual screen HDR modes"))
+        }
         let request = VirtualDisplayRequest(
             name: specification.name, vendor: specification.vendor, product: specification.product, serial: specification.serial,
             widthMillimetres: specification.millimetres.width, heightMillimetres: specification.millimetres.height,
             maximumPixelsWide: UInt32(specification.maximumPixels.width), maximumPixelsHigh: UInt32(specification.maximumPixels.height),
-            modes: specification.modes.map { VirtualDisplayRequest.Mode(width: UInt32($0.size.width), height: UInt32($0.size.height), refreshRate: $0.refreshRate) },
+            modes: specification.modes.flatMap { mode in
+                (specification.hdr?.transferFunctions ?? [0]).map { VirtualDisplayRequest.Mode(width: UInt32(mode.size.width), height: UInt32(mode.size.height), refreshRate: mode.refreshRate, transferFunction: $0) }
+            },
             hiDPI: specification.hiDPI, rotation: specification.rotation
         )
         let box = EndedBox()

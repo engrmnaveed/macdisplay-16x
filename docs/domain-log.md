@@ -6,6 +6,91 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · Release 0.4.0: two releases waiting at once, and a release run with no macOS runner
+
+- **GitHub can fail to find a macOS runner for a release.** 0.3.0's packaging job waited 15 minutes and was cancelled with "The job was not acquired by Runner of type hosted even after multiple attempts", next to GitHub's notice that jobs for macOS arm64 runners may queue longer because of capacity. Its checks job had found a macOS runner six minutes earlier, and 0.2.0's packaging job had waited five minutes for one. Nothing was signed or published. GitHub offers no setting for how long a hosted job may wait. From 0.4.0's workflow on, a run that ends without a release says in its summary why, and for a job with no runner, that **Re-run failed jobs** runs it again with nothing to undo. The runbook says the same. No check was changed.
+- **A release run needs a macOS runner twice**, for the checks and for packaging. If runners stay short, the two could become one job that packages what it has just tested. That changes how the release reuses CI unchanged, so it was not done. It is an option for the maintainer, not a recommendation.
+- **Two releases can wait at once, and the order of approval does not matter** for tags from 0.3.0 on: the higher version stays the latest release and keeps the tap, and while both are ad hoc signed the notes are the same either way. The order matters once, at the change to the certificate: approve the last ad hoc release first, or add the sentence about the Accessibility grant to the first certificate release's notes by hand.
+
+## 24 November 2026 · Brightness above SDR white: built up to the one hook only the core can give
+
+**Request for the core session, through the planning thread: one transform in the color pipeline.** Everything else for "software upscaling" is built at unit-test level and stays inert until then, saying why in the panel and on the command line.
+
+1. A `ColorTransform` case that multiplies by a factor above 1 without clamping the table at 1, for example `case boost(Float)`: `apply(to:)` multiplies and clamps only at 0, and it is neutral at 1. Today `.gain` clamps every entry at 1, so a factor of 1.5 brightens the middle and flattens the top, which is not a brighter picture.
+2. The pipeline's reserved `upscaling` stage takes it, after dimming, so `pipeline.set(.boost(f), for: .upscaling)` writes one composed table. The gamma backend already writes floats and needs no change.
+3. v0.4 then sets one closure in the app: `UpscalingService.boost`. Nothing else in v0.4 changes.
+
+**A question to settle before the change is worth making:** whether a table value above 1 reaches the panel at all. The framebuffer reports `GCPBypassesEDRPixels = 1`, which reads as "the color table leaves pixels above white alone". The existing `spikes/gamma-table-write-probe.swift`, run on the LG with HDR on and a top value of 1.5, answers it in a minute with the owner at the desk. A pipeline only exists where color tables are switched on, so upscaling also needs that switch.
+
+**What is built, with no change to the core:**
+
+- **A level above white of its own**, `upscale`, 0 to 1 of what the display's limits allow, next to brightness rather than inside it. Putting it on the composite scale above 1 would change the engine, the control service and the keys. It is a later step for the core session, and nothing in v0.4 depends on it.
+- **The neutral key stop through the engine.** The brightness keys already arrive as step commands, so a v0.4 extension sends a press past 100% to the level above white: the press that reaches 100% stops there, the next one goes above, and going down the level above white comes off first. With the stop off, the part past 100% goes above at once.
+- **Limits per display**: the highest factor (1.6 by default), the share of the headroom that looks right (the "visual calibration"), and the key stop.
+- **The headroom request**: a one-point, click-through window showing a pixel above white through public Metal, so macOS raises the headroom for that display. It costs while shown. Not proven on hardware.
+- **Nothing survives the app.** The level lives in memory and is recorded in the recovery store before anything is written. It drops to white at sleep, at a lock, when HDR goes off, when the switch goes off and at quit. What a crash left is put back at the next start, through the gate.
+- **Recovery after direct control** puts back a panel's brightness and its reference preset through the engine. Auto-brightness is recorded and not yet put back: there is no switch for it yet.
+- **Direct XDR upscaling is not built.** It drives a built-in XDR panel's own brightness above white, and no XDR panel was in use on this desk. The command line says so for a built-in display.
+
+## 24 November 2026 · Virtual HDR: an option on v0.3's virtual screens, built on a code macOS has not confirmed
+
+**For the v0.3 session, through the planning thread.** "Virtual HDR" is a v0.4 row about v0.3's screens, so it touched four of v0.3's files, additively and with no change to what a screen did before: an optional `hdr` in a screen's definition (`hdr=on` adds HDR modes next to the SDR ones, `hdr=only` offers HDR alone), the same in what the window server is asked to make, a transfer function on each requested mode, and the words in the help. A screen saved before has no HDR and is made exactly as before.
+
+- **macOS takes a transfer function per virtual mode**, through an initializer whose shape the runtime reports. The app passes 2, the PQ code of CTA-861, which the framebuffer registry also uses. **Whether macOS accepts it and then offers HDR for the screen is not proven**: the check that would show it (`spikes/virtual-hdr-write-probe.swift`) was carried forward by the owner.
+- A macOS without that initializer refuses an HDR screen with the reason, and SDR screens are made as before.
+
+## 24 November 2026 · v0.4 surfaces: where they plug into the interface pass's surfaces, and what they say
+
+**For the interface session, through the planning thread.** The v0.4 surfaces are new files built from the skin's values and pieces only (`SkinBoundaryTests` passes), and add nothing to the skin. To reach them, four existing files got one optional entry point each, defaulting to nothing, so the panel and the settings window are drawn exactly as before when it is absent: `PanelView` and `DisplayDetail` take an optional color model, and `SettingsView` takes one for its Advanced tab. The render harness's sample desk carries a sample color system. Every picture is in the render harness, groups "color", "settings" and "floating".
+
+- **"HDR and color" sits on a display's page after "More sizes"**: HDR with its cost, the profile with its HDR twin and its fallback, reference presets where the display has them, and the link, marked read only.
+- **The three v0.4 switches sit at the bottom of the Advanced tab**, after v0.3's virtual screens and written files, each with its cost. The interface session may want them higher.
+- **Keep or Revert for HDR, a profile or a preset** is a window of its own on the display that changed, built like the one for a size, with the same buttons.
+- **Each part that is off says where to turn it on**, and a display without HDR says why in a "say why" row.
+- **Not seen on screen.** The app with these surfaces has not run on the desk. The pictures are from the harness.
+
+## 24 November 2026 · v0.4 core: what it adds to the core, the rules it adopted, and where the architecture did not fit
+
+**Where v0.4 touches what earlier milestones built.** No existing behavior changed, and every earlier test passes unchanged. Three optional keys, the settings version stays 1, so an older build reads both files and ignores them:
+
+1. `color` in the settings document, next to `layout` and `advanced`: the three switches.
+2. `color` in a record's settings, next to `layout`: what protection puts back, the SDR and HDR profiles, the fallback list, and hardware brightness in HDR. Reset and transfer treat it like the rest of the record.
+3. `color` in the recovery store: HDR, profile and preset before a change that waits for Keep, and what the app turned off for HDR. Reset, export and import never touch it, which is the inventory's "protected recovery values".
+
+The v0.3 test rig takes the feature list and a recovery store as parameters. Everything else is in new files.
+
+**Rules adopted where the documents left room:**
+
+- **HDR, a profile and a reference preset each get Keep and Revert from the panel**, and from the command line with `--try`, as a mode does. A switch from the command line, a scene or protection applies at once. What was there is written to the recovery store before the change.
+- **A color change still waiting for Keep is undone at quit**, and one left by a crash at the next start, through the gate. Safe mode leaves it for the next normal start.
+- **Night Shift and True Tone off in HDR give back only what they took.** The debt is written to the recovery store before the switch, so a crash between the two still gives it back. If the user turned Night Shift on again in the meantime, the debt is dropped and nothing is written. At quit it is given back without the gate, because that undoes the app's own change.
+- **The HDR profile goes on whenever HDR switches, whoever switched it**, once the user has chosen one. It is the user's own pair of profiles, so it does not wait for protection to be on. Protection adds the correction of a profile changed elsewhere.
+- **A protected profile's target is what the user asked for, not the fallback used**, so the wanted file is used again once it is back.
+- **A profile assigned elsewhere announces nothing.** It is put back only at the moments everything else is checked (start, wake, reconnect, any reconfiguration) and when HDR switches. Nothing polls for it.
+
+**Where the architecture did not fit, and what was done instead:**
+
+- **"Hardware brightness in HDR" names the resolver as its hook.** Changing how the resolver picks an owner would change the core. Instead the v0.4 command extension holds back a brightness command for a monitor in HDR when the user switched hardware brightness in HDR off, and says why. Other displays named in the same command run as before, one at a time through the engine. The switch is on by default, so nothing changes unless the user asks.
+- **"SDR level in HDR" names the brightness composition.** On a display with its own brightness the composite already drives the panel's brightness, which macOS uses as the SDR level in HDR. External monitors have no SDR level of their own. So no composition was added: the headroom report says what sets the SDR level on each display. The framebuffer's registry entry says the color table leaves pixels above SDR white alone (`GCPBypassesEDRPixels`), which would make software dimming an SDR level in HDR. That is unverified.
+- **"Neutral table reset" is already the core's rule**: at neutral the pipeline writes nothing and gives the table back to the system. The check with the owner showed the LG's table stays a plain ramp in HDR. v0.4 adds nothing here.
+- **The protection stage was reserved and empty.** Color protection is that stage.
+- **Keep and Revert:** the command line's `keep` and `revert` answer a color change too, when it is the only change waiting on the display named.
+
+## 24 November 2026 · v0.4 spikes: how macOS 27 exposes HDR and color, and two inventory rows that can only be read
+
+Read-only, on the M5 Pro (Mac17,9, macOS 27.2.1) with the Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, lid closed. The numbers are in the [feasibility notes](feasibility.md#24-november-2026--v04-hdr-and-color-spikes--apple-m5-pro-mac179--macos-2721-26b131).
+
+- **HDR has one switch, and it is System Settings' own.** The model System Settings uses for a display offers "HDR modes" and a "prefer HDR" switch whose shape the Objective-C runtime reports. The window server's own HDR query agrees with it on both monitors. The app switches HDR through that switch and reads it back through both. Only the LG offers HDR. The Lenovo has no HDR in its EDID.
+- **Switching HDR, checked with the owner at 01:27:** the LG went black briefly at each switch and looked washed out in HDR, as macOS shows ordinary windows at the SDR level inside the HDR range. It did not leave the system, kept its mode, and the color table stayed a plain ramp. The switch blocks for about 0.75 seconds and the reconfiguration callbacks arrive inside it. **Rule:** an HDR switch from the panel gets Keep and Revert, because the user is looking at a different picture and may want the old one back, and a switch from the command line, a scene or protection does not.
+- **Headroom is public.** `NSScreen` gives the current, potential and reference headroom. With HDR off both monitors report 1.0, and the reference reads 0, which means "not reported". The built-in panel's registry entry says its potential headroom is 16, also with the lid closed.
+- **The link color modes can be listed and not chosen.** Each display's framebuffer entry in the I/O registry lists every combination of depth, pixel encoding, range and transfer function the link can carry, and which ones each timing allows. The one in use is not listed. SkyLight exports functions to choose an "output mode", and no permitted reference gives their arguments. **The inventory row "Link color mode" is built as a report in v0.4**, with the choice reserved behind a capability that is off. Guessing the arguments of a call that reconfigures the owner's monitor link is not worth the risk.
+- **GPU dithering can be read and not set**, for the same reason: the registry says it is on for every framebuffer, and CoreDisplay's setter has no documented shape. The row "GPU dithering" is built as a report with the switch reserved.
+- **Every window server mode reports a 30-bit pixel encoding**, while the public interface reports 8 bits for all of them. Neither tells what the link carries. A mode's depth stays out of the size strip.
+- **Night Shift and True Tone are global, not per display**, and their state can be read and switched. Night Shift was off, with no schedule. Its switch was checked on and off with the owner. "Night Shift off in HDR" turns it off only if it is on, remembers that it did, and turns it back on only then, so a schedule or a change the user made meanwhile is left alone.
+- **A color profile assigned through ColorSync takes effect at once and comes off cleanly**, checked with the owner on the LG with sRGB. No reconfiguration event announces it.
+- **Choosing a profile turns software dimming off on every display.** The core's color table check treats any custom profile on any connected display as unsafe, and blocks the table. That rule was written before the app could assign profiles itself. **Decision needed:** keep it (a profile chosen through the app pauses dimming everywhere, and the panel says so), or ask the core session to judge a profile by what it holds: a profile without a calibration curve (`vcgt`), such as the system's sRGB and Display P3, leaves the table to the app. Recommendation: keep the rule for 0.4.0 and say it in the panel, and refine it in the verification round with a check on hardware.
+- **Nothing on this desk has reference presets or an XDR panel in use.** Both are built from their typed interfaces and unit-tested, and stay unproven on hardware.
+
 ## 24 November 2026 · Release 0.3.0: releases can be approved out of order, and removing the app leaves v0.3's files behind
 
 **Prepared as the second release, ad hoc signed like 0.2.0**, while 0.2.0's run still waits at Publish for approval. Two things about releases as a process, and one about uninstalling, came out of it.

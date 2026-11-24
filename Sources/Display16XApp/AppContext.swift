@@ -27,6 +27,8 @@ struct SystemAdapters {
     var systemFiles: (any SystemFileWriter)? = nil
     var systemFilesLedger: any DocumentPersistence = MemoryPersistence()
     var virtualScreens: (any VirtualScreenSystem)? = nil
+    /// v0.4: HDR, color profiles, the link, presets, Night Shift and True Tone.
+    var colorSystem: (any ColorSystem)? = nil
     var macModel: String?
     /// What listens to the system once the app starts, in starting order: sleep, wake and
     /// reconfiguration, then the lid.
@@ -57,6 +59,7 @@ struct SystemAdapters {
             systemFiles: SystemFileAdministrator(staging: paths.systemFilesStaging),
             systemFilesLedger: FilePersistence(url: paths.systemFilesLedger),
             virtualScreens: SystemVirtualScreens(),
+            colorSystem: SystemColor(),
             macModel: HardwareProbe.macModel,
             listeners: { sequencer in [SystemEventSource(sequencer: sequencer, bus: bus), lid] }
         )
@@ -110,6 +113,12 @@ final class AppContext {
     let virtualScreens: VirtualScreenService
     let advancedCommands: AdvancedCommands
     private let virtualInventory: VirtualScreenInventory
+    // v0.4 HDR and color
+    let colors: ColorService
+    let colorProtection: ColorProtection
+    let colorCommands: ColorCommands
+    let upscaling: UpscalingService
+    let upscalingCommands: UpscalingCommands
 
     private let listeners: [any SystemListener]
     private var server: UnixSocketServer?
@@ -129,7 +138,7 @@ final class AppContext {
             registry: registry, system: adapters.modeSystem, rotationSystem: adapters.rotationSystem,
             settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate
         )
-        engine = CommandEngine(registry: registry, features: .complete, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
+        engine = CommandEngine(registry: registry, features: .withColor, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
         engine.selectorContext = adapters.selectorContext
         reconciler = Reconciler(engine: engine, registry: registry, controls: controls, settings: settings, gate: gate, scheduler: scheduler)
         // The app's own virtual screens are reported as virtual, so they are never counted
@@ -172,11 +181,23 @@ final class AppContext {
         virtualScreens.runPlan = { [overrides] plan in await overrides.run(plan) }
         virtualInventory.ownedDisplays = { [virtualScreens] in virtualScreens.ownedDisplays }
         advancedCommands = AdvancedCommands(registry: registry, settings: settings, overrides: overrides, virtualScreens: virtualScreens, layout: layout)
-        engine.extensions = [layoutCommands, advancedCommands]
+        colors = ColorService(registry: registry, settings: settings, recovery: recovery, bus: bus, gate: gate, scheduler: scheduler, system: adapters.colorSystem)
+        colors.backendSafety = { [colorBackend] in colorBackend.safety() }
+        colorProtection = ColorProtection(registry: registry, settings: settings, colors: colors, sequencer: sequencer, gate: gate, bus: bus, scheduler: scheduler)
+        reconciler.register(colorProtection)
+        colorCommands = ColorCommands(registry: registry, settings: settings, modes: modes, colors: colors, protection: colorProtection)
+        upscaling = UpscalingService(registry: registry, settings: settings, recovery: recovery, colors: colors, gate: gate, bus: bus)
+        // The pipeline's upscaling stage cannot write above white yet, so `boost` stays nil
+        // and the feature says it waits for the core.
+        upscaling.restoreBrightness = { [engine] tag, value in
+            _ = await engine.execute(Command(.set, .hardwareBrightness, on: .tag(tag.rawValue), value: .absolute(value), origin: .restore))
+        }
+        upscalingCommands = UpscalingCommands(registry: registry, settings: settings, controls: controls, upscaling: upscaling)
+        engine.extensions = [layoutCommands, advancedCommands, upscalingCommands, colorCommands]
         automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
         listeners = adapters.listeners(sequencer)
         permissions = PermissionBroker(probe: adapters.permissionProbe, bus: bus, settings: settings)
-        engine.statusProvider = { [permissions, colorBackend, loginItem, virtualScreens, overrides] in
+        engine.statusProvider = { [permissions, colorBackend, loginItem, virtualScreens, overrides, colors, recovery, upscaling] in
             var lines = ["version: \(AppPaths.version)"]
             lines.append(contentsOf: permissions.statusLines)
             lines.append("login item service: \(loginItem.systemStatus)")
@@ -186,6 +207,15 @@ final class AppContext {
                 lines.append("mirror-based HiDPI running, the GPU copies a whole screen at every refresh: " + mirrors.map { "\($0.screen) on \($0.display)" }.joined(separator: ", "))
             }
             lines.append("overrides written: \(overrides.written().count)")
+            let hdrOn = colors.knownHDR.filter(\.value).keys.sorted().map(\.description)
+            lines.append("HDR controls: \(colors.hdrControlsEnabled ? "on" : "off")" + (hdrOn.isEmpty ? "" : ", HDR on for \(hdrOn.joined(separator: ", "))"))
+            lines.append("color profile controls: \(colors.profileControlsEnabled ? "on" : "off")")
+            let above = upscaling.levels.filter { $0.value > 0 }.keys.sorted().map(\.description)
+            lines.append("brightness above SDR white: \(upscaling.isEnabled ? "on" : "off")" + (above.isEmpty ? "" : ", running on \(above.joined(separator: ", ")), the GPU keeps content above white on screen"))
+            let owed = recovery.color
+            if owed.nightShiftTurnedOff || owed.trueToneTurnedOff {
+                lines.append("turned off for HDR, given back afterwards: " + [owed.nightShiftTurnedOff ? "Night Shift" : nil, owed.trueToneTurnedOff ? "True Tone" : nil].compactMap { $0 }.joined(separator: " and "))
+            }
             switch colorBackend.safety() {
             case .safe: lines.append("color tables: safe to use")
             case .unsafe(let reason): lines.append("color tables: blocked. \(reason)")
@@ -210,11 +240,16 @@ final class AppContext {
         coordinator.start()
         // Displays the last run left disconnected come back first, then an unconfirmed
         // layout change is undone. Both pass the gate.
-        Task { @MainActor [connection, layout, virtualScreens] in
+        Task { @MainActor [connection, layout, virtualScreens, colors] in
             await connection.reconnectAtStartup()
             await layout.recoverUnconfirmed()
             // Saved virtual screens that were connected come back, through the gate.
             await virtualScreens.start()
+            // HDR, profile and preset changes a crash left waiting are undone, and what the
+            // app turned off for HDR is given back if no display shows HDR.
+            await colors.start()
+            // What a crash left above SDR white is put back.
+            await upscaling.recoverAtStart()
         }
         Log.app.info("Display 16X \(AppPaths.version) started\(gate.isSafeMode ? " in safe mode" : "")\(paths.isDevelopmentDirectory ? ", with its files in \(paths.supportDirectory.path)" : "").")
     }
@@ -222,6 +257,8 @@ final class AppContext {
     func shutdown() {
         server?.stop()
         virtualScreens.shutdown()
+        upscaling.stopAll(reason: "Display 16X quit")
+        colors.shutdown()
         connection.reconnectAtQuit()
         for listener in listeners.reversed() { listener.stop() }
         coordinator.shutdown()

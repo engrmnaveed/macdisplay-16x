@@ -145,6 +145,8 @@ public struct VirtualScreenDefinition: Codable, Sendable, Equatable, Identifiabl
     public var restoreLayout: Bool
     /// The record the screen appeared as. Its settings are kept under this tag.
     public var tag: DisplayTag?
+    /// HDR modes next to the SDR ones, or in their place. Added in v0.4. Nil is SDR only.
+    public var hdr: VirtualHDR?
 
     public init(id: Int, name: String, aspect: ScreenAspect = ScreenAspect(width: 16, height: 9), portrait: Bool = false, modes: VirtualModeSource = .generated(largest: 1920, smallest: 1280, step: 160, cap: 12), refreshRates: [Double] = [60], hiDPI: Bool = true, identity: VirtualIdentity? = nil, association: VirtualAssociation? = nil, wantsConnected: Bool = false, restoreLayout: Bool = true, tag: DisplayTag? = nil) {
         self.id = id
@@ -173,7 +175,7 @@ public struct VirtualScreenDefinition: Codable, Sendable, Equatable, Identifiabl
     public var detail: String {
         let largest = VirtualModes.sizes(self).first.map(\.label) ?? "no size"
         let rates = refreshRates.map { $0 == $0.rounded() ? "\(Int($0)) Hz" : "\($0) Hz" }.joined(separator: ", ")
-        return "\(aspect)\(portrait ? " portrait" : ""), up to \(largest)\(hiDPI ? " HiDPI" : ""), \(rates)"
+        return "\(aspect)\(portrait ? " portrait" : ""), up to \(largest)\(hiDPI ? " HiDPI" : ""), \(rates)" + (hdr.map { ", \($0.title)" } ?? "")
     }
 }
 
@@ -353,6 +355,14 @@ public enum VirtualScreenSpec {
                 case "restore-layout":
                     guard let on = flag() else { return .failure(Refusal("restore-layout takes on or off")) }
                     definition.restoreLayout = on
+                case "hdr":
+                    if value == "only" {
+                        definition.hdr = .only
+                    } else if let on = flag() {
+                        definition.hdr = on ? .alongside : nil
+                    } else {
+                        return .failure(Refusal("hdr takes on, only or off"))
+                    }
                 default:
                     return .failure(Refusal("\"\(word)\" is not something a virtual screen takes. See display16x help virtualCreate"))
                 }
@@ -385,6 +395,8 @@ public struct VirtualScreenSpecification: Sendable, Equatable {
     public var modes: [VirtualModes.Mode]
     public var hiDPI: Bool
     public var rotation: Int
+    /// Added in v0.4. Nil is SDR only.
+    public var hdr: VirtualHDR?
 
     public init(_ definition: VirtualScreenDefinition, rotation: Int = 0) {
         name = definition.name
@@ -397,12 +409,13 @@ public struct VirtualScreenSpecification: Sendable, Equatable {
         modes = VirtualModes.modes(definition)
         hiDPI = definition.hiDPI
         self.rotation = rotation
+        hdr = definition.hdr
     }
 
     public static func == (lhs: VirtualScreenSpecification, rhs: VirtualScreenSpecification) -> Bool {
         lhs.name == rhs.name && lhs.vendor == rhs.vendor && lhs.product == rhs.product && lhs.serial == rhs.serial
             && lhs.millimetres.width == rhs.millimetres.width && lhs.millimetres.height == rhs.millimetres.height
-            && lhs.maximumPixels == rhs.maximumPixels && lhs.modes == rhs.modes && lhs.hiDPI == rhs.hiDPI && lhs.rotation == rhs.rotation
+            && lhs.maximumPixels == rhs.maximumPixels && lhs.modes == rhs.modes && lhs.hiDPI == rhs.hiDPI && lhs.rotation == rhs.rotation && lhs.hdr == rhs.hdr
     }
 }
 
@@ -453,6 +466,33 @@ public final class VirtualScreenInventory: DisplayInventory {
             var marked = snapshot
             marked.kind = .virtual
             return marked
+        }
+    }
+}
+
+/// A virtual screen's HDR, "Virtual HDR" in the inventory. Added in v0.4. macOS takes a
+/// transfer function for each of a virtual screen's modes. Which codes it accepts is not proven
+/// on hardware yet: the app uses 2, the code CTA-861 and the framebuffer registry give PQ.
+public enum VirtualHDR: String, Codable, Sendable, Equatable {
+    /// Each size and rate in SDR and in HDR.
+    case alongside
+    /// Each size and rate in HDR only.
+    case only
+
+    public static let pqTransferFunction: UInt32 = 2
+
+    public var title: String {
+        switch self {
+        case .alongside: "HDR"
+        case .only: "HDR only"
+        }
+    }
+
+    /// The transfer functions each mode is offered with.
+    public var transferFunctions: [UInt32] {
+        switch self {
+        case .alongside: [0, VirtualHDR.pqTransferFunction]
+        case .only: [VirtualHDR.pqTransferFunction]
         }
     }
 }

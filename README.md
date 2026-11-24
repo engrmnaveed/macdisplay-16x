@@ -6,7 +6,7 @@ A free, open-source menu bar utility for the display controls macOS leaves out: 
 
 It targets Apple silicon, and it is built to do nothing when nothing is happening: no timers, no polling, and nothing that renders frames unless you turn a feature on.
 
-**Status: 0.3.0, with v0.3 Advanced scaling, after 0.2.0 brought v0.2 Layout and a redesigned interface (24 November 2026).** The scaling features are off until you switch them on, and the app's own use of them has run in unit tests only. It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
+**Status: 0.4.0, with v0.4 HDR and color, after 0.3.0 brought v0.3 Advanced scaling and 0.2.0 brought v0.2 Layout and a redesigned interface (24 November 2026).** The scaling, HDR and color features are off until you switch them on, and the app's own use of them has run in unit tests only. It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
 
 ## Install
 
@@ -129,6 +129,21 @@ dist/display16x set mirrorHiDPI on                            # keeps the GPU bu
 dist/display16x virtual create "LG HiDPI" match mirror=on connect --tag 2
 ```
 
+HDR and color, from v0.4. Each part is off until switched on. From the panel, and from the command line with `--try`, an HDR or profile change asks Keep or Revert:
+
+```sh
+dist/display16x set hdrControls on
+dist/display16x hdr on --tag 2 --try                          # System Settings' own switch, then Keep or Revert
+dist/display16x hdr headroom --tag 2                          # how far above SDR white it can show
+dist/display16x set nightShiftInHDR on                        # Night Shift off while HDR is on, and back after
+dist/display16x set profileControls on
+dist/display16x color profiles                                # every display profile installed
+dist/display16x color profile "Display P3" --tag 2            # or factory for the monitor's own
+dist/display16x color hdr-profile "ITU-R BT.2020" --tag 2     # put on when HDR switches on
+dist/display16x color modes --tag 2                           # how the link carries the picture, read only
+dist/display16x probe --color                                 # HDR and color in the hardware report
+```
+
 ## What works today
 
 | Area | State |
@@ -148,6 +163,10 @@ dist/display16x virtual create "LG HiDPI" match mirror=on connect --tag 2
 | More sizes through display overrides, with a preview, an administrator prompt and removal | macOS 27 reading and dropping an override was checked on hardware with a probe. The app's own install, check and removal are unit-tested. Off by default |
 | Virtual screens | Created and removed on hardware by a probe. The app's own screens are unit-tested. Off by default |
 | Mirror-based HiDPI | Unit-tested only. Off by default, and it keeps the GPU busy while it runs |
+| HDR switching, its protection, Night Shift off in HDR | Switching HDR and Night Shift through the same interfaces was checked on hardware with a probe. The app's own use is unit-tested. Off by default |
+| Color profiles with a fallback and a profile for HDR, reference presets | Assigning a profile and giving the monitor's own back was checked on hardware with a probe. The app's own use is unit-tested. No display with reference presets was available. Off by default |
+| The link's color modes, rates the mode list leaves out, dithering | Read on hardware through the app's own code. Shown only: macOS offers no documented way to choose them |
+| Brightness above SDR white | Built up to the color pipeline, which cannot write above white yet, so it does nothing and says so. Off by default |
 
 The measurements behind this table are in [docs/feasibility.md](docs/feasibility.md).
 

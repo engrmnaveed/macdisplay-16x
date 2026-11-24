@@ -40,6 +40,7 @@ enum PrivateLibraries {
     static let displayServices = PrivateLibrary("/System/Library/PrivateFrameworks/DisplayServices.framework/DisplayServices")
     static let monitorPanel = PrivateLibrary("/System/Library/PrivateFrameworks/MonitorPanel.framework/MonitorPanel")
     static let skyLight = PrivateLibrary("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight")
+    static let coreBrightness = PrivateLibrary("/System/Library/PrivateFrameworks/CoreBrightness.framework/CoreBrightness")
 }
 
 /// Which private capabilities this macOS release offers. One flag per feature.
@@ -54,6 +55,15 @@ public struct PrivateCapabilities: Sendable, Equatable {
     public var portLinks: Bool = PortLinkDirectory.isAvailable
     /// Virtual displays the app owns. Added in v0.3.
     public var virtualDisplays: Bool = VirtualDisplayFactory.isAvailable
+    /// System Settings' HDR switch. Added in v0.4.
+    public var hdrSwitch: Bool = MonitorPanelDisplay.hdrSwitchAvailable
+    /// Reference presets of Apple displays. Added in v0.4.
+    public var referencePresets: Bool = MonitorPanelDisplay.presetsAvailable
+    /// Night Shift and True Tone. Added in v0.4.
+    public var nightShift: Bool = NightShift.isAvailable
+    public var trueTone: Bool = TrueTone.isAvailable
+    /// The link's color modes and timings, from the framebuffer. Added in v0.4.
+    public var framebufferColor: Bool = FramebufferColor.isAvailable
 
     public static let current = PrivateCapabilities(
         avServiceI2C: AVServiceDirectory.isAvailable,
@@ -71,6 +81,10 @@ public struct PrivateCapabilities: Sendable, Equatable {
             "Display connection: \(displayConnection ? "available" : "missing")",
             "Port descriptions (connection type): \(portLinks ? "available" : "missing")",
             "Virtual displays: \(virtualDisplays ? "available" : "missing")",
+            "HDR switch: \(hdrSwitch ? "available" : "missing")",
+            "Reference presets: \(referencePresets ? "available" : "missing")",
+            "Night Shift: \(nightShift ? "available" : "missing"), True Tone: \(trueTone ? "available" : "missing")",
+            "Link color modes (framebuffer): \(framebufferColor ? "available" : "missing")",
         ]
     }
 }

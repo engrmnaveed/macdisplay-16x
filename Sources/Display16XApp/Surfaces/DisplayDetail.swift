@@ -12,6 +12,8 @@ struct DisplayDetail: View {
     let back: () -> Void
     /// v0.3: more sizes through an override. Nil leaves the page as it was.
     var advanced: AdvancedPanelModel? = nil
+    /// v0.4: HDR and color. Nil leaves the page as it was.
+    var color: ColorPanelModel? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: Skin.space.l) {
@@ -26,6 +28,7 @@ struct DisplayDetail: View {
                 DeskSection(card: card, item: item, layoutModel: layoutModel)
             }
             if let advanced { ScalingSection(tag: card.tag, advanced: advanced) }
+            if let color { ColorSection(tag: card.tag, color: color) }
             OptionsSection(card: card, item: item, model: model, layoutModel: layoutModel)
             AboutDisplaySection(card: card, model: model)
         }

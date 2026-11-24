@@ -26,6 +26,7 @@ final class LayoutSurfaceSet {
         offer = ProtectionOfferPresenter(context: context)
         let notices = self.notices
         context.protection.onNotice = { (notice: ProtectionNotice) in notices.show(notice) }
+        context.colorProtection.onNotice = { (notice: ProtectionNotice) in notices.show(notice) }
         context.protection.onOffer = { [weak offer] in offer?.show() }
         context.layoutCommands.reservedShortcuts = { HotKeyCenter.systemShortcuts() }
         context.shortcuts.onResult = { (binding: ShortcutBinding, result: CommandResult) in

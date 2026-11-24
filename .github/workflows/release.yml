@@ -203,11 +203,13 @@ jobs:
           # A tag below this one with no release is a run that waits for approval, or was rejected.
           tagged="$(gh api "repos/$GH_REPO/git/matching-refs/tags/v" --jq '.[].ref | ltrimstr("refs/tags/")' | below)"
           if [[ -n "$tagged" && "$tagged" != "$previous" ]]; then
-            message="$tagged is tagged but has no published release, so this release is compared with ${previous:-no earlier release}. If the run for $tagged waits for approval, approve or reject it before this one, so the releases come out in order."
+            message="$tagged is tagged but has no published release, so this release is compared with ${previous:-no earlier release}. The two can be approved in either order: the higher version stays the latest release and keeps the tap."
+            level=notice
             if [[ "$SIGNING" != adhoc ]]; then
               message="$message If $tagged is published and signed differently from this release, these notes do not tell its users that the update costs them the Accessibility grant. Add that by editing the notes, as docs/release.md describes."
+              level=warning
             fi
-            echo "::warning::$message"
+            echo "::$level::$message"
             echo "- **Earlier version not published:** $message" >> "$GITHUB_STEP_SUMMARY"
           fi
           if [[ -z "$previous" ]]; then
@@ -347,3 +349,61 @@ jobs:
             -c user.email='41898283+github-actions[bot]@users.noreply.github.com' \
             commit -m "display16x ${GITHUB_REF_NAME#v}"
           git push origin HEAD
+
+  # GitHub sometimes finds no runner for a job, most often a macOS one, and cancels it. Say so
+  # in the run summary with the way on, instead of a cancelled job without a word. It only
+  # reads the run, its jobs and the release.
+  outcome:
+    name: Why the release did not finish
+    needs: publish
+    if: always() && needs.publish.result != 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Say why, and how to go on
+        run: |
+          # Fields are joined with the unit separator, which, unlike a tab, keeps an empty runner name.
+          unread=""
+          if ! jobs="$(gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" \
+            --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled") | [.id, .conclusion, (.runner_name // ""), .name] | map(tostring) | join("\u001f")')"; then
+            jobs=""
+            unread=yes
+          fi
+          unacquired=""
+          others=""
+          while IFS=$'\x1f' read -r id conclusion runner name; do
+            [[ -n "$id" ]] || continue
+            if [[ "$conclusion" == cancelled && -z "$runner" ]] &&
+              gh api "repos/$GH_REPO/check-runs/$id/annotations" --jq '.[].message' | grep -q 'not acquired by Runner'; then
+              unacquired="$unacquired, $name"
+            else
+              others="$others, $name ($conclusion)"
+            fi
+          done <<< "$jobs"
+          {
+            if gh release view "$GITHUB_REF_NAME" --json tagName > /dev/null 2>&1; then
+              echo "### $GITHUB_REF_NAME has a release, and a step after it did not finish"
+              echo "Look at the release before anything else. Its assets and tag cannot be replaced, so fix what is missing by hand, such as the tap, or fix forward with the next patch version, as docs/release.md describes."
+            else
+              echo "### Nothing was published"
+            fi
+            if [[ -n "$unacquired" ]]; then
+              echo "GitHub found no runner for ${unacquired#, } and cancelled it. Nothing was signed or published by it, and nothing needs undoing. Run it again with **Re-run failed jobs** on this run, or \`gh run rerun $GITHUB_RUN_ID --failed\`. The jobs that passed are kept, and Publish asks for approval again."
+            fi
+            if [[ -n "$others" ]]; then
+              echo "Ended without success: ${others#, }. A rejected Publish publishes nothing. For a failure, see \"If a job fails or never starts\" in docs/release.md."
+            fi
+            if [[ -n "$unread" ]]; then
+              echo "The run's jobs could not be read, so see the jobs above for which one stopped."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$unacquired" ]]; then
+            echo "::error::GitHub found no runner for ${unacquired#, }. Use Re-run failed jobs to try again."
+          fi
