@@ -227,6 +227,13 @@ Flexible HiDPI scaling and custom resolutions through generated overrides, with 
 
 HDR switching, XDR brightness on capable hardware, color profile and color mode selection.
 
+**Built on 24 November 2026** on the branch `claude/v0-4-hdr-color-f09b6b`, not pushed, with 495 unit tests passing. The 20 inventory rows are built at unit-test level, in new files, with small additive edits to 15 existing ones.
+
+- **Read-only on macOS 27:** the link color mode and GPU dithering can be reported and not set, because their setters have no documented arguments.
+- **Not built:** direct XDR upscaling, because the only XDR panel on the desk is behind a closed lid.
+- **Waiting on one check with the owner:** whether a color table value above 1 reaches the panel at all. Software upscaling depends on it, and on the core change in the table at the end of this document.
+- **Rule kept from the core:** a color profile chosen through the app pauses software dimming on every display, and the panel says so.
+
 ## 4. Risks
 
 | Risk | Mitigation |
@@ -286,6 +293,7 @@ The rules are written out in the [core architecture](core-architecture.md), sect
 | 23 | Whether a mirror the user linked starts again at launch | Yes, through the automation gate, and not in safe mode. The user switched it on, and it stays on until they switch it off | Keep it. Without it a setup that depends on the mirror breaks at every login. It still never starts unless the user turned it on | v0.3 release |
 | 24 | The vendor number virtual screens report | A made-up one, 0x1616, so settings can tell the app's own screens from real monitors | Keep it, and change it if a real monitor is ever reported with it | Public release |
 | 25 | A review of the v0.3 surfaces by the interface session | Built from the design system's pieces, and the boundary test passes. Not reviewed by the session that designed the system | Let daily use show what needs changing, and review them in the verification round | Verification round |
+| 26 | A color profile chosen through the app and software dimming | The profile pauses software dimming on every display, by the core's existing rule that the two share one color table, and the panel says so | Keep it for 0.4.0. Changing it means a core change to combine a profile with dimming | Verification round |
 
 ### Core changes waiting for the core session
 
@@ -296,3 +304,4 @@ Changes to what v0.1 built are made by the session that built it, on the line of
 | A change origin for automation, next to restore | Automatic layout, protection and connection writes are logged as restores today. A distinct origin lets logs and later consumers tell a restore from an automatic disconnect | The v0.2 branch | Built by the core session on 23 November 2026, on the branch `core/automation-origin` cut from the v0.2 branch, with 321 unit tests passing, not pushed. Merged into the v0.2 branch the same day, where the rule-driven writes now use it. Nothing from outside can claim the origin: the socket and links always run as commands |
 | Confirmed or only sent, for each control | The PRD shows a value the monitor read back as confirmed and one the app only sent as sent. The engine knows this for each write, and the panel is only told a value | The interface pass branch | Built by the core session on 23 November 2026 on the branch `core/panel-facts`, with 350 unit tests passing, and sent to the interface session to merge. Each control's value is read back, sent or not known. No read was added for it and nothing is stored. Not seen in the running app yet |
 | How a display is connected | The PRD's card is "name, connection". The panel is told nothing, so the card says "External" | The interface pass branch | Built on the same branch. Built-in, HDMI, DisplayPort, USB-C, Thunderbolt or not known, read from the I/O registry with public calls. Thunderbolt, adapters and docks are unverified: none was on the desk |
+| A color transform that multiplies above 1 without clamping | Software upscaling in v0.4 needs brightness above SDR white to pass through the color pipeline's reserved stage after dimming | The line current when it is asked for | Not sent. It waits for a one-minute check with the owner that a table value above 1 reaches the panel. If it does not, the change is not needed |
