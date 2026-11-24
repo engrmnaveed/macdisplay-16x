@@ -6,7 +6,7 @@ A free, open-source menu bar utility for the display controls macOS leaves out: 
 
 It targets Apple silicon, and it is built to do nothing when nothing is happening: no timers, no polling, and nothing that renders frames unless you turn a feature on.
 
-**Status: 0.4.0, with v0.4 HDR and color, after 0.3.0 brought v0.3 Advanced scaling and 0.2.0 brought v0.2 Layout and a redesigned interface (24 November 2026).** The scaling, HDR and color features are off until you switch them on, and the app's own use of them has run in unit tests only. It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
+**Status: 0.5.0, with skins, after 0.4.0 brought v0.4 HDR and color, 0.3.0 v0.3 Advanced scaling, and 0.2.0 v0.2 Layout and a redesigned interface (24 November 2026).** The scaling, HDR and color features are off until you switch them on, and the app's own use of them has run in unit tests only. It runs on the developer's Mac with two external monitors and has not been tested on other hardware yet. See [what works](#what-works-today), the [changelog](CHANGELOG.md) for what was checked on hardware in this release, and the [feasibility notes](docs/feasibility.md) for the measurements.
 
 ## Install
 
@@ -181,7 +181,7 @@ dist/display16x skin custom accent=#D6336C surfaces=#E8D8C4   # your own colors,
 | Color profiles with a fallback and a profile for HDR, reference presets | Assigning a profile and giving the monitor's own back was checked on hardware with a probe. The app's own use is unit-tested. No display with reference presets was available. Off by default |
 | The link's color modes, rates the mode list leaves out, dithering | Read on hardware through the app's own code. Shown only: macOS offers no documented way to choose them |
 | Brightness above SDR white | Built up to the color pipeline, which cannot write above white yet, so it does nothing and says so. Off by default |
-| Skins: six ready-made and a custom one, in Settings and from the command line | Unit-tested, contrast measured in all four looks, and drawn off screen on every main surface. Not yet used in the running app |
+| Skins: six ready-made and a custom one, in Settings and from the command line | Unit-tested, contrast measured in all four looks, and drawn off screen on every main surface. In daily use in Studio; another skin has not yet been chosen in the running app |
 
 The measurements behind this table are in [docs/feasibility.md](docs/feasibility.md).
 

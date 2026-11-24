@@ -8,20 +8,20 @@ Every release so far is ad hoc signed, because the project certificate does not 
 
 ## 1. Prepare the version
 
-1. Wait until the milestone is merged into `main` and CI has passed there. Cut a branch from it, such as `release/0.5.0`, in a clean checkout.
+1. Wait until the milestone is merged into `main` and CI has passed there. Cut a branch from it, such as `release/0.6.0`, in a clean checkout.
 2. Run the prepare step:
 
    ```sh
-   scripts/prepare-release 0.5.0
+   scripts/prepare-release 0.6.0
    ```
 
-   It writes the version to `scripts/release-version`, renames the `## Unreleased` section of [CHANGELOG.md](../CHANGELOG.md) to `## 0.5.0` with a new, empty `## Unreleased` above it, and moves the version in the examples of the [installation guide](install.md). It refuses a version that is not later than the current one, a dirty working tree, an empty `## Unreleased` section, and a version that is tagged already. `scripts/release-version` is the only place the version is written: the packaging script reads it for the bundle, and the ReleaseVersion build plugin writes it into the app and the `display16x` tool.
+   It writes the version to `scripts/release-version`, renames the `## Unreleased` section of [CHANGELOG.md](../CHANGELOG.md) to `## 0.6.0` with a new, empty `## Unreleased` above it, and moves the version in the examples of the [installation guide](install.md). It refuses a version that is not later than the current one, a dirty working tree, an empty `## Unreleased` section, and a version that is tagged already. `scripts/release-version` is the only place the version is written: the packaging script reads it for the bundle, and the ReleaseVersion build plugin writes it into the app and the `display16x` tool.
 3. Edit the new section for someone who uses the app: one section per release, what changed, and plainly what was checked on hardware and what was not. Between releases, every change adds its entry under `## Unreleased`.
 4. If the signing level changes with this release, such as the first release signed with the project certificate, update the signing paragraphs at the top of the [installation guide](install.md) and in the Install section of the [README](../README.md).
 5. Preview the release notes. They are the changelog section followed by the standard text about the assets and how the app is signed:
 
    ```sh
-   scripts/release-notes 0.5.0 certificate
+   scripts/release-notes 0.6.0 certificate
    ```
 
    The second argument is the signing level: `certificate` (the default), `developer-id` or `adhoc`. A third, the tag of the last release, adds the sentence for users whose Accessibility permission does not carry over because the signer changed. The workflow passes both: the level it read back from the signed app, and the last release's tag when the new app does not satisfy its signing requirement.
@@ -43,13 +43,13 @@ Every release so far is ad hoc signed, because the project certificate does not 
 
 ## 2. Tag the merged version
 
-Once the pull request is merged, tag the tip of `main`:
+Once the pull request is merged, and once a build of that commit, or of code that contains it, has run as the copy in daily use on the real displays, tag the tip of `main`. CI starts the app on a runner with no monitor, and the first v0.4 build crashed at start only where one was attached.
 
 ```sh
-scripts/tag-release 0.5.0 --push
+scripts/tag-release 0.6.0 --push
 ```
 
-It fetches `origin/main` and tags its tip only when that commit holds the version in `scripts/release-version`, a `## 0.5.0` section in the changelog, and a passing **Build, test and package** check, and when the tag does not exist yet. Without `--push` it makes the tag and prints the command that pushes it. It changes nothing in the working tree, so it can run from any checkout. The tag ruleset lets only the repository's administrators create a `v*` tag. With `tag.gpgSign` set in git, the tag is signed.
+It fetches `origin/main` and tags its tip only when that commit holds the version in `scripts/release-version`, a `## 0.6.0` section in the changelog, and a passing **Build, test and package** check, and when the tag does not exist yet. Without `--push` it makes the tag and prints the command that pushes it. It changes nothing in the working tree, so it can run from any checkout. The tag ruleset lets only the repository's administrators create a `v*` tag. With `tag.gpgSign` set in git, the tag is signed.
 
 ## How a tag becomes a release
 
@@ -67,7 +67,7 @@ The pushed tag runs these jobs:
 
 **What the reviewer sees and clicks.** GitHub sends the reviewer a notification that a deployment to `release` waits for review. In the run (**Actions → Release →** the run for the tag), the summary lists the signing level, the designated requirement and the archive's SHA-256, and the artifact `display16x-macos-arm64` can be downloaded. An ad hoc build also shows the warning that it is not signed with the project certificate. Click **Review deployments**, tick **release**, and click **Approve and deploy**. **Reject** stops the run with nothing published. A pending review expires after 30 days.
 
-**When two runs wait.** They can be approved in either order. The higher version stays the latest release and keeps the tap: a version approved after a later one is published is not marked as the latest and leaves the tap alone. That holds for tags from 0.3.0 on, because a run uses the workflow at its own tag. A release is compared with the release published just below it, so a lower version that is still waiting is left out of the comparison, and the run says so under **Earlier version not published**. That matters only when the two are signed differently, such as the last ad hoc release and the first one signed with the certificate. Then approve the lower one first, or, if it is published second, the higher release's notes lack the sentence about the Accessibility grant: print the notes with it, `scripts/release-notes 0.5.0 certificate v0.4.0`, and replace them with `gh release edit v0.5.0 --notes-file` and that text.
+**When two runs wait.** They can be approved in either order. The higher version stays the latest release and keeps the tap: a version approved after a later one is published is not marked as the latest and leaves the tap alone. That holds for tags from 0.3.0 on, because a run uses the workflow at its own tag. A release is compared with the release published just below it, so a lower version that is still waiting is left out of the comparison, and the run says so under **Earlier version not published**. That matters only when the two are signed differently, such as the last ad hoc release and the first one signed with the certificate. Then approve the lower one first, or, if it is published second, the higher release's notes lack the sentence about the Accessibility grant: print the notes with it, such as `scripts/release-notes 0.6.0 certificate v0.5.0` when 0.5.0 was the last ad hoc release, and replace them with `gh release edit v0.6.0 --notes-file` and that text.
 
 ### If a job fails or never starts
 
@@ -85,7 +85,7 @@ After the release, install it with Homebrew on a Mac where no other copy of Disp
 
 ## Check the first two releases
 
-The checks above prove that the signing requirement stays the same from release to release. They cannot prove what macOS and Homebrew do with it at a real update: that the Accessibility permission stays granted, and that the first launch is not blocked again. Check it once, with the first two releases signed with the project certificate, on your own Mac. The ad hoc releases do not count: if the certificate is in place before 0.5.0, those are 0.5.0 and 0.6.0, or 0.5.0 and a patch release such as 0.5.1.
+The checks above prove that the signing requirement stays the same from release to release. They cannot prove what macOS and Homebrew do with it at a real update: that the Accessibility permission stays granted, and that the first launch is not blocked again. Check it once, with the first two releases signed with the project certificate, on your own Mac. The ad hoc releases do not count: the two are the first release whose run summary gives the signing level `certificate`, and the release after it, which can be a patch release.
 
 **Before the first release:**
 
@@ -273,12 +273,12 @@ Once, on a Mac with the GitHub CLI:
 
 **Each release:** the publish job commits `Casks/display16x.rb` to the tap after creating the release.
 
-**Without the secret:** the job skips the tap and says so in a warning and in the run summary. Until the cask is in the tap, `brew install --cask engrmnaveed/tap/display16x` does not find the new version. Commit the release's `display16x.rb` to the tap by hand, here for 0.4.0. The tap holds one version, so only the newest release needs it:
+**Without the secret:** the job skips the tap and says so in a warning and in the run summary. Until the cask is in the tap, `brew install --cask engrmnaveed/tap/display16x` does not find the new version. Commit the release's `display16x.rb` to the tap by hand, here for 0.5.0. The tap holds one version, so only the newest release needs it:
 
 ```sh
 gh repo clone engrmnaveed/homebrew-tap && cd homebrew-tap
-gh release download v0.4.0 --repo engrmnaveed/macdisplay-16x --pattern display16x.rb --output Casks/display16x.rb --clobber
-git add Casks/display16x.rb && git commit -m "display16x 0.4.0" && git push
+gh release download v0.5.0 --repo engrmnaveed/macdisplay-16x --pattern display16x.rb --output Casks/display16x.rb --clobber
+git add Casks/display16x.rb && git commit -m "display16x 0.5.0" && git push
 ```
 
 ## Sign and notarize on a Mac
