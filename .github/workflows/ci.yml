@@ -37,7 +37,11 @@ jobs:
       - name: Build
         run: swift build
 
+      # Green runs take under two minutes here. A test that waits for something that never
+      # comes holds the run with no thread busy, so the step fails at its own limit, with its
+      # log, long before the job's.
       - name: Unit tests
+        timeout-minutes: 10
         run: swift test
 
       - name: Package the app and the command line tool
