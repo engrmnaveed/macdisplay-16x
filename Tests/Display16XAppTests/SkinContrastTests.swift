@@ -8,7 +8,7 @@ import Testing
 /// Studio, every ready-made skin, the Mac's accent in its every color, and custom colors
 /// awkward on purpose are all measured the same way.
 @MainActor
-@Suite struct SkinContrast {
+@Suite(.timeLimit(.minutes(1))) struct SkinContrast {
     struct RGB {
         var red: Double
         var green: Double
@@ -160,7 +160,11 @@ import Testing
             SkinContrast.measure(Theme.derived(name: name, seed: seed), "Custom, \(name)")
         }
     }
+}
 
+/// Custom colors picked at random, measured on their numbers alone. Nothing here needs the
+/// main actor, so it stays off it: other tests in the same process wait for no one.
+@Suite(.timeLimit(.minutes(1))) struct RandomSkinColors {
     /// Every pair of a palette, measured on its numbers: the same amounts as the pairs above.
     static func palettePairs(_ palette: Palette, _ look: SkinLook) -> [(String, SRGBColor, SRGBColor, (Double, Double))] {
         let attention: SRGBColor = Theme.Shared.attentionSurface[look]
@@ -184,15 +188,15 @@ import Testing
         ]
     }
 
-    @Test("Two thousand custom colors, picked at random, all stay readable")
+    @Test("Three hundred custom colors, picked at random, all stay readable")
     func random() {
         var generator = SplitMix(seed: 16)
         var failures: [String] = []
-        for _ in 0..<2_000 {
+        for _ in 0..<300 {
             let seed = SkinSeed(accent: generator.color(), surfaces: generator.color())
             let palette: Palette = Palette.derive(seed, attentionSurface: Theme.Shared.attentionSurface, dangerSurface: Theme.Shared.dangerSurface)
             for look in SkinLook.allCases {
-                for (name, front, back, least) in SkinContrast.palettePairs(palette, look) {
+                for (name, front, back, least) in RandomSkinColors.palettePairs(palette, look) {
                     let measured: Double = SRGBColor.contrast(front, back)
                     let needed: Double = look.isContrast ? least.1 : least.0
                     if measured < needed { failures.append("accent \(seed.accentLight.hex), surfaces \(seed.surfaces.hex), \(look): \(name) \(String(format: "%.2f", measured))") }

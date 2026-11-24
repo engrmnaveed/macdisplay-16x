@@ -7,7 +7,7 @@ import Testing
 /// touching a display. `scripts/render-surfaces.sh` runs it. Without the variable it does
 /// nothing, so an ordinary `swift test` stays quick and needs no window server.
 @MainActor
-@Suite struct RenderHarness {
+@Suite(.timeLimit(.minutes(10))) struct RenderHarness {
     static var directory: URL? {
         guard let path = ProcessInfo.processInfo.environment["DISPLAY16X_RENDER_DIR"], !path.isEmpty else { return nil }
         return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)

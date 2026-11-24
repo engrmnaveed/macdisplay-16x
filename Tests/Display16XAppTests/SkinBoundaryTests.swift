@@ -5,7 +5,7 @@ import Testing
 /// puts pieces together and adds the words. This keeps a re-skin to those two files: a
 /// surface that brings a color, font, radius, distance or symbol of its own fails here, and
 /// so does one that picks a skin of its own instead of drawing with the skin in use.
-@Suite struct SkinBoundary {
+@Suite(.timeLimit(.minutes(1))) struct SkinBoundary {
     static let surfaces: URL = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("Sources/Display16XApp/Surfaces", isDirectory: true)

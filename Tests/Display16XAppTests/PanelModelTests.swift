@@ -6,7 +6,7 @@ import Testing
 /// The panel's models on the sample desk: the same objects the app builds when the panel
 /// opens, fed by sample adapters. These run without a window server.
 @MainActor
-@Suite struct PanelModelOnTheSampleDesk {
+@Suite(.timeLimit(.minutes(1))) struct PanelModelOnTheSampleDesk {
     @Test("A card per connected display, with what each monitor offers")
     func cards() async {
         let desk = await SurfaceCatalog.desk()
@@ -115,7 +115,7 @@ import Testing
 }
 
 @MainActor
-@Suite struct LayoutPanelLogic {
+@Suite(.timeLimit(.minutes(1))) struct LayoutPanelLogic {
     @Test("The line after a command: the failure, a one-line report, or nothing")
     func messages() {
         #expect(LayoutPanelModel.message(for: .failure("the display is not connected")) == "The display is not connected.")

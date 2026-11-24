@@ -7,7 +7,7 @@ import Testing
 /// Choosing a skin: through the engine like every other setting, kept in settings, carried
 /// by export and import, and worn at once.
 @MainActor
-@Suite struct SkinCommandTests {
+@Suite(.timeLimit(.minutes(1))) struct SkinCommandTests {
     @Test("A ready-made skin chosen by command is kept in settings and worn at once")
     func readyMade() async {
         let desk = await SurfaceCatalog.desk()
@@ -83,7 +83,7 @@ final class Counter: @unchecked Sendable {
 
 /// The store every view reads its look from.
 @MainActor
-@Suite struct SkinStoreTests {
+@Suite(.timeLimit(.minutes(1))) struct SkinStoreTests {
     @Test("A view that read the skin is told when it changes, and only when it does")
     func observed() {
         let store = SkinStore(readMacAccent: { SampleDesk.macAccent })
@@ -137,7 +137,7 @@ final class Counter: @unchecked Sendable {
 }
 
 /// The color math under the derived skins.
-@Suite struct PaletteTests {
+@Suite(.timeLimit(.minutes(1))) struct PaletteTests {
     @Test("Colors go into Oklab and come back the same")
     func roundTrip() {
         for color in [SRGBColor(8, 105, 88), SRGBColor(255, 205, 112), SRGBColor(16, 34, 56), .white, .black, SRGBColor(0, 0, 255)] {
