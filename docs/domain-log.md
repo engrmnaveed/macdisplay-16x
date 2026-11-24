@@ -6,6 +6,12 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · Every build is now started before it ships, and a Mac with a copy in use cannot do it
+
+- **A crash at start passed every check.** The first v0.4 build crashed a second after starting, and the unit tests, the local checks and CI all passed, because nothing started the packaged app. The rule now: the smoke test starts the app for a few seconds, in safe mode with a settings folder of its own, and fails if it crashes, quits or stops answering. The release run does the same with the signed app as users get it. A crash at start fails CI and stops a release before Publish.
+- **It cannot run on a Mac where a copy of Display 16X is in use.** A build with a folder of its own refuses to start next to the running copy, by design, so there the check is skipped and says so. That covers the owner's Mac on every working day. CI is where it runs, and on CI a skip is a failure. To see it catch a crash on real monitors, the copy in use has to be quit for about a minute.
+- **Whether the app starts on a GitHub macOS runner is learned from the first CI run.** The runner has a desktop session, which the app's menu bar item needs. If it turns out not to, the nearest check would be a start option in the app that makes the same start-up reads, empties the autorelease pool, and exits. The app has no such option today.
+
 ## 24 November 2026 · The built-in XDR panel: HDR without a switch, and forty empty preset slots
 
 Seen at 12:05 with the lid open, through the v0.4 build as the running copy, read-only. The panel has no HDR switch: it shows HDR content at all times, with a potential headroom of 16. **Rule:** a display that has headroom and no HDR switch reads as "HDR always on", and the app offers it nothing to switch. Its reference presets come as 51 entries, of which 40 are empty custom slots that macOS names "Preset #11" to "Preset #50" and marks not valid. The app offers only the valid ones. The macOS preset names are Apple's own and are shown as macOS gives them.
