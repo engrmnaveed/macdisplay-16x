@@ -936,6 +936,15 @@ The hardware report gained a read-only HDR and color section, which sends nothin
 
 **A link color mode change was not prepared**: no interface with a known shape can choose one, and a guessed call on the owner's monitor is not a check worth its risk. Reference presets need an Apple display.
 
+### The built-in XDR panel, read through the running app (24 November, 12:05, lid open)
+
+At midday the MacBook's lid was open and the external monitors were unplugged, so the built-in panel was in use for the first time in this milestone. Read-only, through the v0.4 build as the running copy and `display16x probe --color`:
+
+- **No HDR switch.** System Settings' model reports no HDR modes for it, and the window server none either. It shows HDR content at all times: potential headroom **16.0**, now 1.0 with nothing bright on screen. The app now says "Always on" for such a panel instead of "offers no HDR modes".
+- **Reference presets: 51 listed, 11 with names**: Apple XDR Display (P3-1600 nits), in use; Apple Display (P3-600 nits); HDR Video (P3-ST 2084); HDTV Video (BT.709-BT.1886); NTSC Video (BT.601 SMPTE-C); PAL & SECAM Video (BT.601 EBU); Digital Cinema (P3-DCI); Digital Cinema (P3-D65); Design & Print (P3-D50); Photography (P3-D65); Internet & Web (sRGB). The other 40 are empty slots for custom presets, with no name. The app leaves those out.
+- **Profile** "Color LCD", the panel's own. **True Tone** on and in use. **Night Shift** off.
+- **No link details**: the built-in panel's framebuffer lists no color modes, so the app says macOS reports none for it.
+
 ### Where v0.4 stands at the end of 24 November
 
 All five stages are built on the branch, with 495 unit tests passing. The packaged build's version check, archive and signature check, and the comparison of private interfaces under the hardened runtime pass locally. The smoke test and the full hardware report send DDC reads and were left to CI, because the owner's copy was running.

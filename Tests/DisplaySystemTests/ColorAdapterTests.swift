@@ -80,6 +80,17 @@ import Testing
         }
     }
 
+    @Test("A preset slot without a name is left out, as the built-in XDR panel lists forty of them")
+    func presetSlots() {
+        let named = ["Apple XDR Display (P3-1600 nits)", "Apple Display (P3-600 nits)", "Internet & Web (sRGB)"]
+        var entries: [(index: UInt64, name: String?)] = named.enumerated().map { (UInt64($0.offset), $0.element) }
+        entries += (11...50).map { (UInt64($0), nil) }
+        entries.append((51, " "))
+        let presets = MonitorPanelDisplay.named(entries, active: 0)
+        #expect(presets.map(\.name) == named)
+        #expect(presets.first?.isActive == true && presets.dropFirst().allSatisfy { !$0.isActive })
+    }
+
     @Test("Only RGB profiles of the display or color space class can describe a display")
     func profileClass() {
         func header(_ deviceClass: String, _ space: String) -> [UInt8] {

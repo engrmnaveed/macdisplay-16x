@@ -258,7 +258,11 @@ public final class ColorCommands: CommandExtension {
         switch feature.id {
         case .hdr:
             guard connected else { return (result(.failed, detail: ColorUnavailable.notConnected), nil) }
-            if let reason = colors.hdrUnavailableReason(for: tag) { return (result(.failed, detail: reason), nil) }
+            if let reason = colors.hdrUnavailableReason(for: tag) {
+                // A panel that shows HDR at all times reads as on, and cannot be switched.
+                let always = colors.hdrStatus(for: tag)?.offered != true && colors.headroom(for: tag)?.hasRoom == true
+                return (result(always && !writes ? .confirmed : .failed, actual: always ? .flag(true) : nil, detail: reason), nil)
+            }
             let status = colors.hdrStatus(for: tag)
             if !writes { return (result(.confirmed, actual: .flag(status?.isOn ?? false)), nil) }
             guard colors.hdrControlsEnabled else { return (result(.failed, detail: ColorUnavailable.hdrOff), nil) }
@@ -271,7 +275,8 @@ public final class ColorCommands: CommandExtension {
             guard let headroom = colors.headroom(for: tag) else { return (result(.failed, detail: "the headroom cannot be read on this Mac"), nil) }
             var facts = [headroom.summary]
             let hdrOn = colors.hdrStatus(for: tag)?.isOn ?? false
-            facts.append(hdrOn ? "HDR is on" : headroom.hasRoom ? "HDR is off, the display has headroom" : "HDR is off")
+            let offered = colors.hdrStatus(for: tag)?.offered == true
+            facts.append(hdrOn ? "HDR is on" : !headroom.hasRoom ? "HDR is off" : offered ? "HDR is off, the display has headroom" : "The display shows HDR content without a switch")
             facts.append(sdrLevel(tag, hdrOn: hdrOn))
             return (result(.confirmed, actual: .number(headroom.potential), detail: facts.joined(separator: ". ")), nil)
 
@@ -376,7 +381,7 @@ public final class ColorCommands: CommandExtension {
 
         case .colorMode:
             guard connected else { return (result(.failed, detail: ColorUnavailable.notConnected), nil) }
-            guard let link = colors.link(for: tag) else { return (result(.failed, detail: "the link's color modes cannot be read on this Mac"), nil) }
+            guard let link = colors.link(for: tag) else { return (result(.failed, detail: colors.capabilities.linkModes ? ColorUnavailable.linkNotReported : "the link's color modes cannot be read on this Mac"), nil) }
             if writes { return (result(.failed, detail: ColorUnavailable.chooseLinkMode), nil) }
             let offered = link.offeredModes
             let lines = offered.map { "\($0.id): \($0.summary)" }
@@ -391,7 +396,7 @@ public final class ColorCommands: CommandExtension {
 
         case .linkRates:
             guard connected else { return (result(.failed, detail: ColorUnavailable.notConnected), nil) }
-            guard let link = colors.link(for: tag) else { return (result(.failed, detail: "the link's timings cannot be read on this Mac"), nil) }
+            guard let link = colors.link(for: tag) else { return (result(.failed, detail: colors.capabilities.linkModes ? ColorUnavailable.linkNotReported : "the link's timings cannot be read on this Mac"), nil) }
             let rates = link.connectionOnlyRates(listed: modes.modes(for: tag))
             let lines = rates.map { String(format: "%d × %d at %.2f Hz%@", $0.width, $0.height, $0.refreshRate, $0.isVirtual ? ", made up by macOS" : "") }
             return (result(.confirmed, actual: .text("\(rates.count) rates"), detail: rates.isEmpty ? "the mode list has every rate the link offers" : "choosing one is not possible yet"),

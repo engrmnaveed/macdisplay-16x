@@ -119,7 +119,10 @@ public final class ColorService {
     public func hdrUnavailableReason(for tag: DisplayTag) -> String? {
         guard live(tag) != nil else { return ColorUnavailable.notConnected }
         guard capabilities.hdrSwitch else { return ColorUnavailable.hdrSwitch }
-        guard hdrStatus(for: tag)?.offered == true else { return ColorUnavailable.noHDR }
+        guard hdrStatus(for: tag)?.offered == true else {
+            if let headroom = headroom(for: tag), headroom.hasRoom { return ColorUnavailable.alwaysHDR(headroom) }
+            return ColorUnavailable.noHDR
+        }
         return nil
     }
 

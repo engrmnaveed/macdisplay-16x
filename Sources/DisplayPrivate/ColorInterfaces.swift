@@ -111,10 +111,19 @@ public enum MonitorPanelDisplay {
         guard presetsAvailable, let object = object(for: display), ObjectiveC.bool(object, "hasPresets") == true,
               let list = ObjectiveC.object(object, "presets") as? [AnyObject] else { return [] }
         let active = ObjectiveC.object(object, "activePreset").flatMap { ObjectiveC.unsigned($0, "presetIndex") }
-        return list.compactMap { preset in
-            guard let index = ObjectiveC.unsigned(preset, "presetIndex") else { return nil }
-            let name = ObjectiveC.object(preset, "presetName") as? String ?? "Preset \(index)"
-            return Preset(index: Int(index), name: name, isActive: index == active)
+        let entries: [(index: UInt64, name: String?)] = list.compactMap { preset in
+            ObjectiveC.unsigned(preset, "presetIndex").map { ($0, ObjectiveC.object(preset, "presetName") as? String) }
+        }
+        return named(entries, active: active)
+    }
+
+    /// The presets worth offering. The built-in XDR panel lists 51: eleven with names, and forty
+    /// empty slots for custom presets with none, seen on 24 November 2026. A slot without a name
+    /// is left out.
+    static func named(_ entries: [(index: UInt64, name: String?)], active: UInt64?) -> [Preset] {
+        entries.compactMap { entry in
+            guard let name = entry.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
+            return Preset(index: Int(entry.index), name: name, isActive: entry.index == active)
         }
     }
 

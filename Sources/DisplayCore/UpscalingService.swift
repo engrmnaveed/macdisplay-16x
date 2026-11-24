@@ -227,7 +227,7 @@ public final class UpscalingCommands: CommandExtension {
         if command.operation == .get {
             let reason = upscaling.unavailableReason(for: tag)
             var detail = reason ?? String(format: "%.2f times SDR white, at most %.2f", upscaling.factor(for: tag), upscaling.maximumFactor(for: tag))
-            if registry.live[tag]?.snapshot.kind == .builtIn { detail += ". " + UpscalingService.directXDRMissing }
+            if registry.live[tag]?.snapshot.kind == .builtIn { detail += (detail.hasSuffix(".") ? " " : ". ") + UpscalingService.directXDRMissing }
             return DisplayResult(tag: tag, name: name(tag), outcome: reason == nil ? .accepted : .failed, actual: .number(current), detail: detail)
         }
         let target: Double

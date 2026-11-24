@@ -6,6 +6,12 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 24 November 2026 · The built-in XDR panel: HDR without a switch, and forty unnamed preset slots
+
+Seen at 12:05 with the lid open, through the v0.4 build as the running copy, read-only. The panel has no HDR switch: it shows HDR content at all times, with a potential headroom of 16. **Rule:** a display that has headroom and no HDR switch reads as "HDR always on", and the app offers it nothing to switch. Its reference presets come as 51 entries, of which 40 are empty custom slots with no name, and the app offers only the named ones. The macOS preset names are Apple's own and are shown as macOS gives them.
+
+The first start of the v0.4 build as the running copy crashed a second in: the object System Settings' display model hands back was released once too often. It was fixed within minutes, with a test that crashes on the old line, and the copy has run since 12:04. **Rule kept from v0.1:** an object an initializer returns through a raw call is taken unretained when Swift still holds the receiver.
+
 ## 24 November 2026 · Release 0.4.0: two releases waiting at once, and a release run with no macOS runner
 
 - **GitHub can fail to find a macOS runner for a release.** 0.3.0's packaging job waited 15 minutes and was cancelled with "The job was not acquired by Runner of type hosted even after multiple attempts", next to GitHub's notice that jobs for macOS arm64 runners may queue longer because of capacity. Its checks job had found a macOS runner six minutes earlier, and 0.2.0's packaging job had waited five minutes for one. Nothing was signed or published. GitHub offers no setting for how long a hosted job may wait. From 0.4.0's workflow on, a run that ends without a release says in its summary why, and for a job with no runner, that **Re-run failed jobs** runs it again with nothing to undo. The runbook says the same. No check was changed.
