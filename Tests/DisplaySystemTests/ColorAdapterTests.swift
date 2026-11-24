@@ -80,12 +80,13 @@ import Testing
         }
     }
 
-    @Test("A preset slot without a name is left out, as the built-in XDR panel lists forty of them")
+    @Test("An empty preset slot is left out, as the built-in XDR panel lists forty of them")
     func presetSlots() {
         let named = ["Apple XDR Display (P3-1600 nits)", "Apple Display (P3-600 nits)", "Internet & Web (sRGB)"]
-        var entries: [(index: UInt64, name: String?)] = named.enumerated().map { (UInt64($0.offset), $0.element) }
-        entries += (11...50).map { (UInt64($0), nil) }
-        entries.append((51, " "))
+        var entries: [MonitorPanelDisplay.PresetEntry] = named.enumerated().map { .init(index: UInt64($0.offset), name: $0.element, valid: true) }
+        // What macOS gave for the empty slots: a name of its own and PresetValid 0.
+        entries += (11...50).map { .init(index: UInt64($0), name: "Preset #\($0)", valid: false) }
+        entries.append(.init(index: 51, name: " ", valid: nil))
         let presets = MonitorPanelDisplay.named(entries, active: 0)
         #expect(presets.map(\.name) == named)
         #expect(presets.first?.isActive == true && presets.dropFirst().allSatisfy { !$0.isActive })

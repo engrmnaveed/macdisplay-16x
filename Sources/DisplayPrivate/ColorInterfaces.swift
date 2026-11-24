@@ -111,18 +111,28 @@ public enum MonitorPanelDisplay {
         guard presetsAvailable, let object = object(for: display), ObjectiveC.bool(object, "hasPresets") == true,
               let list = ObjectiveC.object(object, "presets") as? [AnyObject] else { return [] }
         let active = ObjectiveC.object(object, "activePreset").flatMap { ObjectiveC.unsigned($0, "presetIndex") }
-        let entries: [(index: UInt64, name: String?)] = list.compactMap { preset in
-            ObjectiveC.unsigned(preset, "presetIndex").map { ($0, ObjectiveC.object(preset, "presetName") as? String) }
+        let entries: [PresetEntry] = list.compactMap { preset in
+            guard let index = ObjectiveC.unsigned(preset, "presetIndex") else { return nil }
+            let dictionary = ObjectiveC.object(preset, "presetDictionary") as? [String: Any]
+            return PresetEntry(index: index, name: ObjectiveC.object(preset, "presetName") as? String, valid: (dictionary?["PresetValid"] as? NSNumber)?.boolValue)
         }
         return named(entries, active: active)
     }
 
-    /// The presets worth offering. The built-in XDR panel lists 51: eleven with names, and forty
-    /// empty slots for custom presets with none, seen on 24 November 2026. A slot without a name
-    /// is left out.
-    static func named(_ entries: [(index: UInt64, name: String?)], active: UInt64?) -> [Preset] {
+    struct PresetEntry {
+        var index: UInt64
+        var name: String?
+        /// `PresetValid` from the preset's dictionary. Nil when it does not say.
+        var valid: Bool?
+    }
+
+    /// The presets worth offering. The built-in XDR panel lists 51, seen on 24 November 2026:
+    /// eleven real ones, and forty empty slots for custom presets named "Preset #11" to
+    /// "Preset #50" by macOS, whose dictionary holds only `PresetValid`, set to 0. A preset
+    /// marked not valid, or without a name, is left out.
+    static func named(_ entries: [PresetEntry], active: UInt64?) -> [Preset] {
         entries.compactMap { entry in
-            guard let name = entry.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
+            guard entry.valid != false, let name = entry.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
             return Preset(index: Int(entry.index), name: name, isActive: entry.index == active)
         }
     }

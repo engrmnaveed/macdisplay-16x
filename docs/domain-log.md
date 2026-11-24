@@ -6,9 +6,9 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
-## 24 November 2026 · The built-in XDR panel: HDR without a switch, and forty unnamed preset slots
+## 24 November 2026 · The built-in XDR panel: HDR without a switch, and forty empty preset slots
 
-Seen at 12:05 with the lid open, through the v0.4 build as the running copy, read-only. The panel has no HDR switch: it shows HDR content at all times, with a potential headroom of 16. **Rule:** a display that has headroom and no HDR switch reads as "HDR always on", and the app offers it nothing to switch. Its reference presets come as 51 entries, of which 40 are empty custom slots with no name, and the app offers only the named ones. The macOS preset names are Apple's own and are shown as macOS gives them.
+Seen at 12:05 with the lid open, through the v0.4 build as the running copy, read-only. The panel has no HDR switch: it shows HDR content at all times, with a potential headroom of 16. **Rule:** a display that has headroom and no HDR switch reads as "HDR always on", and the app offers it nothing to switch. Its reference presets come as 51 entries, of which 40 are empty custom slots that macOS names "Preset #11" to "Preset #50" and marks not valid. The app offers only the valid ones. The macOS preset names are Apple's own and are shown as macOS gives them.
 
 The first start of the v0.4 build as the running copy crashed a second in: the object System Settings' display model hands back was released once too often. It was fixed within minutes, with a test that crashes on the old line, and the copy has run since 12:04. **Rule kept from v0.1:** an object an initializer returns through a raw call is taken unretained when Swift still holds the receiver.
 
