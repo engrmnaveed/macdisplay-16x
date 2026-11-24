@@ -51,7 +51,15 @@ struct HDRRows: View {
     }
 
     var body: some View {
-        if let reason = state.hdrReason, !state.hdrOffered {
+        if state.hdrAlways {
+            LineRow(title: "High dynamic range") { Text("Always on").font(Skin.type.bodyStrong).foregroundStyle(Skin.color.text) }
+            Text(verbatim: state.hdrReason ?? "The display shows HDR content at all times.")
+                .font(Skin.type.caption).foregroundStyle(Skin.color.textSecondary).fixedSize(horizontal: false, vertical: true)
+            if color.upscaling {
+                SkinRule()
+                AboveWhiteRow(state: state, color: color)
+            }
+        } else if let reason = state.hdrReason, !state.hdrOffered {
             WhyRow(title: "High dynamic range", reason: reason)
         } else {
             SwitchRow(title: "High dynamic range", help: help, isOn: hdr, isEnabled: color.hdrControls)

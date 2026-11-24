@@ -98,7 +98,7 @@ func monitorPanelDisplay(_ id: CGDirectDisplayID) -> AnyObject? {
     guard let cls = NSClassFromString("MPDisplay"), class_respondsToSelector(cls, selector),
           let raw = class_createInstance(cls, 0) as AnyObject?,
           let implementation = class_getMethodImplementation(cls, selector) else { return nil }
-    return unsafeBitCast(implementation, to: Initializer.self)(raw, selector, id)?.takeRetainedValue()
+    return unsafeBitCast(implementation, to: Initializer.self)(raw, selector, id)?.takeUnretainedValue()
 }
 
 // MARK: Window server modes

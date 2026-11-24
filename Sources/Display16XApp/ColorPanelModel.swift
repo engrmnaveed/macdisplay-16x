@@ -13,6 +13,8 @@ final class ColorPanelModel: ObservableObject {
         var name: String
         var hdrOffered: Bool
         var hdrOn: Bool
+        /// HDR content is shown at all times, with no switch, as on the built-in XDR panel.
+        var hdrAlways: Bool
         /// Why HDR cannot be switched here, when it cannot.
         var hdrReason: String?
         /// "Up to 2.95 times SDR white."
@@ -111,6 +113,7 @@ final class ColorPanelModel: ObservableObject {
         let state = DisplayColor(
             tag: tag, name: name,
             hdrOffered: status?.offered == true, hdrOn: status?.isOn == true,
+            hdrAlways: status?.offered != true && headroom?.hasRoom == true,
             hdrReason: colors.hdrUnavailableReason(for: tag),
             headroom: headroom.flatMap(ColorPanelModel.headroomLine),
             protectHDR: settings.protectHDR ?? ColorDefaults.protectHDR,

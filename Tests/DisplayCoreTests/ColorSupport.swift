@@ -54,8 +54,11 @@ final class FakeColorSystem: ColorSystem {
         return true
     }
 
+    /// What a display reports with HDR off. 1 for the monitors; 16 for the built-in XDR panel.
+    var hdrHeadroomWhenOff = Headroom(current: 1, potential: 1, reference: 0)
+
     func headroom(for display: SystemDisplayID) -> Headroom? {
-        hdr[display]?.isOn == true ? ColorFixture.lgHeadroomInHDR : Headroom(current: 1, potential: 1, reference: 0)
+        hdr[display]?.isOn == true ? ColorFixture.lgHeadroomInHDR : hdrHeadroomWhenOff
     }
 
     func profiles(for display: SystemDisplayID) -> DisplayProfiles? {

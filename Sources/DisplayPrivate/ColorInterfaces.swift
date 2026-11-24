@@ -15,7 +15,7 @@ enum ObjectiveC {
     typealias ObjectGetter = @convention(c) (AnyObject, Selector) -> Unmanaged<AnyObject>?
     typealias ObjectSetterResult = @convention(c) (AnyObject, Selector, AnyObject) -> Bool
     typealias UnsignedGetter = @convention(c) (AnyObject, Selector) -> UInt64
-    typealias DisplayInitializer = @convention(c) (AnyObject, Selector, UInt32) -> Unmanaged<AnyObject>?
+    typealias DisplayInitializer = @convention(c) (UnsafeMutableRawPointer, Selector, UInt32) -> UnsafeMutableRawPointer?
     typealias StatusGetter = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Bool
 
     static func responds(_ cls: AnyClass?, _ name: String) -> Bool {
@@ -59,9 +59,16 @@ public enum MonitorPanelDisplay {
     static func object(for display: UInt32) -> AnyObject? {
         let selector = NSSelectorFromString("initWithCGSDisplayID:")
         guard let displayClass, class_respondsToSelector(displayClass, selector),
-              let raw = class_createInstance(displayClass, 0) as AnyObject?,
+              let instance = class_createInstance(displayClass, 0) as AnyObject?,
               let function = class_getMethodImplementation(displayClass, selector) else { return nil }
-        return unsafeBitCast(function, to: ObjectiveC.DisplayInitializer.self)(raw, selector, display)?.takeRetainedValue()
+        // An initializer consumes its receiver and returns its result retained. So the receiver
+        // goes in with a reference of its own, and the result is taken retained, as v0.3's
+        // virtual displays do. That is right whether the initializer returns the receiver,
+        // another object or nil. The first v0.4 build took the result retained without giving
+        // the receiver its own reference, released it once too often, and crashed at start
+        // when an autorelease pool emptied (24 November 2026).
+        let result = unsafeBitCast(function, to: ObjectiveC.DisplayInitializer.self)(Unmanaged.passRetained(instance).toOpaque(), selector, display)
+        return result.map { Unmanaged<AnyObject>.fromOpaque($0).takeRetainedValue() }
     }
 
     /// The HDR switch and both ways of reading it are there.
@@ -107,10 +114,29 @@ public enum MonitorPanelDisplay {
         guard presetsAvailable, let object = object(for: display), ObjectiveC.bool(object, "hasPresets") == true,
               let list = ObjectiveC.object(object, "presets") as? [AnyObject] else { return [] }
         let active = ObjectiveC.object(object, "activePreset").flatMap { ObjectiveC.unsigned($0, "presetIndex") }
-        return list.compactMap { preset in
+        let entries: [PresetEntry] = list.compactMap { preset in
             guard let index = ObjectiveC.unsigned(preset, "presetIndex") else { return nil }
-            let name = ObjectiveC.object(preset, "presetName") as? String ?? "Preset \(index)"
-            return Preset(index: Int(index), name: name, isActive: index == active)
+            let dictionary = ObjectiveC.object(preset, "presetDictionary") as? [String: Any]
+            return PresetEntry(index: index, name: ObjectiveC.object(preset, "presetName") as? String, valid: (dictionary?["PresetValid"] as? NSNumber)?.boolValue)
+        }
+        return named(entries, active: active)
+    }
+
+    struct PresetEntry {
+        var index: UInt64
+        var name: String?
+        /// `PresetValid` from the preset's dictionary. Nil when it does not say.
+        var valid: Bool?
+    }
+
+    /// The presets worth offering. The built-in XDR panel lists 51, seen on 24 November 2026:
+    /// eleven real ones, and forty empty slots for custom presets named "Preset #11" to
+    /// "Preset #50" by macOS, whose dictionary holds only `PresetValid`, set to 0. A preset
+    /// marked not valid, or without a name, is left out.
+    static func named(_ entries: [PresetEntry], active: UInt64?) -> [Preset] {
+        entries.compactMap { entry in
+            guard entry.valid != false, let name = entry.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
+            return Preset(index: Int(entry.index), name: name, isActive: entry.index == active)
         }
     }
 
