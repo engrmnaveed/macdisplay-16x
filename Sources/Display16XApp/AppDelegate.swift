@@ -58,6 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return
         }
         self.context = context
+        // The skin comes first, so the first surface on screen already wears it.
+        context.skinCommands.applySettings()
         context.startServer()
         indicatorPresenter.displayName = { [registry = context.registry] tag in registry.record(for: tag)?.displayName }
         context.indicator.presenter = indicatorPresenter

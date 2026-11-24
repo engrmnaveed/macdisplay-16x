@@ -3,10 +3,12 @@ import SwiftUI
 import Testing
 @testable import Display16XApp
 
-/// The skin's colors, measured: text has to stand out from what it sits on in light, dark
+/// The skins' colors, measured: text has to stand out from what it sits on in light, dark
 /// and both increased-contrast looks. A re-skin that fails here is hard to read somewhere.
+/// Studio, every ready-made skin, the Mac's accent in its every color, and custom colors
+/// awkward on purpose are all measured the same way.
 @MainActor
-@Suite struct SkinContrast {
+@Suite(.timeLimit(.minutes(1))) struct SkinContrast {
     struct RGB {
         var red: Double
         var green: Double
@@ -57,9 +59,8 @@ import Testing
         var leastContrast: Double
     }
 
-    static var pairs: [Pair] {
-        let color = Skin.color
-        return [
+    static func pairs(_ color: Theme.Colors) -> [Pair] {
+        [
             Pair(name: "text on a card", front: color.text, back: color.surface, least: 7, leastContrast: 10),
             Pair(name: "text on the canvas", front: color.text, back: color.canvas, least: 7, leastContrast: 10),
             Pair(name: "secondary text on a card", front: color.textSecondary, back: color.surface, least: 4.5, leastContrast: 7),
@@ -79,35 +80,152 @@ import Testing
         ]
     }
 
-    @Test("Text and marks stand out from what they sit on, in every look")
-    func pairs() {
+    /// Every pair, the card edges and the dark surfaces of one theme, in all four looks.
+    static func measure(_ theme: Theme, _ label: String) {
+        let color: Theme.Colors = theme.color
         for look in Look.allCases {
-            let isContrast: Bool = look == .lightContrast || look == .darkContrast
-            for pair in SkinContrast.pairs {
+            for pair in SkinContrast.pairs(color) {
                 let measured: Double = SkinContrast.ratio(pair.front, on: pair.back, in: look)
-                let least: Double = isContrast ? pair.leastContrast : pair.least
-                #expect(measured >= least, "\(pair.name), \(look.rawValue): \(String(format: "%.2f", measured)) to 1, at least \(least) is needed")
+                let least: Double = look.isContrast ? pair.leastContrast : pair.least
+                #expect(measured >= least, "\(label): \(pair.name), \(look.rawValue): \(String(format: "%.2f", measured)) to 1, at least \(least) is needed")
             }
         }
-    }
-
-    @Test("With Increase Contrast a card has an edge that can be seen")
-    func edges() {
+        // With Increase Contrast a card has an edge that can be seen.
         for look in [Look.lightContrast, .darkContrast] {
-            let measured: Double = SkinContrast.ratio(Skin.color.hairline, on: Skin.color.surface, in: look)
-            #expect(measured >= 3, "a card's edge, \(look.rawValue): \(String(format: "%.2f", measured)) to 1")
+            let measured: Double = SkinContrast.ratio(color.hairline, on: color.surface, in: look)
+            #expect(measured >= 3, "\(label): a card's edge, \(look.rawValue): \(String(format: "%.2f", measured)) to 1")
         }
-    }
-
-    @Test("The dark surfaces of the indicator and the notices are readable over anything")
-    func hud() {
         // The surface is a little see-through. White and black behind it are the two extremes.
         for under in [Color.white, Color.black] {
-            let color = Skin.color
-            #expect(SkinContrast.ratio(color.hudText, on: color.hud, in: .light, under: under) >= 7)
-            #expect(SkinContrast.ratio(color.hudTextSecondary, on: color.hud, in: .light, under: under) >= 4.5)
-            #expect(SkinContrast.ratio(color.hudAccent, on: color.hud, in: .light, under: under) >= 4.5)
-            #expect(SkinContrast.ratio(color.hudAttention, on: color.hud, in: .light, under: under) >= 4.5)
+            #expect(SkinContrast.ratio(color.hudText, on: color.hud, in: .light, under: under) >= 7, "\(label): indicator text")
+            #expect(SkinContrast.ratio(color.hudTextSecondary, on: color.hud, in: .light, under: under) >= 4.5, "\(label): indicator secondary text")
+            #expect(SkinContrast.ratio(color.hudAccent, on: color.hud, in: .light, under: under) >= 4.5, "\(label): indicator accent")
+            #expect(SkinContrast.ratio(color.hudAttention, on: color.hud, in: .light, under: under) >= 4.5, "\(label): indicator attention")
         }
+    }
+
+    @Test("Studio: text and marks stand out from what they sit on, in every look")
+    func studio() {
+        SkinContrast.measure(.studio, "Studio")
+    }
+
+    @Test("Every ready-made skin is as readable as Studio")
+    func readyMade() {
+        for entry in Theme.skins {
+            SkinContrast.measure(entry.theme(macAccent: SampleDesk.macAccent), entry.name)
+        }
+    }
+
+    /// The accent colors System Settings offers, as macOS draws them in light and dark, and
+    /// two a Mac could report that macOS itself never would.
+    static let macAccents: [(String, MacAccent)] = [
+        ("blue", MacAccent(light: SRGBColor(0, 122, 255), dark: SRGBColor(10, 132, 255))),
+        ("purple", MacAccent(light: SRGBColor(149, 61, 150), dark: SRGBColor(165, 80, 167))),
+        ("pink", MacAccent(light: SRGBColor(247, 79, 158), dark: SRGBColor(247, 79, 158))),
+        ("red", MacAccent(light: SRGBColor(224, 56, 62), dark: SRGBColor(233, 69, 75))),
+        ("orange", MacAccent(light: SRGBColor(247, 130, 27), dark: SRGBColor(247, 130, 27))),
+        ("yellow", MacAccent(light: SRGBColor(255, 199, 38), dark: SRGBColor(255, 199, 38))),
+        ("green", MacAccent(light: SRGBColor(98, 186, 70), dark: SRGBColor(98, 186, 70))),
+        ("graphite", MacAccent(light: SRGBColor(152, 152, 152), dark: SRGBColor(140, 140, 140))),
+        ("white", MacAccent(light: SRGBColor(255, 255, 255), dark: SRGBColor(255, 255, 255))),
+        ("black", MacAccent(light: SRGBColor(0, 0, 0), dark: SRGBColor(0, 0, 0))),
+    ]
+
+    @Test("The skin that takes the Mac's accent stays readable with every accent the Mac offers")
+    func macAccent() throws {
+        let system = try #require(Theme.skins.first { $0.followsMacAccent })
+        for (name, accent) in SkinContrast.macAccents {
+            SkinContrast.measure(system.theme(macAccent: accent), "System with a \(name) accent")
+        }
+    }
+
+    /// Custom colors chosen to be hard: an accent too light to read on white, one too dark
+    /// to see on navy, colors that sit on the surfaces, and surfaces as loud as can be.
+    static let awkward: [(String, SkinSeed)] = [
+        ("a very light accent", SkinSeed(accent: SRGBColor(hex: 0xFFF6B0), surfaces: SRGBColor(hex: 0xF5F5F5))),
+        ("a very dark accent", SkinSeed(accent: SRGBColor(hex: 0x0B0F1A), surfaces: SRGBColor(hex: 0x16253A))),
+        ("white on white", SkinSeed(accent: .white, surfaces: .white)),
+        ("black on black", SkinSeed(accent: .black, surfaces: .black)),
+        ("pure yellow", SkinSeed(accent: SRGBColor(hex: 0xFFFF00), surfaces: SRGBColor(hex: 0xFFFF00))),
+        ("pure blue", SkinSeed(accent: SRGBColor(hex: 0x0000FF), surfaces: SRGBColor(hex: 0x0000FF))),
+        ("neon green on red", SkinSeed(accent: SRGBColor(hex: 0x39FF14), surfaces: SRGBColor(hex: 0xFF0000))),
+        ("magenta on cyan", SkinSeed(accent: SRGBColor(hex: 0xFF00FF), surfaces: SRGBColor(hex: 0x00FFFF))),
+        ("the accent the surfaces are", SkinSeed(accent: SRGBColor(hex: 0x7A8899), surfaces: SRGBColor(hex: 0x7A8899))),
+        ("the danger red as accent", SkinSeed(accent: SRGBColor(180, 36, 36), surfaces: SRGBColor(hex: 0xFDE8E6))),
+    ]
+
+    @Test("Custom colors stay readable, the awkward ones too")
+    func custom() {
+        for (name, seed) in SkinContrast.awkward {
+            SkinContrast.measure(Theme.derived(name: name, seed: seed), "Custom, \(name)")
+        }
+    }
+}
+
+/// Custom colors picked at random, measured on their numbers alone. Nothing here needs the
+/// main actor, so it stays off it: other tests in the same process wait for no one.
+@Suite(.timeLimit(.minutes(1))) struct RandomSkinColors {
+    /// Every pair of a palette, measured on its numbers: the same amounts as the pairs above.
+    static func palettePairs(_ palette: Palette, _ look: SkinLook) -> [(String, SRGBColor, SRGBColor, (Double, Double))] {
+        let attention: SRGBColor = Theme.Shared.attentionSurface[look]
+        let danger: SRGBColor = Theme.Shared.dangerSurface[look]
+        return [
+            ("text on a card", palette.text[look], palette.surface[look], (7, 10)),
+            ("text on the canvas", palette.text[look], palette.canvas[look], (7, 10)),
+            ("secondary text on a card", palette.textSecondary[look], palette.surface[look], (4.5, 7)),
+            ("secondary text on the canvas", palette.textSecondary[look], palette.canvas[look], (4.5, 7)),
+            ("tertiary text on a card", palette.textTertiary[look], palette.surface[look], (3, 4.5)),
+            ("text on the accent", palette.onAccent[look], palette.accent[look], (4.5, 7)),
+            ("the accent on a card", palette.accent[look], palette.surface[look], (4.5, 7)),
+            ("the accent on the canvas", palette.accent[look], palette.canvas[look], (4.5, 7)),
+            ("a bar against its bed", palette.accent[look], palette.track[look], (3, 4.5)),
+            ("text on a quiet button", palette.text[look], palette.track[look], (7, 10)),
+            ("text on an attention banner", palette.text[look], attention, (7, 10)),
+            ("secondary text on an attention banner", palette.textSecondary[look], attention, (4.5, 7)),
+            ("text on a danger banner", palette.text[look], danger, (7, 10)),
+            ("a display's edge", palette.tileEdge[look], palette.tile[look], (1.5, 3)),
+            ("a card's edge", palette.hairline[look], palette.surface[look], (1, 3)),
+        ]
+    }
+
+    @Test("Three hundred custom colors, picked at random, all stay readable")
+    func random() {
+        var generator = SplitMix(seed: 16)
+        var failures: [String] = []
+        for _ in 0..<300 {
+            let seed = SkinSeed(accent: generator.color(), surfaces: generator.color())
+            let palette: Palette = Palette.derive(seed, attentionSurface: Theme.Shared.attentionSurface, dangerSurface: Theme.Shared.dangerSurface)
+            for look in SkinLook.allCases {
+                for (name, front, back, least) in RandomSkinColors.palettePairs(palette, look) {
+                    let measured: Double = SRGBColor.contrast(front, back)
+                    let needed: Double = look.isContrast ? least.1 : least.0
+                    if measured < needed { failures.append("accent \(seed.accentLight.hex), surfaces \(seed.surfaces.hex), \(look): \(name) \(String(format: "%.2f", measured))") }
+                }
+            }
+            let hudOverWhite: SRGBColor = palette.hud.over(.white, alpha: Palette.Steps.hudOpacity)
+            if SRGBColor.contrast(palette.hudAccent, hudOverWhite) < 4.5 { failures.append("accent \(seed.accentLight.hex): indicator accent") }
+        }
+        #expect(failures.isEmpty, "\(failures.count) pairs fell short, first: \(failures.prefix(5).joined(separator: "; "))")
+    }
+}
+
+/// A small random number generator with a fixed start, so a failure can be found again.
+struct SplitMix: RandomNumberGenerator {
+    var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E37_79B9_7F4A_7C15
+        var value: UInt64 = state
+        value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+        return value ^ (value >> 31)
+    }
+
+    mutating func color() -> SRGBColor {
+        SRGBColor(Int.random(in: 0...255, using: &self), Int.random(in: 0...255, using: &self), Int.random(in: 0...255, using: &self))
     }
 }

@@ -56,12 +56,12 @@ enum RenderComparison {
         return Report(text: lines.joined(separator: "\n"), different: different)
     }
 
-    private static func bitmap(_ url: URL) -> NSBitmapImageRep? {
+    static func bitmap(_ url: URL) -> NSBitmapImageRep? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         return NSBitmapImageRep(data: data)
     }
 
-    private static func difference(_ first: NSBitmapImageRep, _ second: NSBitmapImageRep, tolerance: Int) -> Difference? {
+    static func difference(_ first: NSBitmapImageRep, _ second: NSBitmapImageRep, tolerance: Int) -> Difference? {
         guard let a = first.bitmapData, let b = second.bitmapData else { return nil }
         let width = first.pixelsWide
         let height = first.pixelsHigh

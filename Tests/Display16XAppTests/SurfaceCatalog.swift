@@ -21,6 +21,7 @@ enum SurfaceCatalog {
         try await AdvancedCatalog.render(session)
         try await ColorCatalog.render(session)
         try menuBar(session)
+        try await SkinCatalog.render(session)
     }
 
     // MARK: Desks
@@ -339,9 +340,10 @@ enum SurfaceCatalog {
         let desk = try await livedIn()
         let model = PanelModel(context: desk.context)
         let layoutModel = LayoutPanelModel(context: desk.context, hotKeys: nil)
+        let skins = SkinPanelModel(context: desk.context)
         for tab in SettingsView.Tab.allCases {
             try session.shoot("settings-\(tab.rawValue.lowercased())", group: "settings", title: "Settings: \(tab.rawValue)", chrome: .window, active: true) {
-                SettingsView(model: model, layoutModel: layoutModel, start: tab, openLink: { _ in })
+                SettingsView(model: model, layoutModel: layoutModel, start: tab, skins: skins, openLink: { _ in })
             }
         }
         model.close()

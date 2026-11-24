@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Skins
+
+- Choose how Display 16X looks in **Settings → Appearance**: six ready-made skins, Studio (the default, as before), System (the accent color chosen in System Settings), Graphite, Ember, Orchid and Moss, or **Custom** with an accent and a color for the surfaces of your own. Every skin follows light and dark mode and Increase Contrast. A choice shows at once on the panel, a display's page, Arrange, the settings window, the Keep windows, the indicator and the notices, with no restart.
+- Custom colors stay readable: text and controls are worked out from your two colors in every look, and the accent is drawn lighter or darker only when it has to be, which the Appearance tab says.
+- From the command line: `display16x skin` shows the skin in use and every skin there is, `display16x skin ember` wears one, and `display16x skin custom accent=#D6336C surfaces=#E8D8C4` sets your own. `display16x set skin …` and links work too, and `display16x help skin` explains the values.
+- The choice is part of the settings file, so settings export, import and reset carry it. An older version of the app ignores it and shows Studio.
+- The settings window is 80 points wider, so its seven tabs fit.
+
 ## 0.4.0
 
 HDR and color: switch HDR on the displays that have it, choose color profiles with one to fall back to and one for HDR, see how each display's link carries the picture, and keep Night Shift out of the way in HDR. Every feature here is off until you turn it on, in Settings under Advanced or with `display16x set hdrControls on`, `profileControls on`, `nightShiftInHDR on` and `upscaling on`, and each says what it costs next to its switch. Until then Display 16X does what 0.3.0 did. The app has not yet used any of these features on a real display: they are unit-tested, and what test programs proved on hardware is listed below.

@@ -153,7 +153,9 @@ final class Stage {
             let node = entry.node
             var line = String(repeating: "  ", count: entry.depth) + node.role
             if !node.name.isEmpty { line += " \"\(node.name)\"" }
-            if !node.spokenValue.isEmpty { line += " = \(node.spokenValue)" }
+            // An object's address changes from run to run, so it is left out.
+            let spoken: String = node.spokenValue.replacingOccurrences(of: "0x[0-9a-fA-F]+", with: "0x…", options: .regularExpression)
+            if !spoken.isEmpty { line += " = \(spoken)" }
             if node.isSelected { line += " [selected]" }
             if !node.help.isEmpty { line += " (help: \(node.help))" }
             if node.isDisabled { line += " [disabled]" }

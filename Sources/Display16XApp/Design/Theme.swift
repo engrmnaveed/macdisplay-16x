@@ -4,17 +4,24 @@ import SwiftUI
 // THE SKIN
 //
 // Every color, distance, size, font, symbol name and duration the interface uses is in
-// this file. To give the app another look, change the values of `Theme.studio`, or add a
-// second theme next to it and set `Skin.current` to it in `main.swift`.
+// this file. Studio's values are written out below. The other skins are listed in
+// `Theme.skins`, each made from two colors by Palette.swift.
 //
 // How the look is layered, from cheapest to change to dearest:
 //   1. Theme.swift (this file)   values only. A re-color or re-spacing ends here.
+//      Palette.swift             how a skin's colors are worked out from two colors.
 //   2. Primitives.swift          how a bar, a stop, a chip or a card is drawn from the values.
 //   3. Surfaces/                 which pieces a surface is made of, and its words. A surface
 //                                holds no color, font, radius, distance or symbol of its own.
 //                                `SkinBoundaryTests` fails the build's tests when one does.
 //
-// To check a change without starting the app: `scripts/render-surfaces.sh`, then look at
+// To add a ready-made skin: one line in `Theme.skins` below, with a name for settings and
+// the command line, the name people see, an accent and a color for the surfaces to lean
+// towards. `SkinContrastTests` measures it in all four looks. To see it without starting the
+// app: `scripts/render-surfaces.sh`, then `renders/surfaces/sheets/skins-light.png` and
+// `skins-dark.png` (every skin side by side), and `skin-NAME-light.png` for its values.
+//
+// To check any change: `scripts/render-surfaces.sh`, then look at
 // `renders/surfaces/sheets/skin-light.png` and `skin-dark.png` (every value and piece on
 // one picture) and at the other sheets in that folder (every surface, one sheet a group).
 
@@ -119,9 +126,17 @@ struct Theme: Sendable {
         var keepWindowWidth: CGFloat
         var offerWidth: CGFloat
         var settingsWidth: CGFloat
+        /// The window that shows what would be written to a system file before it is.
+        var previewWidth: CGFloat
         var settingsHeight: CGFloat
         var aboutMark: CGFloat
         var menuBarIcon: CGFloat
+        /// A skin drawn small in the settings window, and how many sit in a row.
+        var swatch: CGSize
+        var swatchColumns: Int
+        /// The bar, the stops and a line of text inside a swatch.
+        var swatchMark: CGFloat
+        var swatchLine: CGFloat
     }
 
     struct TypeScale: Sendable {
@@ -184,6 +199,8 @@ struct Theme: Sendable {
         var mirror: String
         var disconnected: String
         var link: String
+        var chosen: String
+        var customSkin: String
     }
 
     struct Motion: Sendable {
@@ -193,22 +210,53 @@ struct Theme: Sendable {
     }
 }
 
-/// The theme in use. Everything in the interface reads its look from here.
+/// The theme in use. Everything in the interface reads its look from here. A view that reads
+/// it while drawing is drawn again when the skin changes: see `SkinStore`.
 @MainActor
 enum Skin {
-    static var current: Theme = .studio
+    static var current: Theme {
+        get { SkinStore.shared.theme }
+        set { SkinStore.shared.theme = newValue }
+    }
 
-    static var color: Theme.Colors { current.color }
-    static var space: Theme.Space { current.space }
-    static var radius: Theme.Radius { current.radius }
-    static var size: Theme.Size { current.size }
-    static var type: Theme.TypeScale { current.type }
-    static var symbol: Theme.Symbols { current.symbol }
-    static var motion: Theme.Motion { current.motion }
+    static var color: Theme.Colors { SkinStore.shared.read(\.color) }
+    static var space: Theme.Space { SkinStore.shared.read(\.space) }
+    static var radius: Theme.Radius { SkinStore.shared.read(\.radius) }
+    static var size: Theme.Size { SkinStore.shared.read(\.size) }
+    static var type: Theme.TypeScale { SkinStore.shared.read(\.type) }
+    static var symbol: Theme.Symbols { SkinStore.shared.read(\.symbol) }
+    static var motion: Theme.Motion { SkinStore.shared.read(\.motion) }
 
     /// The animation for a small change of state, or none when the user asked for less motion.
     static func animation(reduceMotion: Bool) -> Animation? {
-        reduceMotion ? nil : .easeOut(duration: current.motion.quick)
+        reduceMotion ? nil : .easeOut(duration: motion.quick)
+    }
+}
+
+// MARK: The skins
+
+extension Theme {
+    /// The ready-made skins, in the order the settings window shows them. The first is the
+    /// default. One line each: see the top of this file.
+    static let skins: [SkinEntry] = [
+        SkinEntry(id: "studio", name: "Studio", theme: .studio),
+        SkinEntry(id: "system", name: "System", followsMacAccent: true, surfaces: 0x808080),
+        SkinEntry(id: "graphite", name: "Graphite", accent: 0x505A68, surfaces: 0x8A8F96),
+        SkinEntry(id: "ember", name: "Ember", accent: 0xD9541E, surfaces: 0xC9A27E),
+        SkinEntry(id: "orchid", name: "Orchid", accent: 0xA44BD6, surfaces: 0xA89BC9),
+        SkinEntry(id: "moss", name: "Moss", accent: 0x6B8E23, surfaces: 0xA3B18A),
+    ]
+
+    /// Where the custom skin starts before the user picks a color: Studio's aqua and navy.
+    static let customStart = SkinSeed(accent: SRGBColor(hex: 0x4DF2CF), surfaces: SRGBColor(hex: 0x16253A))
+
+    /// Colors every skin shares, because they mean the same thing in each: something to see
+    /// to, and something that went wrong.
+    enum Shared {
+        static let attention = LookColors(light: SRGBColor(146, 84, 0), dark: SRGBColor(255, 205, 112), lightContrast: SRGBColor(104, 58, 0), darkContrast: SRGBColor(255, 224, 160))
+        static let attentionSurface = LookColors(light: SRGBColor(255, 243, 219), dark: SRGBColor(58, 43, 14), lightContrast: SRGBColor(255, 236, 196), darkContrast: SRGBColor(46, 33, 8))
+        static let danger = LookColors(light: SRGBColor(180, 36, 36), dark: SRGBColor(255, 138, 128), lightContrast: SRGBColor(132, 16, 16), darkContrast: SRGBColor(255, 176, 168))
+        static let dangerSurface = LookColors(light: SRGBColor(253, 232, 230), dark: SRGBColor(62, 24, 26), lightContrast: SRGBColor(252, 220, 216), darkContrast: SRGBColor(48, 16, 18))
     }
 }
 
@@ -231,6 +279,11 @@ extension Theme {
             if isDark { return isContrast ? (darkContrast ?? dark) : dark }
             return isContrast ? (lightContrast ?? light) : light
         })
+    }
+
+    /// A color with its four looks given as one value.
+    static func adaptive(_ colors: LookColors) -> Color {
+        adaptive(light: colors.light.nsColor(), dark: colors.dark.nsColor(), lightContrast: colors.lightContrast.nsColor(), darkContrast: colors.darkContrast.nsColor())
     }
 
     static func rgb(_ red: Int, _ green: Int, _ blue: Int, alpha: CGFloat = 1) -> NSColor {
@@ -259,10 +312,10 @@ extension Theme {
             text: adaptive(light: rgb(16, 26, 38), dark: rgb(236, 243, 250), lightContrast: .black, darkContrast: .white),
             textSecondary: adaptive(light: rgb(86, 99, 114), dark: rgb(152, 170, 192), lightContrast: rgb(46, 56, 68), darkContrast: rgb(206, 220, 236)),
             textTertiary: adaptive(light: rgb(132, 144, 158), dark: rgb(108, 126, 150), lightContrast: rgb(76, 88, 102), darkContrast: rgb(176, 192, 212)),
-            attention: adaptive(light: rgb(146, 84, 0), dark: rgb(255, 205, 112), lightContrast: rgb(104, 58, 0), darkContrast: rgb(255, 224, 160)),
-            attentionSurface: adaptive(light: rgb(255, 243, 219), dark: rgb(58, 43, 14), lightContrast: rgb(255, 236, 196), darkContrast: rgb(46, 33, 8)),
-            danger: adaptive(light: rgb(180, 36, 36), dark: rgb(255, 138, 128), lightContrast: rgb(132, 16, 16), darkContrast: rgb(255, 176, 168)),
-            dangerSurface: adaptive(light: rgb(253, 232, 230), dark: rgb(62, 24, 26), lightContrast: rgb(252, 220, 216), darkContrast: rgb(48, 16, 18)),
+            attention: adaptive(Shared.attention),
+            attentionSurface: adaptive(Shared.attentionSurface),
+            danger: adaptive(Shared.danger),
+            dangerSurface: adaptive(Shared.dangerSurface),
             hud: fixed(rgb(16, 34, 56, alpha: 0.96)),
             hudText: fixed(rgb(242, 248, 255)),
             hudTextSecondary: fixed(rgb(242, 248, 255, alpha: 0.7)),
@@ -284,7 +337,8 @@ extension Theme {
             ring: 54, ringLine: 4, countdownLine: 2, segment: 6, segmentCount: 16,
             mapHeight: 118, miniMap: CGSize(width: 72, height: 44),
             hudWidth: 280, noticeWidth: 400, keepWindowWidth: 380, offerWidth: 400,
-            settingsWidth: 500, settingsHeight: 440, aboutMark: 64, menuBarIcon: 18
+            settingsWidth: 580, previewWidth: 500, settingsHeight: 440, aboutMark: 64, menuBarIcon: 18,
+            swatch: CGSize(width: 126, height: 64), swatchColumns: 4, swatchMark: 7, swatchLine: 3
         ),
         type: TypeScale(
             title: .system(size: 14, weight: .semibold),
@@ -337,7 +391,9 @@ extension Theme {
             record: "record.circle",
             mirror: "rectangle.on.rectangle",
             disconnected: "bolt.horizontal.circle",
-            link: "arrow.up.right"
+            link: "arrow.up.right",
+            chosen: "checkmark.circle.fill",
+            customSkin: "paintpalette"
         ),
         motion: Motion(quick: 0.15)
     )

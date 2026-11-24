@@ -17,7 +17,7 @@ struct SystemFilePreview: View {
     }
 
     var body: some View {
-        WindowBody(width: Skin.size.settingsWidth) {
+        WindowBody(width: Skin.size.previewWidth) {
             VStack(alignment: .leading, spacing: Skin.space.l) {
                 Text(verbatim: plan.title).font(Skin.type.windowTitle).foregroundStyle(Skin.color.text).fixedSize(horizontal: false, vertical: true)
                 if !plan.affected.isEmpty { PreviewAffected(affected: plan.affected) }
