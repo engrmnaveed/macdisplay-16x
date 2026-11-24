@@ -1,9 +1,12 @@
 #!/bin/zsh
-# Checks the packaged app bundle and the command line tool. Run scripts/package-macos.sh
-# first.
+# Checks the packaged app bundle and the command line tool, then starts the app for a few
+# seconds. Run scripts/package-macos.sh first.
 #
-# It is read-only: it changes no display setting and does not start the app. The hardware
-# report it runs asks a connected monitor for its values and writes nothing.
+# It changes no display setting. The hardware report it runs asks a connected monitor for its
+# values and writes nothing. scripts/start-check.sh then starts the app in safe mode with a
+# settings folder of its own, reads the displays as the app does at every start, and fails
+# if the app crashes or stops answering. Where a copy of Display 16X is already running, the
+# app is not started and the start check says it was skipped; CI always runs it.
 #
 #   scripts/smoke-test.sh
 set -euo pipefail
@@ -61,5 +64,9 @@ REPORT="$("$TOOL" probe)" || fail "the hardware report failed"
 print -r -- "$REPORT" | head -1 | grep -q "hardware report" || fail "the hardware report has no heading"
 print -r -- "$REPORT" | grep -q "^Displays: " || fail "the hardware report lists no display count"
 print "Hardware report: ran, $(print -r -- "$REPORT" | grep "^Displays: ")."
+
+# The app itself. Nothing above starts it, and the unit tests run on fakes, so a crash at
+# start would pass everything else, as the first v0.4 build's did.
+scripts/start-check.sh "$APP" || fail "the app did not start and stay up"
 
 print "Smoke test passed."
