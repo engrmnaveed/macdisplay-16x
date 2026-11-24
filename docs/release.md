@@ -38,7 +38,7 @@ Every release so far is ad hoc signed, because the project certificate does not 
    scripts/archive-macos.sh
    ```
 
-   `check-version.sh` fails when the bundle, the tool and the version file disagree, or when the changelog has no section for the version. `check-hardened-runtime.sh` fails when the private interfaces resolve differently under the hardened runtime, which notarization needs. Neither changes a display. `smoke-test.sh` and `display16x probe` read every connected monitor over DDC; on a Mac where a copy of Display 16X is in use, leave them to CI.
+   `check-version.sh` fails when the bundle, the tool and the version file disagree, or when the changelog has no section for the version. `check-hardened-runtime.sh` fails when the private interfaces resolve differently under the hardened runtime, which notarization needs. Neither changes a display. `smoke-test.sh` and `display16x probe` read every connected monitor over DDC; on a Mac where a copy of Display 16X is in use, leave them to CI. The smoke test ends by starting the app for a few seconds with `scripts/start-check.sh`: in safe mode, with a settings folder of its own in a temporary folder, and it fails if the app crashes, quits or stops answering. Nothing else starts the app, and the unit tests run on fakes, so this is the check that catches a crash at start. Where a copy of Display 16X is running, it is skipped and says so, because a build with a folder of its own does not start next to one.
 7. Commit, open a pull request into `main`, and merge it once CI passes.
 
 ## 2. Tag the merged version
@@ -56,8 +56,8 @@ It fetches `origin/main` and tags its tip only when that commit holds the versio
 The pushed tag runs these jobs:
 
 1. **Tag matches scripts/release-version.** Fails unless the tag is `v` followed by the content of `scripts/release-version`, and `CHANGELOG.md` has a section for it.
-2. **Same checks as CI.** Runs [ci.yml](../.github/workflows/ci.yml) unchanged: identifiers, build, unit tests, packaging, smoke test, version check, hardened runtime check, the archive, and `brew style` on the cask.
-3. **Package, sign and archive**, in the `release-signing` environment, on macOS with the full history (the build number is the commit count). It signs at the level the environment's secrets allow (see [Signing](#signing)), writes `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file, unpacks the ZIP with `unzip` as Homebrew does and verifies the signature and the version. It reads the signing level back from the signed app and stops if it is not the level it meant, so the cask's caveats and the release notes always describe the level users get. The run summary shows the signing level, the designated requirement and the digest. It compares the app with the published release just below this version, and warns when the designated requirement no longer matches that release's, because users would then lose the Accessibility grant and Homebrew's first-launch approval. It also warns when a lower version is tagged but not published, such as one whose run still waits for approval. The ZIP is kept as the run's artifact `display16x-macos-arm64`, with the notary log when the app was notarized.
+2. **Same checks as CI.** Runs [ci.yml](../.github/workflows/ci.yml) unchanged: identifiers, build, unit tests, packaging, smoke test with the start of the app, version check, hardened runtime check, the archive, and `brew style` on the cask.
+3. **Package, sign and archive**, in the `release-signing` environment, on macOS with the full history (the build number is the commit count). It signs at the level the environment's secrets allow (see [Signing](#signing)), writes `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file, unpacks the ZIP with `unzip` as Homebrew does and verifies the signature and the version. It then starts the unpacked, signed app with `scripts/start-check.sh`, as the smoke test starts CI's own build, and stops if it crashes at start. It reads the signing level back from the signed app and stops if it is not the level it meant, so the cask's caveats and the release notes always describe the level users get. The run summary shows the signing level, the designated requirement and the digest. It compares the app with the published release just below this version, and warns when the designated requirement no longer matches that release's, because users would then lose the Accessibility grant and Homebrew's first-launch approval. It also warns when a lower version is tagged but not published, such as one whose run still waits for approval. The ZIP is kept as the run's artifact `display16x-macos-arm64`, with the notary log when the app was notarized.
 4. **Publish**, in the `release` environment. It waits here for a required reviewer. Before you approve, read the run summary and, if you like, download the artifact and try it. After approval it:
    - checks the archive's digest again, renders the cask with `scripts/render-cask` and the notes with `scripts/release-notes`,
    - attests build provenance for the ZIP,
@@ -294,7 +294,7 @@ NOTARY_PROFILE='display16x-notary' \
 
 The script signs a copy, so the input bundle stays available for local checks, and writes the ZIP, its checksum and `dist/macos-notary-log.json`.
 
-To check a build under the hardened runtime without any certificate or starting the app, sign it ad hoc with the runtime and run the read-only checks:
+To check a build under the hardened runtime without any certificate, sign it ad hoc with the runtime and run the smoke test, which also starts the app where no copy is running:
 
 ```sh
 DISPLAY16X_HARDENED_RUNTIME=1 scripts/package-macos.sh
