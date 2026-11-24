@@ -1,3 +1,4 @@
+import CoreGraphics
 import DisplayCore
 @testable import DisplayPrivate
 import Foundation
@@ -65,6 +66,18 @@ import Testing
         #expect(report.modes.first { $0.id == 6 }?.offered == false, "only the 1920 × 1080 timing lists it")
         #expect(report.offeredModes.map(\.summary) == ["10-bit RGB, full range, PQ"])
         #expect(report.dithering == true)
+    }
+
+    @Test("Reading HDR through System Settings' display model leaves the object's references balanced. Read-only")
+    func balancedReferences() {
+        // The first v0.4 build released the model once too often and crashed when an
+        // autorelease pool emptied. Emptying pools around repeated reads would crash here.
+        for _ in 0..<5 {
+            autoreleasepool {
+                _ = MonitorPanelDisplay.hdr(display: CGMainDisplayID())
+                _ = MonitorPanelDisplay.presets(display: CGMainDisplayID())
+            }
+        }
     }
 
     @Test("Only RGB profiles of the display or color space class can describe a display")

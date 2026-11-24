@@ -61,7 +61,11 @@ public enum MonitorPanelDisplay {
         guard let displayClass, class_respondsToSelector(displayClass, selector),
               let raw = class_createInstance(displayClass, 0) as AnyObject?,
               let function = class_getMethodImplementation(displayClass, selector) else { return nil }
-        return unsafeBitCast(function, to: ObjectiveC.DisplayInitializer.self)(raw, selector, display)?.takeRetainedValue()
+        // Swift keeps its own reference to `raw` and releases it when it goes, so the object
+        // the initializer hands back is taken unretained, as v0.1's rotation does. Taking it
+        // retained released it once too often: the app crashed at start when an autorelease
+        // pool emptied (24 November 2026).
+        return unsafeBitCast(function, to: ObjectiveC.DisplayInitializer.self)(raw, selector, display)?.takeUnretainedValue()
     }
 
     /// The HDR switch and both ways of reading it are there.

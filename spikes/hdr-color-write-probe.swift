@@ -119,7 +119,7 @@ func panel(_ id: CGDirectDisplayID) -> AnyObject? {
     guard let cls = NSClassFromString("MPDisplay"), class_respondsToSelector(cls, selector),
           let raw = class_createInstance(cls, 0) as AnyObject?,
           let function = class_getMethodImplementation(cls, selector) else { return nil }
-    return unsafeBitCast(function, to: Initializer.self)(raw, selector, id)?.takeRetainedValue()
+    return unsafeBitCast(function, to: Initializer.self)(raw, selector, id)?.takeUnretainedValue()
 }
 
 func screen(_ id: CGDirectDisplayID) -> NSScreen? {

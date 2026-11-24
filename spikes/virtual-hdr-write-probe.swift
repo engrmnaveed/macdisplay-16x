@@ -197,7 +197,7 @@ if id != 0 {
     _ = dlopen("/System/Library/PrivateFrameworks/MonitorPanel.framework/MonitorPanel", RTLD_LAZY)
     let initSelector = NSSelectorFromString("initWithCGSDisplayID:")
     if let cls = NSClassFromString("MPDisplay"), let raw = class_createInstance(cls, 0) as AnyObject?,
-       let panel = unsafeBitCast(class_getMethodImplementation(cls, initSelector), to: InitPanel.self)(raw, initSelector, id)?.takeRetainedValue() {
+       let panel = unsafeBitCast(class_getMethodImplementation(cls, initSelector), to: InitPanel.self)(raw, initSelector, id)?.takeUnretainedValue() {
         for name in ["hasHDRModes", "preferHDRModes"] {
             let selector = NSSelectorFromString(name)
             if class_respondsToSelector(cls, selector) {
