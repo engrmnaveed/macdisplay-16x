@@ -945,6 +945,22 @@ At midday the MacBook's lid was open and the external monitors were unplugged, s
 - **Profile** "Color LCD", the panel's own. **True Tone** on and in use. **Night Shift** off.
 - **No link details**: the built-in panel's framebuffer lists no color modes, so the app says macOS reports none for it.
 
+### The crash at the first start, and why nothing caught it
+
+The first v0.4 build crashed a second after it started as the owner's running copy, at 12:01:46 on 24 November: `EXC_BAD_ACCESS` in `objc_release`, while the main queue emptied an autorelease pool after a Swift task. The object System Settings' display model (`MPDisplay`) hands back from its initializer was released once more than it was retained. It was never released, and was fixed within minutes. Nothing caught it before, for these reasons:
+
+- **The unit tests run the color service on a fake system.** The one real path into `MPDisplay` was never called from a test. The adapter tests read profile files only.
+- **The probes and `display16x probe --color` made the same call and did not crash**, because a command line tool ends before the main thread's autorelease pool is emptied, so the extra release never ran. The app empties a pool after every task on the main queue, and the first such task after start, which reads HDR for each display, crashed.
+- **The render harness uses sample adapters**, so the surfaces never touch the real system.
+- **CI and the local checks never start the app.** The smoke test checks the bundle and runs the command line tool. A development build refuses to start while the copy in daily use runs, and that copy was running, so the first start of the new app was as the running copy.
+
+What guards it now:
+
+- `ColorAdapterTests` reads HDR and presets through `MPDisplay` five times, each inside an autorelease pool that is emptied, for the main display and for one that does not exist. With either unbalanced version of the call, the test process crashes. It runs on every `swift test`, on CI too.
+- The call now gives the initializer a reference of its own and takes the result retained, which is right whether the initializer returns the receiver, another object or nil. `MPDisplay` returned an object even for a display ID that does not exist, so the nil path is not reachable today.
+
+**The cheapest check that would have caught it at the level of the app:** start the packaged app for a few seconds in the smoke test, with a folder of its own and in safe mode, and fail if it is not still running and answering. Safe mode writes nothing, and the HDR read that crashed runs in safe mode too. It belongs in `scripts/smoke-test.sh`, which the release session wrote, so it is proposed and not made here. On a Mac where the copy in daily use runs it has to be skipped, as the smoke test already skips its check for a missing app.
+
 ### Where v0.4 stands at the end of 24 November
 
 All five stages are built on the branch, with 495 unit tests passing. The packaged build's version check, archive and signature check, and the comparison of private interfaces under the hardened runtime pass locally. The smoke test and the full hardware report send DDC reads and were left to CI, because the owner's copy was running.

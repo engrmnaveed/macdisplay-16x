@@ -76,6 +76,8 @@ import Testing
             autoreleasepool {
                 _ = MonitorPanelDisplay.hdr(display: CGMainDisplayID())
                 _ = MonitorPanelDisplay.presets(display: CGMainDisplayID())
+                // A display that does not exist. MPDisplay answers it with an object too.
+                _ = MonitorPanelDisplay.hdr(display: 0x7FFF_FFF0)
             }
         }
     }

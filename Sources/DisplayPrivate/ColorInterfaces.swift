@@ -15,7 +15,7 @@ enum ObjectiveC {
     typealias ObjectGetter = @convention(c) (AnyObject, Selector) -> Unmanaged<AnyObject>?
     typealias ObjectSetterResult = @convention(c) (AnyObject, Selector, AnyObject) -> Bool
     typealias UnsignedGetter = @convention(c) (AnyObject, Selector) -> UInt64
-    typealias DisplayInitializer = @convention(c) (AnyObject, Selector, UInt32) -> Unmanaged<AnyObject>?
+    typealias DisplayInitializer = @convention(c) (UnsafeMutableRawPointer, Selector, UInt32) -> UnsafeMutableRawPointer?
     typealias StatusGetter = @convention(c) (AnyObject, Selector, UnsafeMutableRawPointer) -> Bool
 
     static func responds(_ cls: AnyClass?, _ name: String) -> Bool {
@@ -59,13 +59,16 @@ public enum MonitorPanelDisplay {
     static func object(for display: UInt32) -> AnyObject? {
         let selector = NSSelectorFromString("initWithCGSDisplayID:")
         guard let displayClass, class_respondsToSelector(displayClass, selector),
-              let raw = class_createInstance(displayClass, 0) as AnyObject?,
+              let instance = class_createInstance(displayClass, 0) as AnyObject?,
               let function = class_getMethodImplementation(displayClass, selector) else { return nil }
-        // Swift keeps its own reference to `raw` and releases it when it goes, so the object
-        // the initializer hands back is taken unretained, as v0.1's rotation does. Taking it
-        // retained released it once too often: the app crashed at start when an autorelease
-        // pool emptied (24 November 2026).
-        return unsafeBitCast(function, to: ObjectiveC.DisplayInitializer.self)(raw, selector, display)?.takeUnretainedValue()
+        // An initializer consumes its receiver and returns its result retained. So the receiver
+        // goes in with a reference of its own, and the result is taken retained, as v0.3's
+        // virtual displays do. That is right whether the initializer returns the receiver,
+        // another object or nil. The first v0.4 build took the result retained without giving
+        // the receiver its own reference, released it once too often, and crashed at start
+        // when an autorelease pool emptied (24 November 2026).
+        let result = unsafeBitCast(function, to: ObjectiveC.DisplayInitializer.self)(Unmanaged.passRetained(instance).toOpaque(), selector, display)
+        return result.map { Unmanaged<AnyObject>.fromOpaque($0).takeRetainedValue() }
     }
 
     /// The HDR switch and both ways of reading it are there.
