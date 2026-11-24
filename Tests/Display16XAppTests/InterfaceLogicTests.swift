@@ -5,7 +5,7 @@ import Testing
 @testable import Display16XApp
 @testable import DisplayCore
 
-@Suite struct PanelWords {
+@Suite(.timeLimit(.minutes(1))) struct PanelWords {
     @Test("A display's diagonal in whole inches, and nothing for a display that does not say")
     func inches() {
         #expect(PanelText.inches(PhysicalSize(widthMillimeters: 700, heightMillimeters: 390)) == 32)
@@ -84,7 +84,7 @@ import Testing
 }
 
 @MainActor
-@Suite struct Pieces {
+@Suite(.timeLimit(.minutes(1))) struct Pieces {
     @Test("A bar's fill never gets shorter than its symbol, and a pointer position maps back")
     func bar() {
         #expect(BarGeometry.fill(width: 230, value: 0, minimum: 30) == 30)
@@ -150,7 +150,7 @@ import Testing
 
 /// How a value is known comes from the core, and the panel follows it as it changes.
 @MainActor
-@Suite struct HowAValueIsKnown {
+@Suite(.timeLimit(.minutes(1))) struct HowAValueIsKnown {
     @Test("A value the monitor read back is shown as read back, also after a change from the panel")
     func readBack() async {
         let desk = await SurfaceCatalog.desk()
@@ -214,7 +214,7 @@ import Testing
 }
 
 @MainActor
-@Suite struct ArrangingFromThePanel {
+@Suite(.timeLimit(.minutes(1))) struct ArrangingFromThePanel {
     @Test("A display dragged on the picture lands next to the nearest display and waits for Keep")
     func drag() async {
         let desk = await SurfaceCatalog.desk()

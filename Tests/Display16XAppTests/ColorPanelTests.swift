@@ -4,7 +4,7 @@ import Testing
 @testable import DisplayCore
 
 @MainActor
-@Suite struct ColorPanelLogicTests {
+@Suite(.timeLimit(.minutes(1))) struct ColorPanelLogicTests {
     @Test("Rates the link offers are said once per size, slowest first")
     func rates() {
         let phrases = ColorPanelModel.rates([

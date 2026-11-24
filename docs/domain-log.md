@@ -6,6 +6,19 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 25 November 2026 · CI's unit tests hung: one test held the main actor, and a core test then waited forever
+
+- **The trigger was the skins' random-colors test.** On CI every test target runs in one process. Here each runs in its own, so it never showed. The test measured 2,000 colors on the main actor. It is arithmetic only, yet it held the main actor about 16 seconds on CI and 5 here, and every main-actor test in the process waited, the core's too. It now runs off the main actor with 300 colors. **Rule for tests:** nothing holds the main actor for more than a fraction of a second, and every wait has a limit.
+- **What hangs is a core test.** "A change left unconfirmed by a crash is undone at the next start, through the gate" (`ModeServiceTests.recoversAfterCrash`) works like this:
+  - it gives the undo 3 seconds of wall-clock time to reach the display;
+  - it moves the test clock once by 1.1 seconds, which is meant to settle the reconfiguration that change starts;
+  - it then waits for detection to finish, with no limit.
+
+  When the main actor was held longer than those 3 seconds, the clock moves before the undo has started its wait. Nothing moves the clock again, so neither that wait's settle nor its 6-second timeout ever comes, detection never ends, and the run hangs with no thread busy. A main-actor hold alone reproduces it here: 4 seconds fails and hangs, 1 second passes.
+- **For the core session, through the planning thread:** make that test move the clock only once the change has reached the display, or move it in steps until it has, rather than give it a wall-clock deadline. Bound its wait for detection, for example with `.timeLimit(.minutes(1))` on the suite, as `VirtualScreenServiceTests` has, so a slow runner gives a named failure instead of a hang.
+- **Also for the core session:** "Its writes carry the origin automation, and putting back the app's own change stays a restore" (`ConnectionTests.swift:326`) fails every time the core tests run one at a time (`--no-parallel`), on `main` as well, and passes when they run in parallel. Nothing in the skins touches it.
+- **For the release session:** a limit on a test names the test, but a wait that is never resumed can still hold the run, so CI's unit-test step needs a time limit of its own.
+
 ## 24 November 2026 · Skins: the owner's choice, and what holds a chosen color readable
 
 - **Owner decisions, 24 November:** ship all six ready-made skins (Studio, System, Graphite, Ember, Orchid, Moss) and Custom; keep the dark-mode tint as drawn (Ember's surfaces go brown and Moss's olive in dark mode); call the settings tab **Appearance**. Studio stays the default.

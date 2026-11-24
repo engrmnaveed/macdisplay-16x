@@ -9,7 +9,7 @@ import Testing
 /// opens in under 100 ms warm", which is about the real app on screen and is measured
 /// there. Run it with `DISPLAY16X_MEASURE=1 swift test -c release --filter PanelSpeed`.
 @MainActor
-@Suite struct PanelSpeed {
+@Suite(.timeLimit(.minutes(1))) struct PanelSpeed {
     static func buildOnce(_ desk: SampleDesk, route: PanelRoute) -> Duration {
         let clock = ContinuousClock()
         let start = clock.now
