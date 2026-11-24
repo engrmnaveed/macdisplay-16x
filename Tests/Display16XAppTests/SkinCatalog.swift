@@ -18,6 +18,101 @@ enum SkinCatalog {
             SkinStore.shared.readMacAccent = accent
         }
         try await live(session)
+        try await skins(session)
+    }
+
+    // MARK: Every skin
+
+    struct Example {
+        var id: String
+        var name: String
+        var settings: InterfaceSettings
+    }
+
+    /// The ready-made skins, then custom colors: one a person might pick, and two chosen to
+    /// be hard, an accent too light to read on white and one too dark to see on navy.
+    static var examples: [Example] {
+        Theme.skins.map { Example(id: $0.id, name: $0.name, settings: InterfaceSettings(skin: $0.id)) } + [
+            Example(id: "custom-raspberry", name: "Custom: raspberry on sand", settings: InterfaceSettings(skin: Theme.customID, customAccent: "#D6336C", customSurfaces: "#E8D8C4")),
+            Example(id: "custom-pale", name: "Custom: a very light accent", settings: InterfaceSettings(skin: Theme.customID, customAccent: "#FFF6B0", customSurfaces: "#F5F5F5")),
+            Example(id: "custom-dark", name: "Custom: a very dark accent", settings: InterfaceSettings(skin: Theme.customID, customAccent: "#0B0F1A", customSurfaces: "#16253A")),
+        ]
+    }
+
+    /// The surfaces each skin is drawn on, by the name used in the file names.
+    static let parts: [(id: String, title: String)] = [
+        ("panel", "The panel"), ("display", "A display's page"), ("arrange", "Arrange"), ("settings", "Settings: Look"),
+        ("keep", "A Keep window"), ("indicator", "The indicator"), ("notice", "A notice"), ("sheet", "Every value and piece"),
+    ]
+
+    /// Draws every skin on the main surfaces in light and dark, one group a skin, then one
+    /// sheet a surface with every skin side by side.
+    static func skins(_ session: RenderSession) async throws {
+        let desk = try await SurfaceCatalog.livedIn()
+        desk.context.skinCommands.store = .shared
+        let model = PanelModel(context: desk.context)
+        let layoutModel = LayoutPanelModel(context: desk.context, hotKeys: nil)
+        let skinModel = SkinPanelModel(context: desk.context)
+        defer {
+            model.close()
+            layoutModel.close()
+        }
+        let lg: DisplayTag = desk.tag(SampleDesk.lgID)
+        let deadline = Date().addingTimeInterval(86_400)
+        let notice = ProtectionNotice(kind: .restored, tag: lg, message: "The arrangement was put back after a change made elsewhere.")
+        for example in examples {
+            SkinStore.shared.apply(example.settings)
+            let group = "skin \(example.id)"
+            func id(_ part: String) -> String { "skin-\(example.id)-\(part)" }
+            func title(_ part: String) -> String { "\(example.name): \(parts.first { $0.id == part }?.title ?? part)" }
+            try session.shoot(id("panel"), group: group, title: title("panel"), dumpAccessibility: false) {
+                PanelView(model: model, layoutModel: layoutModel, maxHeight: 900, start: .home, openSettings: {}, quit: {})
+            }
+            try session.shoot(id("display"), group: group, title: title("display"), dumpAccessibility: false) {
+                PanelView(model: model, layoutModel: layoutModel, maxHeight: 1400, start: .display(lg), openSettings: {}, quit: {})
+            }
+            try session.shoot(id("arrange"), group: group, title: title("arrange"), dumpAccessibility: false) {
+                PanelView(model: model, layoutModel: layoutModel, maxHeight: 900, start: .arrange, openSettings: {}, quit: {})
+            }
+            try session.shoot(id("settings"), group: group, title: title("settings"), chrome: .window, dumpAccessibility: false, active: true) {
+                SettingsView(model: model, layoutModel: layoutModel, start: .look, skins: skinModel, openLink: { _ in })
+            }
+            try session.shoot(id("keep"), group: group, title: title("keep"), chrome: .window, dumpAccessibility: false) {
+                ColorConfirmationView(name: "LG SDQHD", question: "Keep HDR on?", fallback: "HDR off", deadline: deadline, seconds: 86_400, keep: {}, revert: {})
+            }
+            try session.shoot(id("indicator"), group: group, title: title("indicator"), chrome: .overlay, dumpAccessibility: false) {
+                IndicatorView(payload: IndicatorPayload(tag: lg, control: .brightness, value: 0.62), name: "LG SDQHD")
+            }
+            try session.shoot(id("notice"), group: group, title: title("notice"), chrome: .overlay, dumpAccessibility: false) {
+                NoticeView(notice: notice)
+            }
+            try session.shoot(id("sheet"), group: group, title: title("sheet"), chrome: .bare, dumpAccessibility: false, active: true) {
+                SkinSheet()
+            }
+        }
+        try compareSheets(session)
+    }
+
+    /// One sheet a surface and look, every skin side by side: the ready-made ones in one,
+    /// the custom examples in another. `skins-light.png` and `skins-dark.png` are the panel.
+    static func compareSheets(_ session: RenderSession) throws {
+        let sheets = session.directory.appendingPathComponent("sheets", isDirectory: true)
+        try FileManager.default.createDirectory(at: sheets, withIntermediateDirectories: true)
+        let readyMade: [Example] = examples.filter { !$0.id.hasPrefix("custom") }
+        let custom: [Example] = examples.filter { $0.id.hasPrefix("custom") }
+        for part in parts {
+            let zoom: CGFloat = ["panel", "display", "arrange"].contains(part.id) ? 0.6 : 0.5
+            for look in [Look.light, .dark] {
+                for (set, list) in [("", readyMade), ("custom-", custom)] {
+                    let items: [ContactSheet.Item] = list.map { example in
+                        ContactSheet.Item(caption: example.name, file: session.directory.appendingPathComponent("skin-\(example.id)-\(part.id)-\(look.rawValue).png"))
+                    }
+                    let name: String = part.id == "panel" ? "skins-\(set)\(look.rawValue).png" : "skins-\(set)\(part.id)-\(look.rawValue).png"
+                    let columns: Int = part.id == "sheet" || part.id == "settings" ? 3 : list.count
+                    try ContactSheet.write(items, title: "\(part.title), \(look.rawValue)", columns: columns, zoom: zoom, scale: 1.5, to: sheets.appendingPathComponent(name))
+                }
+            }
+        }
     }
 
     // MARK: Live
