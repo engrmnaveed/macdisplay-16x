@@ -693,3 +693,73 @@ struct WindowBody<Content: View>: View {
             .background(Skin.color.surface)
     }
 }
+
+// MARK: Skins
+
+/// A skin drawn small: its canvas, a card with a bar and stops, and two lines of text. It
+/// is drawn with the colors of the theme it is given, not the skin in use, so every skin
+/// can be seen side by side in the settings window.
+struct SkinSwatch: View {
+    let theme: Theme
+
+    var body: some View {
+        let color: Theme.Colors = theme.color
+        let mark: CGFloat = Skin.size.swatchMark
+        let line: CGFloat = Skin.size.swatchLine
+        let card = RoundedRectangle(cornerRadius: Skin.radius.stop, style: .continuous)
+        return VStack(alignment: .leading, spacing: Skin.space.xs) {
+            HStack(spacing: Skin.space.xxs) {
+                Capsule().fill(color.text).frame(width: mark * 4, height: line)
+                Capsule().fill(color.textSecondary).frame(width: mark * 3, height: line)
+            }
+            ZStack(alignment: .leading) {
+                Capsule().fill(color.track)
+                Capsule().fill(color.accent).frame(width: Skin.size.swatch.width * 0.42)
+            }
+            .frame(height: mark)
+            HStack(spacing: Skin.space.xxs) {
+                ForEach(0..<4, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: Skin.radius.glyph, style: .continuous)
+                        .fill(index == 2 ? color.accent : color.track)
+                        .frame(height: mark)
+                }
+            }
+        }
+        .padding(Skin.space.s)
+        .background(color.surface, in: card)
+        .overlay(card.edge(color.hairline, width: Skin.size.hairline))
+        .padding(Skin.space.s)
+        .frame(width: Skin.size.swatch.width, height: Skin.size.swatch.height)
+        .background(color.canvas, in: RoundedRectangle(cornerRadius: Skin.radius.control, style: .continuous))
+        .accessibilityHidden(true)
+    }
+}
+
+/// A skin to choose: its swatch, and its name under it. The one in use has a strong edge
+/// and a check.
+struct SwatchStyle: ButtonStyle {
+    let theme: Theme
+    let isChosen: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Skin.radius.control, style: .continuous)
+        return VStack(alignment: .leading, spacing: Skin.space.xs) {
+            SkinSwatch(theme: theme)
+                .overlay(shape.edge(isChosen ? Skin.color.accent : Skin.color.hairline, width: isChosen ? Skin.size.edgeStrong * 2 : Skin.size.hairline))
+                .overlay(alignment: .topTrailing) {
+                    if isChosen {
+                        Image(systemName: Skin.symbol.chosen)
+                            .font(Skin.type.symbol)
+                            .foregroundStyle(Skin.color.onAccent, Skin.color.accent)
+                            .padding(Skin.space.xs)
+                    }
+                }
+            configuration.label
+                .font(isChosen ? Skin.type.captionStrong : Skin.type.caption)
+                .foregroundStyle(isChosen ? Skin.color.text : Skin.color.textSecondary)
+                .lineLimit(1)
+        }
+        .opacity(configuration.isPressed ? 0.7 : 1)
+        .contentShape(Rectangle())
+    }
+}

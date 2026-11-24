@@ -126,9 +126,17 @@ struct Theme: Sendable {
         var keepWindowWidth: CGFloat
         var offerWidth: CGFloat
         var settingsWidth: CGFloat
+        /// The window that shows what would be written to a system file before it is.
+        var previewWidth: CGFloat
         var settingsHeight: CGFloat
         var aboutMark: CGFloat
         var menuBarIcon: CGFloat
+        /// A skin drawn small in the settings window, and how many sit in a row.
+        var swatch: CGSize
+        var swatchColumns: Int
+        /// The bar, the stops and a line of text inside a swatch.
+        var swatchMark: CGFloat
+        var swatchLine: CGFloat
     }
 
     struct TypeScale: Sendable {
@@ -191,6 +199,8 @@ struct Theme: Sendable {
         var mirror: String
         var disconnected: String
         var link: String
+        var chosen: String
+        var customSkin: String
     }
 
     struct Motion: Sendable {
@@ -327,7 +337,8 @@ extension Theme {
             ring: 54, ringLine: 4, countdownLine: 2, segment: 6, segmentCount: 16,
             mapHeight: 118, miniMap: CGSize(width: 72, height: 44),
             hudWidth: 280, noticeWidth: 400, keepWindowWidth: 380, offerWidth: 400,
-            settingsWidth: 500, settingsHeight: 440, aboutMark: 64, menuBarIcon: 18
+            settingsWidth: 540, previewWidth: 500, settingsHeight: 440, aboutMark: 64, menuBarIcon: 18,
+            swatch: CGSize(width: 114, height: 60), swatchColumns: 4, swatchMark: 7, swatchLine: 3
         ),
         type: TypeScale(
             title: .system(size: 14, weight: .semibold),
@@ -380,7 +391,9 @@ extension Theme {
             record: "record.circle",
             mirror: "rectangle.on.rectangle",
             disconnected: "bolt.horizontal.circle",
-            link: "arrow.up.right"
+            link: "arrow.up.right",
+            chosen: "checkmark.circle.fill",
+            customSkin: "paintpalette"
         ),
         motion: Motion(quick: 0.15)
     )
