@@ -123,7 +123,7 @@ Built the same way as Space 16X, so one owner runs both projects with the same s
 
 **0.2.0 was tagged on 23 November 2026**, at the merge of [pull request 9](https://github.com/engrmnaveed/macdisplay-16x/pull/9), by the owner with `scripts/tag-release 0.2.0 --push`. It is the first run of the release workflow. From here a release is two steps: `scripts/prepare-release X.Y.Z` through a pull request, then `scripts/tag-release X.Y.Z --push`.
 
-**0.2.0 was published on 23 November 2026**, after the owner's approval, as the first release. **0.3.0 was tagged on 24 November 2026.** Both are signed ad hoc.
+**0.2.0 was published on 23 November 2026**, after the owner's approval, as the first release. **0.3.0 was tagged on 24 November 2026** and approved by the owner the same day, after its packaging job had twice waited for a macOS runner until GitHub cancelled it. Both are signed ad hoc.
 
 **Signing, until the project certificate exists.** The workflow signs with what the `release-signing` environment holds. It holds nothing yet, so 0.2.0 is signed ad hoc: the first launch has to be allowed by hand, and every update costs the Accessibility grant. The owner's certificate, its three secrets and the tap's deploy key change that from the release after they are added.
 
@@ -211,6 +211,10 @@ Set by the owner on 23 November 2026: the next milestones are built in new sessi
 3. **Release groundwork, alongside v0.3.** It touches documents and `.github` only, so it can run at the same time: the tested-hardware list, the contribution guide and issue templates, the note on running next to other display utilities, and a pass over the README and the install guide for the new interface.
 4. **v0.4 HDR and color**, after v0.3, because both change the core and the app.
 5. **A verification round** for what earlier milestones carried forward. Daily use of the latest build covers part of it.
+
+### Skins
+
+Asked for by the owner on 24 November 2026: the user chooses the interface's colors in Settings. A small set of ready-made skins, with "Studio" as the unchanged default, and a custom choice whose text and control colors are worked out from the chosen colors so contrast holds in light, dark and increased contrast. The choice applies at once to every surface, is stored in the settings, and is reachable from the command line. It is built in its own session on Opus, on the three layers the interface pass left, and adding one more skin stays one small entry in one file. The owner chooses which ready-made skins ship, from renders.
 
 ### v0.3 Advanced scaling
 
