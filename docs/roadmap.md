@@ -214,7 +214,7 @@ Set by the owner on 23 November 2026: the next milestones are built in new sessi
 
 ### Skins
 
-Asked for by the owner on 24 November 2026: the user chooses the interface's colors in Settings. A small set of ready-made skins, with "Studio" as the unchanged default, and a custom choice whose text and control colors are worked out from the chosen colors so contrast holds in light, dark and increased contrast. The choice applies at once to every surface, is stored in the settings, and is reachable from the command line. It is built in its own session on Opus, on the three layers the interface pass left, and adding one more skin stays one small entry in one file. The owner chooses which ready-made skins ship, from renders.
+Asked for by the owner on 24 November 2026: the user chooses the interface's colors in Settings. A small set of ready-made skins, with "Studio" as the unchanged default, and a custom choice whose text and control colors are worked out from the chosen colors so contrast holds in light, dark and increased contrast. The choice applies at once to every surface, is stored in the settings, and is reachable from the command line. It is built in its own session on Opus, on the three layers the interface pass left, and adding one more skin stays one small entry in one file. The owner chooses which ready-made skins ship, from renders. It ships as its own version, 0.5.0, after 0.4.0.
 
 ### v0.3 Advanced scaling
 
