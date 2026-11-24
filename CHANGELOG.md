@@ -2,13 +2,27 @@
 
 ## Unreleased
 
+## 0.5.0
+
+Skins: choose the colors Display 16X is drawn in, from six ready-made skins or two colors of your own. A skin changes how the app looks and nothing on your displays. Studio stays the default, so until you choose another skin the app looks as 0.4.0 did, apart from a settings window made wider for its new tab.
+
 ### Skins
 
 - Choose how Display 16X looks in **Settings → Appearance**: six ready-made skins, Studio (the default, as before), System (the accent color chosen in System Settings), Graphite, Ember, Orchid and Moss, or **Custom** with an accent and a color for the surfaces of your own. Every skin follows light and dark mode and Increase Contrast. A choice shows at once on the panel, a display's page, Arrange, the settings window, the Keep windows, the indicator and the notices, with no restart.
-- Custom colors stay readable: text and controls are worked out from your two colors in every look, and the accent is drawn lighter or darker only when it has to be, which the Appearance tab says.
-- From the command line: `display16x skin` shows the skin in use and every skin there is, `display16x skin ember` wears one, and `display16x skin custom accent=#D6336C surfaces=#E8D8C4` sets your own. `display16x set skin …` and links work too, and `display16x help skin` explains the values.
-- The choice is part of the settings file, so settings export, import and reset carry it. An older version of the app ignores it and shows Studio.
+- Custom colors stay readable: text and controls are worked out from your two colors in every look, and the accent is drawn lighter or darker only when it has to be, which the Appearance tab says. `display16x get skin` gives the accent as drawn.
+- The menu bar icon keeps the system's color in every skin.
+- From the command line: `display16x skin` shows the skin in use and every skin there is, `display16x skin ember` wears one, and `display16x skin custom accent=#D6336C surfaces=#E8D8C4` sets your own. `display16x set skin …` works too, and so do links where they are switched on. `display16x help skin` explains the values.
+- The choice is part of the settings file, so settings export, import and reset carry it. An older version of the app shows Studio, and forgets the choice the next time it saves its settings.
 - The settings window is 80 points wider, so its seven tabs fit.
+
+### What was checked on hardware
+
+- On an Apple M5 Pro Mac with macOS 27.2.1, a build with the skins has been the developer's copy in daily use since 24 November, in Studio.
+- Not yet done in the running app: choosing another skin or Custom, and the System skin following a change of the Mac's accent color. Both are unit-tested. The tests measure the contrast of every pair of colors in Studio, every ready-made skin, every accent color macOS offers, awkward custom colors and two thousand random ones, in light, dark and both increased-contrast looks. An off-screen run opens the panel, a display's page, Arrange, the Appearance tab, a Keep window, the indicator and a notice, changes the skin, and checks that each one takes it at once.
+
+### For developers
+
+- A ready-made skin is one line in `Theme.skins`, in `Sources/Display16XApp/Design/Theme.swift`, and the tests measure its contrast on their own. The README's section on the look says how to check one by eye.
 
 ## 0.4.0
 
