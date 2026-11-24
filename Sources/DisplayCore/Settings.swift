@@ -346,6 +346,9 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
     /// HDR, color profiles and upscaling. Added in v0.4. An older version of the app ignores
     /// the section.
     public var color: ColorSettings
+    /// How the app looks: the skin and the custom skin's colors. Added after v0.4. An older
+    /// version of the app ignores the section.
+    public var interface: InterfaceSettings
 
     public init() {
         schemaVersion = SettingsDocument.currentSchemaVersion
@@ -357,6 +360,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         layout = LayoutSettings()
         advanced = AdvancedSettings()
         color = ColorSettings()
+        interface = InterfaceSettings()
     }
 
     public init(from decoder: Decoder) throws {
@@ -370,6 +374,7 @@ public struct SettingsDocument: Codable, Sendable, Equatable {
         layout = try container.decodeIfPresent(LayoutSettings.self, forKey: .layout) ?? LayoutSettings()
         advanced = try container.decodeIfPresent(AdvancedSettings.self, forKey: .advanced) ?? AdvancedSettings()
         color = try container.decodeIfPresent(ColorSettings.self, forKey: .color) ?? ColorSettings()
+        interface = try container.decodeIfPresent(InterfaceSettings.self, forKey: .interface) ?? InterfaceSettings()
         // A tag is never reused, whatever the file says.
         let highest = displays.map(\.record.tag.rawValue).max() ?? 0
         nextTag = max(nextTag, highest + 1)

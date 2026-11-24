@@ -100,6 +100,12 @@ display16x \(AppPaths.version) — command line for Display 16X
                                           rates the mode list leaves out. Read only
   display16x color controls [on|off]      The switch for profiles and presets. Off by default
 
+  display16x skin [show]                  The skin in use, and every skin there is
+  display16x skin NAME                    Wear a ready-made skin, such as studio or system
+  display16x skin custom [accent=#RRGGBB] [surfaces=#RRGGBB]
+                                          Your own colors. Text and controls are worked out
+                                          from them, so they stay readable
+
   <display>   --tag N | --name "NAME" | --uuid UUID | --main | --pointer | --focused | --all
   <other>     --of-tag N | --of-name "NAME" | --of-uuid UUID | --of-main | --of-pointer
               The other display, for placement and mirroring
@@ -209,7 +215,7 @@ func parseValue(_ text: String, for feature: FeatureDescriptor) -> CommandValue 
 // MARK: Sending
 
 func send(_ command: Command, arguments: Arguments) -> Never {
-    if let problem = FeatureRegistry.withColor.validate(command) { fail(problem, .usage) }
+    if let problem = FeatureRegistry.withSkin.validate(command) { fail(problem, .usage) }
     let client = UnixSocketClient(path: AppPaths().socketPath)
     let result: CommandResult
     do {
@@ -235,7 +241,7 @@ func send(_ command: Command, arguments: Arguments) -> Never {
 
 func feature(named name: String?) -> FeatureDescriptor {
     guard let name else { fail("name a feature. Run \"display16x features\" for the list", .usage) }
-    let registry = FeatureRegistry.withColor
+    let registry = FeatureRegistry.withSkin
     guard let match = registry.ordered.first(where: { $0.id.rawValue.lowercased() == name.lowercased() }) else {
         fail("unknown feature \"\(name)\". Run \"display16x features\" for the list", .usage)
     }
@@ -270,13 +276,13 @@ switch verb {
 case "help":
     if let name = arguments.positional.dropFirst().first {
         let target = feature(named: name)
-        print(FeatureRegistry.withColor.helpWithColor(for: target.id) ?? usage)
+        print(FeatureRegistry.withSkin.helpWithSkin(for: target.id) ?? usage)
     } else {
         print(usage)
     }
 
 case "features":
-    print("Features\n" + FeatureRegistry.withColor.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
+    print("Features\n" + FeatureRegistry.withSkin.help() + "\n\nRun \"display16x help FEATURE\" for its values and an example.")
 
 case "probe":
     var probeOptions = ProbeOptions()
@@ -414,7 +420,7 @@ case "shortcut":
         var bound = command(operation, target.id, value: value)
         bound.origin = .keyboard
         bound.options.confirmed = arguments.flags.contains("--confirm")
-        if let problem = FeatureRegistry.withColor.validate(bound) { fail(problem, .usage) }
+        if let problem = FeatureRegistry.withSkin.validate(bound) { fail(problem, .usage) }
         let binding = ShortcutBinding(combo: combo, command: bound)
         guard let data = try? JSONEncoder().encode(binding) else { fail("the shortcut could not be encoded", .failed) }
         send(Command(.set, .shortcuts, value: .choice(String(decoding: data, as: UTF8.self)), origin: .command), arguments: arguments)
@@ -467,6 +473,9 @@ case "hdr":
 
 case "color", "colour":
     colorVerb()
+
+case "skin":
+    skinVerb()
 
 default:
     fail("unknown command \"\(verb)\". Run \"display16x help\"", .usage)

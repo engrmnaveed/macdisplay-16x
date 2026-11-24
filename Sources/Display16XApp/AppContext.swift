@@ -119,6 +119,8 @@ final class AppContext {
     let colorCommands: ColorCommands
     let upscaling: UpscalingService
     let upscalingCommands: UpscalingCommands
+    // The look: the skin in use, chosen in settings or from the command line.
+    let skinCommands: SkinCommands
 
     private let listeners: [any SystemListener]
     private var server: UnixSocketServer?
@@ -138,7 +140,7 @@ final class AppContext {
             registry: registry, system: adapters.modeSystem, rotationSystem: adapters.rotationSystem,
             settings: settings, recovery: recovery, bus: bus, scheduler: scheduler, gate: gate
         )
-        engine = CommandEngine(registry: registry, features: .withColor, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
+        engine = CommandEngine(registry: registry, features: .withSkin, controls: controls, modes: modes, settings: settings, gate: gate, scheduler: scheduler)
         engine.selectorContext = adapters.selectorContext
         reconciler = Reconciler(engine: engine, registry: registry, controls: controls, settings: settings, gate: gate, scheduler: scheduler)
         // The app's own virtual screens are reported as virtual, so they are never counted
@@ -193,7 +195,8 @@ final class AppContext {
             _ = await engine.execute(Command(.set, .hardwareBrightness, on: .tag(tag.rawValue), value: .absolute(value), origin: .restore))
         }
         upscalingCommands = UpscalingCommands(registry: registry, settings: settings, controls: controls, upscaling: upscaling)
-        engine.extensions = [layoutCommands, advancedCommands, upscalingCommands, colorCommands]
+        skinCommands = SkinCommands(settings: settings)
+        engine.extensions = [skinCommands, layoutCommands, advancedCommands, upscalingCommands, colorCommands]
         automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
         listeners = adapters.listeners(sequencer)
         permissions = PermissionBroker(probe: adapters.permissionProbe, bus: bus, settings: settings)

@@ -51,6 +51,9 @@ final class SampleDesk {
             listeners: { _ in [] }
         )
         context = AppContext(safeMode: safeMode, adapters: adapters)
+        // A skin chosen on a sample desk stays on it. The render harness puts the skin it
+        // draws in on the app's own store by hand.
+        context.skinCommands.store = SkinStore(readMacAccent: { SampleDesk.macAccent })
         if let configure { context.settings.update(configure) }
         connectionSystem.inventory = inventory
         virtualScreens.desk = self
@@ -65,6 +68,9 @@ final class SampleDesk {
 
     // MARK: The sample monitors
 
+    /// The Mac's accent on the sample desk: macOS's blue, so pictures do not change with the
+    /// accent of the Mac they are drawn on.
+    static let macAccent = MacAccent(light: SRGBColor(0, 122, 255), dark: SRGBColor(10, 132, 255))
     static let lenovoID = SystemDisplayID(4)
     static let lgID = SystemDisplayID(5)
     static let builtInID = SystemDisplayID(1)
