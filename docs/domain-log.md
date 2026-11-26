@@ -6,6 +6,15 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 26 November 2026 · Homebrew never had Display 16X: four releases passed without reaching the tap
+
+- **What the owner saw:** `brew install --cask engrmnaveed/tap/display16x` with Homebrew 7.0.16 said `Casks/display16x.rb` does not exist in the tap. The README and the installation guide give that command as the way to install.
+- **What happened:** the tap's deploy key, `HOMEBREW_TAP_DEPLOY_KEY`, was never set in the `release` environment, so the step that commits the cask skipped the tap in every run, for 0.2.0, 0.3.0, 0.4.0 and 0.5.0. It said so in a warning and the run summary, but the step and the run passed, and each release was reported as done. The tap only ever had DiskUse16x's packages. The 0.5.0 release and its `display16x.rb` were sound: the cask passes `brew style` and `brew audit --online`, and its digest matches the published ZIP.
+- **Why nothing caught it:** the only check that installs with Homebrew was the manual one after a release, and it needs a Mac with no other copy of Display 16X running. The owner's Mac always has one, so it was never done. The installation guide also explained the failure away as "the tap has not been given the newest release yet", which was never what was wrong.
+- **Rule for the product:** a release is finished when the command the guides give installs it on a clean Mac, not when its run passes. A step users depend on must fail the run, not leave a warning.
+- **What changed:** 0.5.0's cask was committed to the tap by hand. `scripts/tag-release` refuses to tag while the key is missing. Publish checks first that the key can write to the tap and stops before anything is published otherwise. A failed push fails the run. A new last job installs the release from the tap on a clean macOS runner, checks the version and removes it, and can be run by hand at any time.
+- **The deploy key exists now.** On the owner's word, a key used for nothing else was added to the tap with write access, titled "macdisplay-16x release", and stored as `HOMEBREW_TAP_DEPLOY_KEY` in the `release` environment. GitHub names the tap when that key signs in, and a dry-run push with it alone passes. No release run has used it yet: the next release is the first whose own run writes to the tap and then installs from it.
+
 ## 25 November 2026 · CI's unit tests hung: one test held the main actor, and a core test then waited forever
 
 - **The trigger was the skins' random-colors test.** On CI every test target runs in one process. Here each runs in its own, so it never showed. The test measured 2,000 colors on the main actor. It is arithmetic only, yet it held the main actor about 16 seconds on CI and 5 here, and every main-actor test in the process waited, the core's too. It now runs off the main actor with 300 colors. **Rule for tests:** nothing holds the main actor for more than a fraction of a second, and every wait has a limit.

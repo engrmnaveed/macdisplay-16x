@@ -25,7 +25,9 @@ Since Homebrew 6, Homebrew only loads casks from taps you trust, and installing 
 brew trust --cask engrmnaveed/tap/display16x
 ```
 
-The cask puts **Display 16X.app** in Applications and links the `display16x` command into Homebrew's `bin` folder. If Homebrew says it cannot find `display16x` in the tap, the tap has not been given the newest release yet: install the release ZIP below, or try again later.
+The cask puts **Display 16X.app** in Applications and links the `display16x` command into Homebrew's `bin` folder. The tap has the cask from 0.5.0 on, and every release is installed from it on a clean Mac before its release run finishes.
+
+**If Homebrew says the cask is unavailable or does not exist,** your copy of the tap is older than the cask, which is the case if you tapped it before 26 November 2026 with automatic updates off. Run `brew update` and try again. If it still fails, install the release ZIP below and please [open an issue](https://github.com/engrmnaveed/macdisplay-16x/issues).
 
 - **Upgrade:** `brew upgrade --cask display16x`. If the app is running, Homebrew quits it, replaces it and opens it again. For an ad hoc signed release, Homebrew prints "display16x's signer changed so macOS may prompt at next launch": allow the launch and give the Accessibility permission again, as described below.
 - **Remove:** see [Remove Display 16X](#remove-display-16x).

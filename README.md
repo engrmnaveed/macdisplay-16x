@@ -10,7 +10,7 @@ It targets Apple silicon, and it is built to do nothing when nothing is happenin
 
 ## Install
 
-Releases are published as a Homebrew cask and as a ZIP on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases), from 0.2.0 on, for Apple silicon Macs with macOS 14 or later:
+Releases are published as a ZIP on the [releases page](https://github.com/engrmnaveed/macdisplay-16x/releases) from 0.2.0 on, and as a Homebrew cask from 0.5.0 on, for Apple silicon Macs with macOS 14 or later:
 
 ```sh
 brew install --cask engrmnaveed/tap/display16x
@@ -55,7 +55,7 @@ scripts/check-hardened-runtime.sh  # private interfaces resolve the same under t
 scripts/archive-macos.sh           # the release ZIP and its SHA-256 file
 ```
 
-CI also checks the ZIP after `unzip`, as Homebrew unpacks it, and runs `brew style` on the cask rendered for each signing level. The version is written only in `scripts/release-version`.
+CI also checks the ZIP after `unzip`, as Homebrew unpacks it, and runs `brew style` on the cask rendered for each signing level. Each release run ends by installing the release from the tap with `brew`, on a Mac that has never had it. The version is written only in `scripts/release-version`.
 
 Captured hardware output that becomes a test fixture carries made-up serial numbers, UUIDs and manufacture dates, never the real ones.
 

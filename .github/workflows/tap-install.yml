@@ -1,0 +1,72 @@
+name: Install from the tap
+
+# Installs Display 16X from engrmnaveed/tap with the command the guides give users, on a Mac
+# that has never had it, then removes it. The Release workflow runs it once the tap has the
+# new cask. Run it by hand to check the tap at any time, such as after committing a cask to
+# it yourself:
+#
+#   gh workflow run tap-install.yml -f version=0.5.0
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version the tap should install, such as 0.5.0
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version the tap should install, such as 0.5.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: brew install --cask engrmnaveed/tap/display16x
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      VERSION: ${{ inputs.version }}
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_ANALYTICS: '1'
+      HOMEBREW_NO_ENV_HINTS: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - name: Install, check and remove
+        run: |
+          fail() {
+            echo "::error::$1"
+            echo "- **Install from the tap failed:** $1" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Give a version such as 0.5.0, not '$VERSION'."
+          app="/Applications/Display 16X.app"
+          tool="$(brew --prefix)/bin/display16x"
+          [[ ! -e "$app" && ! -e "$tool" ]] || fail "This Mac has Display 16X already, so it cannot show what a new user gets."
+          brew --version | head -1
+
+          # Taps the repository from GitHub, as it does for users, and trusts this one cask.
+          brew install --cask engrmnaveed/tap/display16x ||
+            fail "brew install --cask engrmnaveed/tap/display16x failed. Its output above says why."
+
+          installed="$(brew list --cask --versions display16x | awk '{ print $2 }')"
+          [[ "$installed" == "$VERSION" ]] || fail "The tap installed ${installed:-nothing}, not $VERSION."
+          bundle="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+          [[ "$bundle" == "$VERSION" ]] || fail "The installed app says $bundle, not $VERSION."
+          codesign --verify --strict --verbose=2 "$app" || fail "The installed app's signature does not verify."
+          [[ -x "$tool" ]] || fail "The cask did not link the display16x command into $(dirname "$tool")."
+          # Homebrew quarantines what it downloads. Users allow the first run in Privacy &
+          # Security or remove the attribute, as the guides say. A runner has no window for
+          # the first, so it does the second.
+          xattr -dr com.apple.quarantine "$app"
+          # The first line of the help is "display16x X.Y.Z — command line for Display 16X".
+          reported="$("$tool" --help | head -1 | awk '{ print $2 }')"
+          [[ "$reported" == "$VERSION" ]] || fail "The linked display16x command says ${reported:-nothing}, not $VERSION."
+
+          brew uninstall --cask --zap display16x || fail "brew uninstall --cask --zap display16x failed."
+          [[ ! -e "$app" && ! -e "$tool" ]] || fail "brew uninstall left the app or the display16x link behind."
+          echo "- Installed $VERSION from engrmnaveed/tap with brew, ran \`display16x --help\` from Homebrew's bin, and removed it again." >> "$GITHUB_STEP_SUMMARY"

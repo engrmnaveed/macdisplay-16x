@@ -1,8 +1,9 @@
 #!/bin/zsh
 # Tags a release, the second of the two steps in docs/release.md, once the pull request from
 # scripts/prepare-release is merged. It tags the tip of origin/main, and only when that commit
-# holds the version, its changelog section and a passing CI check. Nothing in the working
-# tree is changed, so it can run from any checkout of the repository.
+# holds the version, its changelog section and a passing CI check, and when the release
+# environment has the Homebrew tap's deploy key. Nothing in the working tree is changed, so it
+# can run from any checkout of the repository.
 #
 #   scripts/tag-release X.Y.Z            makes the tag and prints the command that pushes it
 #   scripts/tag-release X.Y.Z --push     also pushes it, which starts the Release workflow
@@ -45,6 +46,16 @@ if ! grep -qx 'completed success' <<< "$results"; then
         fail "the check '$check' is still running on $short. Try again when it has passed"
     fi
     fail "the check '$check' has not passed on $short${results:+ (${results//$'\n'/, })}"
+fi
+
+# Publish stops when it cannot update the Homebrew tap, because users install with brew. Say
+# so now, not after the build and the approval. Reading the names of an environment's secrets
+# needs administrator access; without it, Publish is where a missing key shows.
+if secrets="$(gh api "repos/$repo/environments/release/secrets" --jq '.secrets[].name' 2>/dev/null)"; then
+    grep -qx HOMEBREW_TAP_DEPLOY_KEY <<< "$secrets" ||
+        fail "the release environment has no HOMEBREW_TAP_DEPLOY_KEY, so Publish would stop and brew install would not find $version. Add the deploy key as docs/release.md says under \"Add the deploy key\""
+else
+    print -u2 "tag-release: could not read the release environment's secrets. If HOMEBREW_TAP_DEPLOY_KEY is missing, Publish stops before it publishes anything."
 fi
 
 git tag -a "$tag" -m "Display 16X $version" "$commit"

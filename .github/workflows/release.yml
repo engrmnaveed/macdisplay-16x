@@ -266,15 +266,57 @@ jobs:
       attestations: write
       contents: write
       id-token: write
+    outputs:
+      # The version the tap holds once this job is done: this one, or a later one published
+      # already.
+      tap_version: ${{ steps.release.outputs.tap_version }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       SIGNING: ${{ needs.build.outputs.signing }}
       CHANGED_FROM: ${{ needs.build.outputs.changed_from }}
+      TAP_REPO: engrmnaveed/homebrew-tap
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # Users install with brew, so a release that cannot reach the tap is not published at
+      # all. From 0.2.0 to 0.5.0 a missing key only left a warning, every run passed, and the
+      # tap never had the cask. The key is the release environment's, so this is the
+      # earliest step that can read it; scripts/tag-release checks that it is set before the
+      # tag is pushed.
+      - name: The Homebrew tap can be written
+        env:
+          # A write deploy key for the tap repository only. docs/release.md says how to add it.
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          stop() {
+            echo "::error::$1 Nothing is published. Fix it as docs/release.md says under \"Homebrew tap\", then use Re-run failed jobs on this run."
+            echo "- **Stopped before publishing:** $1" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
+          [[ -n "$HOMEBREW_TAP_DEPLOY_KEY" ]] ||
+            stop "HOMEBREW_TAP_DEPLOY_KEY is not set in the release environment, so brew install would not find this version."
+          umask 077
+          # The key lives only as long as this step. The step that pushes writes it again, so
+          # the actions in between never have it on disk.
+          ssh_dir="$(mktemp -d "$RUNNER_TEMP/display16x-tap-ssh.XXXXXX")"
+          trap 'rm -rf "$ssh_dir"' EXIT
+          printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" > "$ssh_dir/key"
+          unset HOMEBREW_TAP_DEPLOY_KEY
+          # GitHub's published Ed25519 host key.
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
+
+          tap="$RUNNER_TEMP/display16x-tap"
+          git clone --quiet --depth 1 "git@github.com:$TAP_REPO.git" "$tap" ||
+            stop "The deploy key in HOMEBREW_TAP_DEPLOY_KEY cannot read $TAP_REPO. It may have been removed from the tap, or the secret holds another key."
+          # A dry run asks GitHub for write access and changes nothing. A deploy key added
+          # without "Allow write access" fails here.
+          git -C "$tap" push --dry-run --quiet origin HEAD ||
+            stop "The deploy key in HOMEBREW_TAP_DEPLOY_KEY can read $TAP_REPO but not write to it. Add it again with write access."
+          echo "TAP_CLONE=$tap" >> "$GITHUB_ENV"
 
       - name: Collect and verify the signed archive
         run: |
@@ -302,12 +344,14 @@ jobs:
           subject-path: ${{ env.RELEASE_DIR }}/display16x-*-macos-arm64.zip
 
       - name: Publish the release
+        id: release
         run: |
           cd "$RELEASE_DIR"
           # A version approved after a later one was published is not the latest release, and
           # the tap keeps the later cask.
           newest="$( { gh release list --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '.[].tagName'; echo "$GITHUB_REF_NAME"; } |
             grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
+          echo "tap_version=$newest" >> "$GITHUB_OUTPUT"
           latest=true
           if [[ "v$newest" != "$GITHUB_REF_NAME" ]]; then
             latest=false
@@ -322,51 +366,66 @@ jobs:
 
       - name: Update the Homebrew tap
         env:
-          # A write deploy key for the tap repository only. Without it, publish display16x.rb by hand.
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
-          TAP_REPO: engrmnaveed/homebrew-tap
         run: |
           if [[ -n "${NEWER_RELEASE:-}" ]]; then
             echo "The tap keeps $NEWER_RELEASE, which is later than $GITHUB_REF_NAME."
             exit 0
           fi
-          if [[ -z "$HOMEBREW_TAP_DEPLOY_KEY" ]]; then
-            message="HOMEBREW_TAP_DEPLOY_KEY is not set, so the tap was not updated and brew install does not find this version. Commit display16x.rb from the release to $TAP_REPO as Casks/display16x.rb by hand."
-            echo "::warning::$message"
-            echo "- **Homebrew tap not updated:** $message" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
           umask 077
+          # The same key and host key as in "The Homebrew tap can be written".
           ssh_dir="$(mktemp -d "$RUNNER_TEMP/display16x-tap-ssh.XXXXXX")"
           trap 'rm -rf "$ssh_dir"' EXIT
           printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" > "$ssh_dir/key"
           unset HOMEBREW_TAP_DEPLOY_KEY
-          # GitHub's published Ed25519 host key.
           echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$ssh_dir/known_hosts"
           export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
 
-          tap="$ssh_dir/tap"
-          git clone --depth 1 "git@github.com:$TAP_REPO.git" "$tap"
-          mkdir -p "$tap/Casks"
-          cp "$RELEASE_DIR/display16x.rb" "$tap/Casks/display16x.rb"
-          cd "$tap"
-          git add Casks/display16x.rb
-          if git diff --cached --quiet; then
-            echo "The tap already has this cask."
-            exit 0
-          fi
-          git -c user.name='github-actions[bot]' \
-            -c user.email='41898283+github-actions[bot]@users.noreply.github.com' \
-            commit -m "display16x ${GITHUB_REF_NAME#v}"
-          git push origin HEAD
+          cd "$TAP_CLONE"
+          branch="$(git symbolic-ref --short HEAD)"
+          # The tap is shared with DiskUse16x, whose releases commit to it too. Start from the
+          # tap as it is now, and start again if one of its commits lands in between.
+          for attempt in 1 2 3; do
+            git fetch --quiet --depth 1 origin "$branch"
+            git reset --quiet --hard FETCH_HEAD
+            mkdir -p Casks
+            cp "$RELEASE_DIR/display16x.rb" Casks/display16x.rb
+            git add Casks/display16x.rb
+            if git diff --cached --quiet; then
+              echo "The tap already has this cask."
+              exit 0
+            fi
+            git -c user.name='github-actions[bot]' \
+              -c user.email='41898283+github-actions[bot]@users.noreply.github.com' \
+              commit --quiet -m "display16x ${GITHUB_REF_NAME#v}"
+            if git push --quiet origin "HEAD:refs/heads/$branch"; then
+              echo "- Homebrew tap: \`Casks/display16x.rb\` in $TAP_REPO is now ${GITHUB_REF_NAME#v}." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep $((attempt * 10))
+          done
+          message="$GITHUB_REF_NAME is published, but its cask could not be pushed to $TAP_REPO, so brew install does not find it. Commit it by hand as docs/release.md says under \"Commit the cask by hand\"."
+          echo "::error::$message"
+          echo "- **Homebrew tap not updated:** $message" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+  # The command the guides give users, on a Mac that has never had Display 16X. It proves the
+  # tap serves the version it should, the cask installs the app and links the tool, and
+  # removing it works.
+  tap:
+    name: Install from the tap
+    needs: publish
+    uses: ./.github/workflows/tap-install.yml
+    with:
+      version: ${{ needs.publish.outputs.tap_version }}
 
   # GitHub sometimes finds no runner for a job, most often a macOS one, and cancels it. Say so
   # in the run summary with the way on, instead of a cancelled job without a word. It only
   # reads the run, its jobs and the release.
   outcome:
     name: Why the release did not finish
-    needs: publish
-    if: always() && needs.publish.result != 'success'
+    needs: [publish, tap]
+    if: always() && (needs.publish.result != 'success' || needs.tap.result != 'success')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -400,12 +459,12 @@ jobs:
           {
             if gh release view "$GITHUB_REF_NAME" --json tagName > /dev/null 2>&1; then
               echo "### $GITHUB_REF_NAME has a release, and a step after it did not finish"
-              echo "Look at the release before anything else. Its assets and tag cannot be replaced, so fix what is missing by hand, such as the tap, or fix forward with the next patch version, as docs/release.md describes."
+              echo "Look at the release before anything else. Its assets and tag cannot be replaced, so fix what is missing by hand, such as the tap, or fix forward with the next patch version, as docs/release.md describes. When only **Install from the tap** failed, its log says what brew did; see \"When Install from the tap fails\" in docs/release.md."
             else
               echo "### Nothing was published"
             fi
             if [[ -n "$unacquired" ]]; then
-              echo "GitHub found no runner for ${unacquired#, } and cancelled it. Nothing was signed or published by it, and nothing needs undoing. Run it again with **Re-run failed jobs** on this run, or \`gh run rerun $GITHUB_RUN_ID --failed\`. The jobs that passed are kept, and Publish asks for approval again."
+              echo "GitHub found no runner for ${unacquired#, } and cancelled it. Nothing was signed or published by it, and nothing needs undoing. Run it again with **Re-run failed jobs** on this run, or \`gh run rerun $GITHUB_RUN_ID --failed\`. The jobs that passed are kept, and Publish, if it had not run yet, asks for approval again."
             fi
             if [[ -n "$others" ]]; then
               echo "Ended without success: ${others#, }. A rejected Publish publishes nothing. For a failure, see \"If a job fails or never starts\" in docs/release.md."

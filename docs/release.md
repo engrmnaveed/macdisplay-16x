@@ -49,7 +49,7 @@ Once the pull request is merged, and once a build of that commit, or of code tha
 scripts/tag-release 0.6.0 --push
 ```
 
-It fetches `origin/main` and tags its tip only when that commit holds the version in `scripts/release-version`, a `## 0.6.0` section in the changelog, and a passing **Build, test and package** check, and when the tag does not exist yet. Without `--push` it makes the tag and prints the command that pushes it. It changes nothing in the working tree, so it can run from any checkout. The tag ruleset lets only the repository's administrators create a `v*` tag. With `tag.gpgSign` set in git, the tag is signed.
+It fetches `origin/main` and tags its tip only when that commit holds the version in `scripts/release-version`, a `## 0.6.0` section in the changelog, and a passing **Build, test and package** check, when the tag does not exist yet, and when the `release` environment has `HOMEBREW_TAP_DEPLOY_KEY`, without which Publish would stop. Reading an environment's secret names needs administrator access; without it the script says so and leaves the check to Publish. Without `--push` it makes the tag and prints the command that pushes it. It changes nothing in the working tree, so it can run from any checkout. The tag ruleset lets only the repository's administrators create a `v*` tag. With `tag.gpgSign` set in git, the tag is signed.
 
 ## How a tag becomes a release
 
@@ -59,11 +59,13 @@ The pushed tag runs these jobs:
 2. **Same checks as CI.** Runs [ci.yml](../.github/workflows/ci.yml) unchanged: identifiers, build, unit tests, packaging, smoke test with the start of the app, version check, hardened runtime check, the archive, and `brew style` on the cask.
 3. **Package, sign and archive**, in the `release-signing` environment, on macOS with the full history (the build number is the commit count). It signs at the level the environment's secrets allow (see [Signing](#signing)), writes `display16x-X.Y.Z-macos-arm64.zip` and its `.sha256` file, unpacks the ZIP with `unzip` as Homebrew does and verifies the signature and the version. It then starts the unpacked, signed app with `scripts/start-check.sh`, as the smoke test starts CI's own build, and stops if it crashes at start. It reads the signing level back from the signed app and stops if it is not the level it meant, so the cask's caveats and the release notes always describe the level users get. The run summary shows the signing level, the designated requirement and the digest. It compares the app with the published release just below this version, and warns when the designated requirement no longer matches that release's, because users would then lose the Accessibility grant and Homebrew's first-launch approval. It also warns when a lower version is tagged but not published, such as one whose run still waits for approval. The ZIP is kept as the run's artifact `display16x-macos-arm64`, with the notary log when the app was notarized.
 4. **Publish**, in the `release` environment. It waits here for a required reviewer. Before you approve, read the run summary and, if you like, download the artifact and try it. After approval it:
+   - checks that `HOMEBREW_TAP_DEPLOY_KEY` is set and can write to [engrmnaveed/homebrew-tap](https://github.com/engrmnaveed/homebrew-tap), and stops before anything is published if it cannot. Users install with Homebrew, so a release the tap does not get is not published,
    - checks the archive's digest again, renders the cask with `scripts/render-cask` and the notes with `scripts/release-notes`,
    - attests build provenance for the ZIP,
    - runs `gh release create --verify-tag` with the ZIP, its `.sha256` file and `display16x.rb`, titled "Display 16X vX.Y.Z", with the notes. It is marked as the latest release unless a later version is published already. With immutable releases on, its assets and its tag cannot be changed afterwards; its title and notes can still be edited,
-   - commits `Casks/display16x.rb` to [engrmnaveed/homebrew-tap](https://github.com/engrmnaveed/homebrew-tap) with the deploy key, unless a later version is published already, whose cask the tap keeps. Without `HOMEBREW_TAP_DEPLOY_KEY` it leaves a warning and a line in the run summary instead, and `brew install` does not find the new version until you [commit the cask by hand](#homebrew-tap).
-5. **Why the release did not finish.** Runs only when Publish did not succeed, and only reads. It writes to the run summary whether a release exists for the tag, which jobs failed or were cancelled, and, for a job GitHub found no runner for, how to run it again. See [If a job fails or never starts](#if-a-job-fails-or-never-starts).
+   - commits `Casks/display16x.rb` to the tap with the deploy key, unless a later version is published already, whose cask the tap keeps. The tap is shared with DiskUse16x, so when one of its commits lands at the same moment, the job starts again from the tap as it is, up to three times. If the push still fails, the job fails, and the cask is [committed by hand](#commit-the-cask-by-hand).
+5. **Install from the tap** ([tap-install.yml](../.github/workflows/tap-install.yml)), on a macOS runner that has never had Display 16X. It runs `brew install --cask engrmnaveed/tap/display16x`, the command the guides give users, checks that Homebrew, the app and the linked `display16x` command all say the version the tap should hold, then removes the app with `brew uninstall --cask --zap`. It is the step that proves users can install the release. See [When Install from the tap fails](#when-install-from-the-tap-fails).
+6. **Why the release did not finish.** Runs only when Publish or Install from the tap did not succeed, and only reads. It writes to the run summary whether a release exists for the tag, which jobs failed or were cancelled, and, for a job GitHub found no runner for, how to run it again. See [If a job fails or never starts](#if-a-job-fails-or-never-starts).
 
 **What the reviewer sees and clicks.** GitHub sends the reviewer a notification that a deployment to `release` waits for review. In the run (**Actions → Release →** the run for the tag), the summary lists the signing level, the designated requirement and the archive's SHA-256, and the artifact `display16x-macos-arm64` can be downloaded. An ad hoc build also shows the warning that it is not signed with the project certificate. Click **Review deployments**, tick **release**, and click **Approve and deploy**. **Reject** stops the run with nothing published. A pending review expires after 30 days.
 
@@ -81,7 +83,7 @@ gh run rerun RUN_ID --failed
 
 It runs the cancelled job and the jobs after it again, keeps the jobs that passed, and asks for the approval of **Publish** again. The tag stays as it is. The signer comparison runs again too, against the releases published by then. GitHub offers no setting for how long a hosted job may wait, so if runners stay short, re-run later; [githubstatus.com](https://www.githubstatus.com) says when GitHub Actions is degraded.
 
-After the release, install it with Homebrew on a Mac where no other copy of Display 16X is running, and open it once. Two copies must not run at once, because they share the settings folder and the command socket. With the first two releases signed with the project certificate, also do the [check across an update](#check-the-first-two-releases).
+The run itself installs the release from the tap on a clean Mac. To try it on your own Mac as well, install it with Homebrew where no other copy of Display 16X is running, and open it once. Two copies must not run at once, because they share the settings folder and the command socket. With the first two releases signed with the project certificate, also do the [check across an update](#check-the-first-two-releases).
 
 ## Check the first two releases
 
@@ -123,7 +125,7 @@ If all of this holds, the permission across an update is proven: record it in th
 
 These live on GitHub, not in the repository. Set them before the first tag.
 
-- **Settings → Environments → `release`:** add yourself, or the release owners, as required reviewers. Under deployment branches and tags, allow only tags matching `v*`. Without a reviewer, a tag push publishes at once. Add the `HOMEBREW_TAP_DEPLOY_KEY` secret here.
+- **Settings → Environments → `release`:** add yourself, or the release owners, as required reviewers. Under deployment branches and tags, allow only tags matching `v*`. Without a reviewer, a tag push publishes at once. Add the `HOMEBREW_TAP_DEPLOY_KEY` secret here, as described under [Add the deploy key](#add-the-deploy-key). No release is published without it.
 - **Settings → Environments → `release-signing`:** allow only tags matching `v*`, and add the project certificate's three secrets (see [Project certificate](#project-certificate)). A required reviewer here is optional: it gates signing as well, at the cost of a second approval per release. Without the environment, the workflow creates it empty on the first run and signs ad hoc.
 - **Settings → Rules → Rulesets:** protect tags matching `v*` from creation, update and deletion by anyone outside the release owners. Protect `main` with required pull requests and the CI check **Build, test and package**.
 - **Settings → General → Releases:** enable immutable releases, so a published release's assets and tag cannot be replaced.
@@ -246,13 +248,13 @@ The `release` environment holds `HOMEBREW_TAP_DEPLOY_KEY` at every level.
 
 ## Homebrew tap
 
-The cask is published through the public tap [engrmnaveed/homebrew-tap](https://github.com/engrmnaveed/homebrew-tap), next to Space 16X's, so users run `brew install --cask engrmnaveed/tap/display16x`. Homebrew's official cask repository only accepts apps that pass Gatekeeper, which needs the Developer ID level. The template is [packaging/homebrew/display16x.rb.in](../packaging/homebrew/display16x.rb.in): it installs the app, links the `display16x` command, requires Apple silicon and macOS 14, quits the app before an upgrade (Homebrew reopens it afterwards), and its `zap` removes the app's settings folder. `scripts/render-cask VERSION SHA256 SIGNING` fills it in, with caveats about the first launch and Accessibility that depend on the signing level.
+The cask is published through the public tap [engrmnaveed/homebrew-tap](https://github.com/engrmnaveed/homebrew-tap), next to DiskUse16x's (called Space 16X before its 1.0), so users run `brew install --cask engrmnaveed/tap/display16x`. Homebrew's official cask repository only accepts apps that pass Gatekeeper, which needs the Developer ID level. The template is [packaging/homebrew/display16x.rb.in](../packaging/homebrew/display16x.rb.in): it installs the app, links the `display16x` command, requires Apple silicon and macOS 14, quits the app before an upgrade (Homebrew reopens it afterwards), and its `zap` removes the app's settings folder. `scripts/render-cask VERSION SHA256 SIGNING` fills it in, with caveats about the first launch and Accessibility that depend on the signing level.
 
 ### Add the deploy key
 
 Once, on a Mac with the GitHub CLI:
 
-1. Make a key pair for this repository alone, so it can be revoked without touching Space 16X's:
+1. Make a key pair for this repository alone, so it can be revoked without touching DiskUse16x's:
 
    ```sh
    ssh-keygen -t ed25519 -N '' -C 'macdisplay-16x release' -f display16x-tap
@@ -271,15 +273,37 @@ Once, on a Mac with the GitHub CLI:
    rm display16x-tap display16x-tap.pub
    ```
 
-**Each release:** the publish job commits `Casks/display16x.rb` to the tap after creating the release.
+**Each release:** the publish job commits `Casks/display16x.rb` to the tap after creating the release, and **Install from the tap** then installs it from there.
 
-**Without the secret:** the job skips the tap and says so in a warning and in the run summary. Until the cask is in the tap, `brew install --cask engrmnaveed/tap/display16x` does not find the new version. Commit the release's `display16x.rb` to the tap by hand, here for 0.5.0. The tap holds one version, so only the newest release needs it:
+**Without the key, or with a key that cannot write:** `scripts/tag-release` refuses to tag while the secret is missing, and Publish stops at its first step, before anything is published, with the reason in the run summary. Add or replace the key as above, then use **Re-run failed jobs** on the run. Publish asks for approval again. From 0.2.0 to 0.5.0 a missing key only left a warning and the runs passed, so the tap never had the cask until 0.5.0's was committed by hand on 26 November 2026.
+
+### Commit the cask by hand
+
+When Publish created the release but its push to the tap failed, commit the release's `display16x.rb` yourself, here for 0.5.0. The tap holds one version, so only the newest release needs it:
 
 ```sh
 gh repo clone engrmnaveed/homebrew-tap && cd homebrew-tap
 gh release download v0.5.0 --repo engrmnaveed/macdisplay-16x --pattern display16x.rb --output Casks/display16x.rb --clobber
 git add Casks/display16x.rb && git commit -m "display16x 0.5.0" && git push
 ```
+
+Then check it the way the release does:
+
+```sh
+gh workflow run tap-install.yml --repo engrmnaveed/macdisplay-16x -f version=0.5.0
+```
+
+### When Install from the tap fails
+
+The release and the tap's commit exist by then, so look at what users get before anything else. The job's log has brew's own output:
+
+- **"Cask 'display16x' is unavailable" or "does not exist":** the tap has no `Casks/display16x.rb`. [Commit the cask by hand](#commit-the-cask-by-hand).
+- **The tap installed another version:** a later release holds the tap, or the push did not land. Compare `Casks/display16x.rb` in the tap with the release's `display16x.rb`.
+- **A checksum mismatch or a failed download:** the cask in the tap does not match the release's ZIP. Commit the release's own `display16x.rb` by hand, which carries the ZIP's digest.
+- **The app or the `display16x` command says another version, or a signature does not verify:** the published ZIP is wrong. Its assets cannot be replaced, so fix forward with the next patch version.
+- **The job never got a runner:** **Re-run failed jobs**. Nothing else runs again.
+
+After a fix, run `gh workflow run tap-install.yml --repo engrmnaveed/macdisplay-16x -f version=X.Y.Z` to check again.
 
 ## Sign and notarize on a Mac
 
