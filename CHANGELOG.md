@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Homebrew
+
+- `brew install --cask engrmnaveed/tap/display16x` now installs Display 16X. Until 26 November 2026 it said the cask does not exist: no release from 0.2.0 to 0.5.0 had reached the Homebrew tap. The tap has 0.5.0's cask now, and nothing had to change in 0.5.0 itself.
+- A release is no longer published when it cannot update the tap, and before a release run finishes it installs the new version from the tap on a Mac that has never had Display 16X, then removes it again.
+
 ## 0.5.0
 
 Skins: choose the colors Display 16X is drawn in, from six ready-made skins or two colors of your own. A skin changes how the app looks and nothing on your displays. Studio stays the default, so until you choose another skin the app looks as 0.4.0 did, apart from a settings window made wider for its new tab.
