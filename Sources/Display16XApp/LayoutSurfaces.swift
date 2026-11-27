@@ -229,20 +229,42 @@ enum LinkHandler {
 @MainActor
 enum MirrorAwareKeys {
     static func handle(_ key: MediaKey, fine: Bool, context: AppContext) -> Bool {
-        guard case .handle(let commands) = KeyRouter.decide(context.keys.routingInput(for: key, fine: fine)) else { return false }
+        let input = context.keys.routingInput(for: key, fine: fine)
         let control: DisplayCore.ControlID = key.isBrightness ? .brightness : .volume
+        guard case .handle(let commands) = KeyRouter.decide(input) else {
+            let reason = KeyExplanation.reason(
+                input,
+                pointerOnOtherDisplay: context.keys.selectorContext?.displayUnderPointer() != nil,
+                name: { name(of: $0, context: context) },
+                unavailable: { context.controls.availability(of: control, for: $0).reason }
+            )
+            context.keyActivity.passed(key, because: reason ?? "the app did not claim it")
+            return false
+        }
         let expanded = MirrorExpansion.expand(commands, layout: context.layout.snapshot()) { tag in
             context.controls.availability(of: control, for: tag).isAvailable && context.settings.effective(tag).keyboardControl
         }
-        Task { @MainActor [engine = context.engine] in
+        context.keyActivity.claimed(key, for: expanded.map { name(of: $0, context: context) })
+        Task { @MainActor [engine = context.engine, activity = context.keyActivity] in
+            var failures: [(name: String, reason: String)] = []
             for command in expanded {
                 let result = await engine.execute(command)
                 if !result.succeeded {
-                    Log.core.debug("Key command \(command.feature) failed: \(result.error ?? result.entries.first?.detail ?? "unknown").")
+                    failures.append((name(of: command, context: context), result.error ?? result.entries.first?.detail ?? "unknown"))
                 }
             }
+            activity.failed(key, failures)
         }
         return true
+    }
+
+    private static func name(of tag: DisplayTag, context: AppContext) -> String {
+        context.registry.record(for: tag)?.displayName ?? "display \(tag.rawValue)"
+    }
+
+    private static func name(of command: Command, context: AppContext) -> String {
+        guard case .tag(let raw) = command.selector else { return "a display" }
+        return name(of: DisplayTag(raw), context: context)
     }
 }
 

@@ -56,7 +56,7 @@ struct SettingsView: View {
 
     @ViewBuilder private var page: some View {
         switch tab.wrappedValue {
-        case .general: GeneralSettings(model: model)
+        case .general: GeneralSettings(model: model, keys: model.keyActivity)
         case .appearance:
             if let skins { AppearanceSettings(skins: skins) }
         case .scenes: SceneSettings(layoutModel: layoutModel)
@@ -94,6 +94,7 @@ struct SettingsNotices: View {
 
 struct GeneralSettings: View {
     @ObservedObject var model: PanelModel
+    @ObservedObject var keys: KeyActivity
 
     private var login: Binding<Bool> {
         Binding(get: { model.loginItem == .enabled || model.loginItem == .requiresApproval }, set: { model.setLaunchAtLogin($0) })
@@ -133,7 +134,7 @@ struct GeneralSettings: View {
         }
         SkinHeading(text: "Brightness and volume keys")
         SkinBlock {
-            SwitchRow(title: "Brightness keys change a display's brightness", isOn: brightnessKeys)
+            SwitchRow(title: "Brightness keys change a display's brightness", help: model.brightnessKeys ? keys.brightnessNote : nil, isOn: brightnessKeys)
             SkinRule()
             SwitchRow(title: "Volume keys change a monitor's volume", help: "Only while sound plays through that monitor.", isOn: volumeKeys)
             SkinRule()

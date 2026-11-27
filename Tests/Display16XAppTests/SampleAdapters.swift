@@ -223,8 +223,10 @@ final class SampleColorBackend: ColorBackend {
 @MainActor
 final class SampleSelectorContext: SelectorContext {
     var main: SystemDisplayID?
+    /// Where the pointer is. Nil leaves it on the main display; `.some(nil)` puts it on no display.
+    var pointer: SystemDisplayID??
     func mainDisplay() -> SystemDisplayID? { main }
-    func displayUnderPointer() -> SystemDisplayID? { main }
+    func displayUnderPointer() -> SystemDisplayID? { pointer ?? main }
     func focusedDisplay() -> SystemDisplayID? { main }
 }
 

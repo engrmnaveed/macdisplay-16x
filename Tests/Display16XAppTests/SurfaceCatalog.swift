@@ -341,10 +341,19 @@ enum SurfaceCatalog {
         let model = PanelModel(context: desk.context)
         let layoutModel = LayoutPanelModel(context: desk.context, hotKeys: nil)
         let skins = SkinPanelModel(context: desk.context)
+        // Key capture runs, as it does with Accessibility granted, and no key has been pressed.
+        desk.context.keyActivity.listening()
         for tab in SettingsView.Tab.allCases {
             try session.shoot("settings-\(tab.rawValue.lowercased())", group: "settings", title: "Settings: \(tab.rawValue)", chrome: .window, active: true) {
                 SettingsView(model: model, layoutModel: layoutModel, start: tab, skins: skins, openLink: { _ in })
             }
+        }
+        // A brightness key pressed with the pointer on a display the app does not list.
+        desk.selector.pointer = .some(SampleDesk.builtInID)
+        _ = MirrorAwareKeys.handle(.brightnessUp, fine: false, context: desk.context)
+        desk.selector.pointer = nil
+        try session.shoot("settings-general-key-passed", group: "settings", title: "Settings: General, after a brightness key was passed on", chrome: .window, active: true) {
+            SettingsView(model: model, layoutModel: layoutModel, start: .general, skins: skins, openLink: { _ in })
         }
         model.close()
         layoutModel.close()

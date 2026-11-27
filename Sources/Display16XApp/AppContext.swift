@@ -94,6 +94,8 @@ final class AppContext {
     let reconciler: Reconciler
     let coordinator: DisplayCoordinator
     let keys: KeyCoordinator
+    /// What became of the brightness and volume keys, for the log, the status and Settings.
+    let keyActivity = KeyActivity()
     let indicator: IndicatorCoordinator
     let permissions: PermissionBroker
     let loginItem = LoginItem()
@@ -200,9 +202,10 @@ final class AppContext {
         automation = ConnectionAutomation(registry: registry, settings: settings, connection: connection, gate: gate, bus: bus)
         listeners = adapters.listeners(sequencer)
         permissions = PermissionBroker(probe: adapters.permissionProbe, bus: bus, settings: settings)
-        engine.statusProvider = { [permissions, colorBackend, loginItem, virtualScreens, overrides, colors, recovery, upscaling] in
+        engine.statusProvider = { [permissions, keyActivity, colorBackend, loginItem, virtualScreens, overrides, colors, recovery, upscaling] in
             var lines = ["version: \(AppPaths.version)"]
             lines.append(contentsOf: permissions.statusLines)
+            lines.append(contentsOf: keyActivity.statusLines)
             lines.append("login item service: \(loginItem.systemStatus)")
             let mirrors = virtualScreens.activeMirrors
             lines.append("virtual screens: \(virtualScreens.live.count) connected, \(virtualScreens.definitions.count) saved")
