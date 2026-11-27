@@ -41,29 +41,22 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Skin.space.xl) {
-            Picker("Section", selection: tab.projectedValue) {
-                ForEach(Tab.allCases) { (tab: Tab) in
-                    Text(verbatim: tab.rawValue).tag(tab)
-                }
+        FixedWindowColumn(width: Skin.size.settingsWidth, height: Skin.size.settingsHeight) {
+            TabStrip(title: "Section", tabs: Tab.allCases.map(\.rawValue), chosen: Tab.allCases.firstIndex(of: tab.wrappedValue) ?? 0) { (index: Int) in
+                tab.wrappedValue = Tab.allCases[index]
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             SettingsNotices(layoutModel: layoutModel, model: model)
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: Skin.space.l) { page }
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(Skin.space.window)
-        .frame(width: Skin.size.settingsWidth, height: Skin.size.settingsHeight, alignment: .top)
-        .background(Skin.color.canvas)
         .tint(Skin.color.accent)
     }
 
     @ViewBuilder private var page: some View {
         switch tab.wrappedValue {
-        case .general: GeneralSettings(model: model)
+        case .general: GeneralSettings(model: model, keys: model.keyActivity)
         case .appearance:
             if let skins { AppearanceSettings(skins: skins) }
         case .scenes: SceneSettings(layoutModel: layoutModel)
@@ -101,6 +94,7 @@ struct SettingsNotices: View {
 
 struct GeneralSettings: View {
     @ObservedObject var model: PanelModel
+    @ObservedObject var keys: KeyActivity
 
     private var login: Binding<Bool> {
         Binding(get: { model.loginItem == .enabled || model.loginItem == .requiresApproval }, set: { model.setLaunchAtLogin($0) })
@@ -140,7 +134,8 @@ struct GeneralSettings: View {
         }
         SkinHeading(text: "Brightness and volume keys")
         SkinBlock {
-            SwitchRow(title: "Brightness keys change a display's brightness", isOn: brightnessKeys)
+            SwitchRow(title: "Brightness keys change a display's brightness", help: model.brightnessKeys ? keys.brightnessNote : nil, isOn: brightnessKeys)
+                .help(KeyActivity.brightnessTip)
             SkinRule()
             SwitchRow(title: "Volume keys change a monitor's volume", help: "Only while sound plays through that monitor.", isOn: volumeKeys)
             SkinRule()

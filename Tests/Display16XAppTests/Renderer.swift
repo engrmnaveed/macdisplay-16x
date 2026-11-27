@@ -275,6 +275,15 @@ struct AccessibleNode {
         (call("accessibilityChildren") as? [AnyObject]) ?? []
     }
 
+    /// Where the element is, in screen coordinates.
+    var frame: NSRect {
+        let selector = NSSelectorFromString("accessibilityFrame")
+        guard object.responds(to: selector) else { return .zero }
+        typealias Function = @convention(c) (AnyObject, Selector) -> NSRect
+        let function = unsafeBitCast(object.method(for: selector), to: Function.self)
+        return function(object, selector)
+    }
+
     func press() {
         let selector = NSSelectorFromString("accessibilityPerformPress")
         guard object.responds(to: selector) else { return }

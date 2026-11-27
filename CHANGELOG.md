@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixes
+
+- The brightness keys change the display under the pointer again, and the volume keys reach a monitor that plays the sound. From 0.2.0 to 0.5.0 the app lost track of the display under the pointer right after it started, so both kinds of key went on to macOS and did nothing on a monitor. `display16x --pointer` and `--focused`, and links naming those displays, found no display for the same reason.
+- `display16x status`, and the line under the brightness keys switch in Settings → General, say whether the keys are heard, and why a key was passed on to macOS or did not change a display. The log notes when the keys start to end differently.
+- The settings window no longer cuts off its tabs and its pages after the first click. The tabs share the width of the window, so they are always shown whole.
+- On a display's card, the text-size strip shows the size a step gives while the pointer is on it, in the line under the strip, and each step has a tooltip with that size.
+
 ### Homebrew
 
 - `brew install --cask engrmnaveed/tap/display16x` now installs Display 16X. Until 26 November 2026 it said the cask does not exist: no release from 0.2.0 to 0.5.0 had reached the Homebrew tap. The tap has 0.5.0's cask now, and nothing had to change in 0.5.0 itself.
