@@ -6,6 +6,25 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 27 November 2026 · Three reports on 0.5.0: tabs cut off after a click, silent brightness keys, a size step that says nothing
+
+Reported by the owner on 27 November against the Homebrew 0.5.0 (build 203), on an Apple silicon MacBook with macOS 27, a Lenovo monitor on HDMI and a rotated LG on USB-C. Fixed on `claude/fix-0-5-0-bugs-914810`. None of the fixes touches `DisplayCore`, `DDC`, `DisplaySystem` or `DisplayPrivate`.
+
+- **What the app hands to a weak property, the app must own.** The core holds the app's view of the system weakly: the selector context (the display under the pointer, the one with the active window) and the audio output. It does so in order not to own the app's objects. The app made them inside a bundle of adapters that lived only while the app started, so they were freed the moment start-up ended. From 0.2.0 to 0.5.0:
+  - every brightness key with the default target was passed on as "the pointer is on no display";
+  - every volume key was passed on;
+  - `display16x --pointer`, `--focused` and `--of-pointer`, and links naming those displays, found nothing.
+
+  The unit tests passed because the test desk kept its own sample objects. The regression came in on 23 November with the render harness's adapter bundle (`8e330d7`), before 0.2.0. Earlier builds kept the two objects themselves, which fits the owner's memory that the keys worked up to 0.2. **Rule:** whatever the app hands to a weak property, the app keeps for as long as it runs. A test builds the app's context the way the app does, without holding anything the app would not hold. The context now keeps its adapters for its whole life. The other weak properties the app assigns were checked, and each one is held by something else.
+- **Seen on the owner's desk**, with no other copy of Display 16X running:
+  - A build with the new key reports logged "Brightness down key was passed on to macOS, because the pointer is on no display" with the pointer on a monitor.
+  - The build with the fix logged "Brightness down key changed LEN P32p-20", then "…changed LG SDQHD", as the pointer moved, and `--pointer` and `--focused` found the monitor.
+  - Both monitors' brightness was read before and put back after.
+- **A key press must explain itself.** Nothing in 0.5.0 said why a key was ignored, and the cause was found only once each press left a line saying where it went. Each brightness or volume key now writes one line once its outcome is known: a notice when that kind of key ends differently from the last notice, debug otherwise. `display16x status` and Settings show the last key of each kind.
+- **macOS 27's segmented control does not promise to fit.** SwiftUI's segmented picker is an `NSSegmentedControl` with equal segments, each as wide as the widest name: seven settings tabs ask for 679 points, and 0.4.0's six already asked for 504 where the window gave 464. SwiftUI squeezes it into the width offered at first, then gives it its full width once it is measured again. In the owner's app that happened on the first click, and the whole settings column was centred and cut on both sides. In a test window nothing made it happen: not a click, the window becoming key, a model update or a new selection. **Rule for the interface:** a row of tabs shares the width it is given, and nothing in a window of fixed size may be able to widen its content. The tabs are now drawn by the app. An eighth tab will not break the window, and a test says when the names stop fitting whole.
+- **Larger text and bold text barely reach the settings window.** Every font in the skin is a fixed size, so the system's text size does not change it. Bold names were measured anyway: they still fit, 529 of 544 points.
+- **A size preview on hover needs no timer.** macOS reports the pointer arriving at a view and leaving it. Moving between neighbouring steps can report the arrival before the departure, so the strip keeps whichever step was entered last.
+
 ## 26 November 2026 · Homebrew never had Display 16X: four releases passed without reaching the tap
 
 - **What the owner saw:** `brew install --cask engrmnaveed/tap/display16x` with Homebrew 7.0.16 said `Casks/display16x.rb` does not exist in the tap. The README and the installation guide give that command as the way to install.
