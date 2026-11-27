@@ -167,11 +167,32 @@ struct PanelNotices: View {
                 Button("Cancel") { layoutModel.stopRecording() }.buttonStyle(QuietStyle())
             }
         }
-        if let message = model.message {
-            Banner(kind: .danger, symbol: Skin.symbol.danger, title: PanelText.sentence(message))
-        }
+        PanelMessage(model: model)
         if let message = layoutModel.message {
             Banner(kind: layoutModel.messageIsFailure ? .danger : .note, symbol: layoutModel.messageIsFailure ? Skin.symbol.danger : Skin.symbol.confirmed, title: PanelText.sentence(message))
+        }
+    }
+}
+
+/// The panel's last message. A failure is red. A monitor that kept its value is not a
+/// failure of the app, so it is said calmly, with the symbol of its control.
+struct PanelMessage: View {
+    @ObservedObject var model: PanelModel
+
+    static func symbol(_ feature: FeatureID) -> String {
+        switch feature {
+        case .volume: Skin.symbol.volume
+        case .contrast: Skin.symbol.contrast
+        default: Skin.symbol.brightness
+        }
+    }
+
+    var body: some View {
+        if let message = model.message {
+            switch model.messageKind {
+            case .failure: Banner(kind: .danger, symbol: Skin.symbol.danger, title: PanelText.sentence(message))
+            case .kept(let feature): Banner(kind: .note, symbol: PanelMessage.symbol(feature), title: PanelText.sentence(message))
+            }
         }
     }
 }

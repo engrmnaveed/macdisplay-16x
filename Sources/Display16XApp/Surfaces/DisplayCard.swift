@@ -23,6 +23,9 @@ struct DisplayCard: View {
                 ) { value, final in
                     model.setVolume(value, tag: card.tag, final: final)
                 }
+            } else if card.volumeIgnored, let reason = card.volume.reason {
+                // Learned on this desk: the monitor reports a volume and keeps it.
+                QuietLine(symbol: Skin.symbol.volume, text: "No volume control. \(reason)")
             }
             if card.inputReason == nil, !card.inputs.isEmpty {
                 InputRow(card: card, model: model)
