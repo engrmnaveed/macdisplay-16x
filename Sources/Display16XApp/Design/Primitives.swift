@@ -269,7 +269,7 @@ struct ValueBar: View {
             .gesture(drag(width: width), including: isEnabled ? .all : .none)
         }
         .frame(height: Skin.size.bar)
-        .scaleEffect(x: 1, y: isDragging ? Skin.size.barDragScale : 1)
+        .scaleEffect(x: 1, y: ValueBar.drawnScale(dragging: isDragging))
         .animation(Skin.animation(reduceMotion: reduceMotion), value: isLifted)
         .animation(Skin.animation(reduceMotion: reduceMotion), value: isDragging)
         .onHover { (inside: Bool) in hovering.wrappedValue = inside }
@@ -282,6 +282,12 @@ struct ValueBar: View {
                 .accessibilityValue(Text(verbatim: spoken))
                 .disabled(!isEnabled)
         }
+    }
+
+    /// How much taller the bar is drawn: a little while it is dragged. Only drawn: its place
+    /// in the layout stays, on every macOS.
+    static func drawnScale(dragging: Bool) -> CGFloat {
+        dragging ? Skin.size.barDragScale : 1
     }
 
     /// The number at the trailing end, in one color.
