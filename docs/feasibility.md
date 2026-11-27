@@ -143,6 +143,38 @@ Other controls, each changed by one step through `display16x set`, read back, an
 
 Input switching was never sent to hardware. It can cut the Mac off from the monitor, and nothing on this desk needs it.
 
+### Reading a value back after a write (27 November 2026)
+
+Measured with `spikes/ddc-settle-write-probe.swift` on a Mac17,9 with macOS 27.2.1 (26B131). The monitors were the Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, rotated, with no copy of Display 16X running. The probe writes and reads the way the app does: each write sent twice 10 ms apart, each query twice 10 ms apart, the reply read 50 ms later, and burst writes 50 ms apart. It reads back at about 0, 50, 100, 200, 400, 800 and 1,600 ms after the last write, plus once with the first read only after a second. Every run put the starting value back and checked it.
+
+The question was raised by the report "LEN P32p-20: sent 63, but the display reports 50" after a dragged slider.
+
+**Awake** (before the displays turned off at 12:56:24):
+
+| Monitor and control | After one write | After a burst | First read after a second |
+| --- | --- | --- | --- |
+| Lenovo brightness, 100 → 90 | new value at the first read, about 95 ms | new value at the first read, about 95 ms | new value |
+| LG brightness, 50 → 40 | new value at the first read, about 90 ms | 1 of 2 bursts: no reply for about 900 ms, then **41, the step before the last, for good** | new value |
+| Lenovo volume, 50 → 44 | **never**: 50 at every read up to 1.7 s | never | never |
+
+**Displays asleep**, still answering at first:
+
+| Monitor and control | Result |
+| --- | --- |
+| LG volume, 70 → 64 | new value at the first read, about 95 ms, after one write and after a burst |
+| LG brightness, bursts, first read at once | 1 of 8 lost the last write (reported 41, for good) |
+| LG brightness, bursts, first read after 100 ms | 0 of 8 lost |
+| LG brightness, a third batch | the LG stopped answering DDC from the fifth burst on, as its standby deepened. These runs are not counted. Its last restore could not be confirmed and is checked once it wakes |
+| Lenovo brightness, 10 bursts, first read at once | 0 of 10 lost |
+
+What it shows:
+
+- **Neither monitor needs time before it reports a value it took.** When a value is taken, the first read has it, about 90 to 100 ms after the write. A longer wait would not have changed the reported value in any run.
+- **The Lenovo never takes a volume.** It reports 50 whatever is written, as the earlier check in this file found. The banner was the app learning that from scratch on a fresh settings file: two such reads mark volume as reported and ignored.
+- **The LG can lose the last write of a burst** when the read's query follows it within about 10 ms. It then reports the step before for good, and two reads that agree make the app believe the write was ignored. That would turn a dragged brightness slider into a false mismatch, and a second one would hide brightness as ignored. A first read held back 100 ms lost none in 8 bursts. The earlier write probe, which read 150 ms after each sweep, never lost a last value on either monitor. The DDC/CI standard asks for 50 ms after a Set VCP Feature before the next command, and the app sends its query after 10.
+- **Not settled, and needs the displays awake:** how often the LG loses the last write with the query at once (1 of 2 awake, 1 of 8 asleep), and whether a 60 ms wait is enough. Holding the first read back keeps the screen awake for the run with the owner present.
+
+
 Not tested: a connection that carries video and no DDC. There is none on this desk.
 
 ### Color tables
