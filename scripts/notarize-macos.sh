@@ -82,7 +82,10 @@ spctl --assess --type execute --verbose "$signed_app"
 
 # Without extended attributes, for the reason given in scripts/archive-macos.sh.
 ditto -c -k --norsrc --noextattr --noacl --keepParent "$signed_app" "$stage/$name"
-if zipinfo -1 "$stage/$name" | grep -Eq '(^|/)(__MACOSX|\._)'; then
+# The listing is read whole first: piped into grep -q under pipefail, zipinfo can die of
+# SIGPIPE after a match, and the check would then pass the archive it should stop.
+entries="$(zipinfo -1 "$stage/$name")"
+if grep -Eq '(^|/)(__MACOSX|\._)' <<< "$entries"; then
     echo "The archive holds AppleDouble files, which would break the signature when unzipped." >&2
     exit 1
 fi

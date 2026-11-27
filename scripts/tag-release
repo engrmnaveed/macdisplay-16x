@@ -31,7 +31,11 @@ short="$(git log -1 --format='%h %s' "$commit")"
 
 on_main="$(git show "${commit}:scripts/release-version")"
 [[ "$on_main" == "$version" ]] || fail "origin/main ($short) says $on_main in scripts/release-version, not $version. Merge the prepared version first"
-git show "${commit}:CHANGELOG.md" | grep -qx "## $version" || fail "CHANGELOG.md on origin/main has no '## $version' section"
+# Read the whole file first. Piped into grep -q under pipefail, git show dies of SIGPIPE when
+# grep stops at the match before the file is written, and the check fails on a file that has
+# the section.
+changelog="$(git show "${commit}:CHANGELOG.md")"
+grep -qx "## $version" <<< "$changelog" || fail "CHANGELOG.md on origin/main has no '## $version' section"
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
     fail "the tag $tag exists in this repository already"
 fi
