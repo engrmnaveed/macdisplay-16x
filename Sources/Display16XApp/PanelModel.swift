@@ -36,6 +36,8 @@ final class PanelModel: ObservableObject {
         var brightness = ControlState()
         var contrast = ControlState()
         var volume = ControlState()
+        /// The monitor reports a volume and was found to ignore changes to it.
+        var volumeIgnored = false
         var isMuted = false
         var inputReason: String?
         var inputs: [InputEntry] = []
@@ -81,6 +83,14 @@ final class PanelModel: ObservableObject {
     @Published private(set) var isFirstRun = false
     /// The last thing that went wrong, in the user's terms. Cleared by the next success.
     @Published var message: String?
+    /// What `message` is: a failure, or a monitor that kept its value, which is not one.
+    @Published private(set) var messageKind = MessageKind.failure
+
+    enum MessageKind: Equatable {
+        case failure
+        /// The monitor kept the value it had for this feature.
+        case kept(FeatureID)
+    }
 
     private let context: AppContext
     private var subscription: EventBus.Subscription?
@@ -194,6 +204,7 @@ final class PanelModel: ObservableObject {
             card.brightness = state(.brightness, tag: tag)
             card.contrast = state(.contrast, tag: tag)
             card.volume = state(.volume, tag: tag)
+            card.volumeIgnored = ignoredWrites([.volume], tag: tag).ignored
             card.isMuted = context.controls.isMuted(tag)
             card.inputReason = context.controls.availability(of: .input, for: tag).reason
             card.inputs = context.controls.inputs(for: tag)
@@ -266,20 +277,68 @@ final class PanelModel: ObservableObject {
         Task { [weak self, context] in
             let result = await context.send(command)
             guard report, let self else { return }
-            if let failure = result.error {
-                self.message = failure.prefix(1).uppercased() + failure.dropFirst() + "."
-            } else if let failed = result.entries.first(where: { $0.outcome == .failed }) {
-                self.message = "\(failed.name): \(failed.detail ?? "the change failed")."
-            } else {
-                self.message = nil
-            }
+            self.report(result)
+        }
+    }
+
+    private func report(_ result: CommandResult) {
+        messageKind = .failure
+        if let failure = result.error {
+            message = failure.prefix(1).uppercased() + failure.dropFirst() + "."
+        } else if let failed = result.entries.first(where: { $0.outcome == .failed }) {
+            message = "\(failed.name): \(failed.detail ?? "the change failed")."
+        } else {
+            message = nil
         }
     }
 
     private func set(_ feature: FeatureID, _ value: Double, tag: DisplayTag, final: Bool) {
         // While dragging, values are sent without waiting for confirmation. The last one is read back.
         let options = CommandOptions(verification: final ? .readBack : .none)
-        run(Command(.set, feature, on: .tag(tag.rawValue), value: .absolute(value), origin: .interface, options: options), report: final)
+        let command = Command(.set, feature, on: .tag(tag.rawValue), value: .absolute(value), origin: .interface, options: options)
+        guard final else { return run(command, report: false) }
+        // A monitor that keeps its value is not a failure of the app. The core counts such a
+        // write as evidence that the control is ignored; that count is how it is told apart
+        // from a write that could not be sent.
+        let controls: [ControlID] = PanelModel.evidence(for: feature)
+        let before = ignoredWrites(controls, tag: tag)
+        Task { [weak self, context] in
+            let result = await context.send(command)
+            guard let self else { return }
+            let after = self.ignoredWrites(controls, tag: tag)
+            guard result.error == nil, let failed = result.entries.first(where: { $0.outcome == .failed }), after.count > before.count || (after.ignored && !before.ignored) else {
+                return self.report(result)
+            }
+            var kept: Double?
+            if case .number(let value)? = failed.actual { kept = value }
+            self.messageKind = .kept(feature)
+            self.message = PanelText.kept(name: failed.name, feature: feature, value: kept, nowIgnored: after.ignored && !before.ignored)
+        }
+    }
+
+    /// The controls whose ignored writes count for a feature.
+    static func evidence(for feature: FeatureID) -> [ControlID] {
+        switch feature {
+        case .brightness: [.brightness, .hardwareBrightness]
+        case .volume: [.volume]
+        case .contrast: [.contrast]
+        default: []
+        }
+    }
+
+    /// How many verified writes changed nothing, and whether the core concluded that the
+    /// display ignores the control.
+    private func ignoredWrites(_ controls: [ControlID], tag: DisplayTag) -> (count: Int, ignored: Bool) {
+        var count = 0
+        var ignored = false
+        for configuration in context.settings.recordSettings(tag).controllers.values {
+            for control in controls {
+                let entry = configuration.controls?[control]
+                count += entry?.ineffectiveWrites ?? 0
+                if entry?.ignoresWrites == true { ignored = true }
+            }
+        }
+        return (count, ignored)
     }
 
     func setBrightness(_ value: Double, tag: DisplayTag, final: Bool) { set(.brightness, value, tag: tag, final: final) }

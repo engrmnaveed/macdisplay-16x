@@ -103,6 +103,22 @@ final class FakeController: DisplayController, @unchecked Sendable {
     private var _unanswered: Set<ControlID> = []
     private var _reads: [ControlID] = []
     private var _onWrite: (@Sendable (ControlID) -> Void)?
+    private var _dropWrites = 0
+    private var _silentReads = 0
+    private var _beforeRead: (@Sendable () async -> Void)?
+
+    /// The next writes reach the device and are lost, as the LG SDQHD loses the last writes
+    /// of a burst while it is busy.
+    func dropNextWrites(_ count: Int) { lock.withLock { _dropWrites = count } }
+
+    /// The next reads get no answer, as from a monitor busy for a moment.
+    func silenceNextReads(_ count: Int) { lock.withLock { _silentReads = count } }
+
+    /// Runs before every read reaches the device, for things that happen meanwhile.
+    var beforeRead: (@Sendable () async -> Void)? {
+        get { lock.withLock { _beforeRead } }
+        set { lock.withLock { _beforeRead = newValue } }
+    }
 
     /// Called for every write that reaches the device, to check the order of things.
     var onWrite: (@Sendable (ControlID) -> Void)? {
@@ -196,9 +212,14 @@ final class FakeController: DisplayController, @unchecked Sendable {
     func clearReads() { lock.withLock { _reads.removeAll() } }
 
     func read(_ control: ControlID, access: ControlAccess) async -> Result<RawReading, ControlFailure> {
-        lock.withLock {
+        if let hook = beforeRead { await hook() }
+        return lock.withLock {
             _reads.append(control)
             if _failReads { return .failure(.noReply) }
+            if _silentReads > 0 {
+                _silentReads -= 1
+                return .failure(.noReply)
+            }
             guard let value = _values[control] else { return .failure(.unsupported) }
             return .success(RawReading(value: value, maximum: _capabilities[control]?.rawMaximum))
         }
@@ -209,6 +230,10 @@ final class FakeController: DisplayController, @unchecked Sendable {
             if _failWrites { return .failed(.noReply) }
             _onWrite?(control)
             _writes.append((control, raw, access))
+            if _dropWrites > 0 {
+                _dropWrites -= 1
+                return .written
+            }
             if !_ignoreWrites && !_deafControls.contains(control) { _values[control] = raw }
             return .written
         }
