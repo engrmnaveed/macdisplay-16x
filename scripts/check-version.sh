@@ -29,9 +29,11 @@ APP="${1:-dist/Display 16X.app}"
 bundle="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")"
 [[ "$bundle" == "$VERSION" ]] || fail "the bundle says $bundle, scripts/release-version says $VERSION"
 
-# The first line of the help is "display16x X.Y.Z — command line for Display 16X".
+# The first line of the help is "display16x X.Y.Z — command line for Display 16X". awk reads
+# the whole help: head would stop early, and under pipefail the tool's SIGPIPE would fail
+# the check once the help outgrows the pipe.
 tool_version() {
-    "$1" --help | head -1 | awk '{ print $2 }'
+    "$1" --help | awk 'NR == 1 { print $2 }'
 }
 tools=("$APP/Contents/MacOS/display16x")
 [[ $# -eq 0 && -x dist/display16x ]] && tools+=(dist/display16x)

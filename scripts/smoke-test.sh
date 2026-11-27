@@ -35,13 +35,18 @@ plist() {
 [[ "$(plist LSMinimumSystemVersion)" == "14.0" ]] || fail "unexpected minimum macOS version"
 VERSION="$(plist CFBundleShortVersionString)"
 codesign --verify --strict "$APP" || fail "the bundle's signature does not verify"
-lipo -archs "$APP/Contents/MacOS/Display 16X" | grep -q arm64 || fail "the app is not built for Apple silicon"
+# Output is read whole before grep -q looks at it. Piped, the writer can die of SIGPIPE when
+# grep stops at the match, and pipefail then fails a check that holds.
+archs="$(lipo -archs "$APP/Contents/MacOS/Display 16X")" || fail "lipo cannot read the app's executable"
+grep -q arm64 <<< "$archs" || fail "the app is not built for Apple silicon"
 print "Bundle: version $VERSION, signed, Apple silicon."
 
 # The command line tool, without the app
-"$TOOL" --help | grep -q "display16x $VERSION" || fail "the tool and the bundle disagree about the version"
-"$TOOL" features | grep -q "^  brightness " || fail "the feature list has no brightness"
-"$TOOL" features | grep -q "^  restoreAfterWake " || fail "the feature list has no restoreAfterWake"
+help="$("$TOOL" --help)" || fail "the tool's help failed"
+grep -q "display16x $VERSION" <<< "$help" || fail "the tool and the bundle disagree about the version"
+features="$("$TOOL" features)" || fail "the tool's feature list failed"
+grep -q "^  brightness " <<< "$features" || fail "the feature list has no brightness"
+grep -q "^  restoreAfterWake " <<< "$features" || fail "the feature list has no restoreAfterWake"
 if "$TOOL" no-such-command >/dev/null 2>&1; then
     fail "an unknown command was accepted"
 else
@@ -61,8 +66,8 @@ fi
 # disable a control, never stop the tool. So this must succeed on any Mac, with or without
 # an external monitor.
 REPORT="$("$TOOL" probe)" || fail "the hardware report failed"
-print -r -- "$REPORT" | head -1 | grep -q "hardware report" || fail "the hardware report has no heading"
-print -r -- "$REPORT" | grep -q "^Displays: " || fail "the hardware report lists no display count"
+grep -q "hardware report" <<< "${REPORT%%$'\n'*}" || fail "the hardware report has no heading"
+grep -q "^Displays: " <<< "$REPORT" || fail "the hardware report lists no display count"
 print "Hardware report: ran, $(print -r -- "$REPORT" | grep "^Displays: ")."
 
 # The app itself. Nothing above starts it, and the unit tests run on fakes, so a crash at

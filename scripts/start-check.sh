@@ -64,7 +64,9 @@ ended() {
     # macOS writes the crash report a moment after the process ends.
     local report="" try
     for try in {1..10}; do
-        report="$(find "$REPORTS" -maxdepth 1 -name 'Display 16X*' -newer "$SUPPORT/started" 2>/dev/null | head -n 1)"
+        # sed reads every line, where head would stop and let pipefail fail on find's SIGPIPE.
+        # A folder find cannot read is no crash report, not a reason to end the check here.
+        report="$(find "$REPORTS" -maxdepth 1 -name 'Display 16X*' -newer "$SUPPORT/started" 2>/dev/null | sed -n 1p)" || report=""
         [[ -n "$report" ]] && break
         sleep 0.5
     done
