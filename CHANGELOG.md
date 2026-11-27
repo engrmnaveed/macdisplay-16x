@@ -2,12 +2,34 @@
 
 ## Unreleased
 
+## 0.5.2
+
+A fix release for 0.5.1. Sliders keep their width and show their number inside, a monitor that keeps its value gets a calm note instead of an error, the last value of a drag is sent again when a monitor loses it, and a new README and user guide are written for people who use the app. Apart from these, the app works as 0.5.1 did, with the same settings.
+
 ### Fixes
 
 - Sliders keep their length before, during and after a drag. They take the full width of the card, and the percentage sits inside the slider, readable over both parts. A value sent and not yet confirmed is underlined with dots, with a tooltip, and no longer pushes the slider aside. The slider shows an edge and a grip under the pointer, and grows a little while dragged.
-- After a drag, the value is checked with the monitor and sent again if the monitor dropped it. The LG SDQHD drops writes while it is busy, which gave "sent 40, but the display reports 41" and could hide its brightness.
-- A monitor that keeps its value is no longer reported as an error. "LEN P32p-20 kept its volume at 50%." comes first. The second time, the control is no longer offered and its card says why.
+- After a drag, the value is checked with the monitor and sent again if the monitor dropped it, at most twice and within about three seconds. The LG SDQHD drops writes while it is busy, which gave "sent 40, but the display reports 41" and could hide its brightness. If 0.5.1 stopped offering a control that does work, **Check Again** on the display's page offers it again.
+- A monitor that keeps its value is no longer reported as an error. "LEN P32p-20 kept its volume at 50%." comes first. The second time, the control is no longer offered and its card says why. Only a monitor that still reports what it reported before the change counts as keeping its value; one that moved part of the way keeps the control.
 - A brightness drag no longer stays marked as sent after it took.
+
+### Documentation
+
+- The README is now written for people who use the app: how to install it, what it does, with pictures of the panel in light and dark, which Macs and monitors it has been tried with, and what is good to know. The part for contributors comes last.
+- A user guide, `docs/user-guide.md`, by what you want to do: the panel, brightness and volume, text size and resolution, arrangement, scenes and shortcuts, HDR and color, more sizes, skins, settings, the command line, and what to do when something does not work.
+
+### What was checked on hardware
+
+- On an Apple M5 Pro Mac with macOS 27.2.1, a Lenovo P32p-20 on HDMI and an LG SDQHD on USB-C, a test program measured first. A monitor that takes a value reports it at the first read, about a tenth of a second after the write. The LG lost the last write of about one burst of writes in ten, while awake, and then kept a value one to five steps short. The Lenovo lost none in 22 bursts, and reports a volume of 50 that never changes.
+- Then two test builds with these fixes, each run with a settings folder of its own while the developer tried them. Thirty drags on the LG, made through the app, sent 60 values to be checked, and all 60 were confirmed, 7 of them only after the value was sent again. On the first build the brightness slider stayed marked as sent after a drag; the second build fixed that, and the developer confirmed it clears. The developer dragged the brightness and volume sliders on both builds and reported no other problem.
+- Both monitors' brightness and the Lenovo's volume were put back to their values from before and read back. The LG's volume stayed where the developer set it while trying the slider.
+- Not yet seen on hardware: the calm note and the "No volume control" line for the Lenovo's volume, which are unit-tested and drawn by the tests in every skin; how the slider looks under the pointer and while dragged; the slider with Reduce Motion on.
+- Not yet done: a build with these fixes as the copy in daily use.
+
+### For developers
+
+- Two of the fixes change how the core verifies a write, in `Sources/DisplayCore/ControlService.swift`. It reads back, sends the same value again when the monitor answers with another one, at most two re-sends and four reads, and counts a write as ignored only when the monitor still reports what it reported before the write. A brightness drag now always sends and checks the value it ends on. The domain log's entry of 27 November says why, and `docs/feasibility.md` has the measurements under "Reading a value back after a write".
+- `spikes/ddc-settle-write-probe.swift` made those measurements. It writes to a monitor, moving a value a few steps and putting it back. `scripts/docs-pictures.sh` makes the README's and the guide's pictures from the tests' renders of made-up monitors.
 
 ## 0.5.1
 
