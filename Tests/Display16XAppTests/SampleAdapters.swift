@@ -230,6 +230,21 @@ final class SampleSelectorContext: SelectorContext {
     func focusedDisplay() -> SystemDisplayID? { main }
 }
 
+/// Answers from the inventory alone: the pointer and the active window are on the main
+/// display. Only what it is handed to keeps it alive.
+@MainActor
+final class InventorySelector: SelectorContext {
+    let inventory: SampleInventory
+
+    init(inventory: SampleInventory) {
+        self.inventory = inventory
+    }
+
+    func mainDisplay() -> SystemDisplayID? { inventory.displays.first(where: \.isMain)?.systemID }
+    func displayUnderPointer() -> SystemDisplayID? { mainDisplay() }
+    func focusedDisplay() -> SystemDisplayID? { mainDisplay() }
+}
+
 @MainActor
 final class SampleAudio: AudioOutputProviding {
     var output: AudioOutput?

@@ -126,9 +126,16 @@ final class AppContext {
 
     private let listeners: [any SystemListener]
     private var server: UnixSocketServer?
+    /// The adapters the context was built from, kept for its whole life. The core holds some
+    /// of them weakly, such as the selector context on the engine and on the keys, and the
+    /// audio output; nothing else holds those, and without this they were freed as soon as
+    /// `init` returned. Every brightness key was then passed on as "the pointer is on no
+    /// display", from 0.2.0 to 0.5.0.
+    private let ownedAdapters: SystemAdapters
 
     init(safeMode: Bool, adapters: SystemAdapters? = nil) {
         let adapters = adapters ?? .live(bus: bus, loginItem: loginItem)
+        ownedAdapters = adapters
         let colorBackend = adapters.colorBackend
         paths = adapters.paths
         scheduler = adapters.scheduler

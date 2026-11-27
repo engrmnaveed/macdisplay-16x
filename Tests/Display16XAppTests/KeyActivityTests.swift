@@ -192,3 +192,49 @@ import Testing
         #expect(passed > 300 && claimed > 300)
     }
 }
+
+/// The context built the way the app builds it: its selector context and audio output are
+/// held by nothing but the context. From 0.2.0 to 0.5.0 they were freed when `init`
+/// returned, because the core holds them weakly, and every brightness key was passed on.
+@MainActor
+@Suite(.timeLimit(.minutes(1))) struct AdapterOwnership {
+    static func desk() async -> SampleDesk {
+        let desk = SampleDesk(contextOwnsSelector: true)
+        desk.context.permissions.refresh()
+        desk.plugBoth()
+        await desk.start()
+        return desk
+    }
+
+    @Test("The context keeps what the core holds weakly: the selector context on the engine and on the keys, and the audio output")
+    func kept() async {
+        let desk = await AdapterOwnership.desk()
+        #expect(desk.context.engine.selectorContext != nil)
+        #expect(desk.context.keys.selectorContext != nil)
+        #expect(desk.context.keys.audio != nil)
+        #expect(desk.context.keys.selectorContext?.displayUnderPointer() == SampleDesk.lenovoID)
+    }
+
+    @Test("Built as the app builds it, a brightness key with the pointer on a monitor is claimed for that monitor")
+    func keyClaimed() async throws {
+        let desk = await AdapterOwnership.desk()
+        desk.context.keyActivity.listening()
+        let lenovo = desk.tag(SampleDesk.lenovoID)
+        let before = try #require(desk.context.controls.trackedValue(.brightness, for: lenovo))
+        #expect(MirrorAwareKeys.handle(.brightnessUp, fine: false, context: desk.context))
+        await desk.until { desk.context.controls.trackedValue(.brightness, for: lenovo) != before }
+        #expect(try #require(desk.context.controls.trackedValue(.brightness, for: lenovo)) > before)
+        #expect(desk.context.keyActivity.lastBrightness?.outcome == "changed LEN P32p-20")
+    }
+
+    @Test("Built as the app builds it, the pointer, focused and main selectors find the main monitor")
+    func selectors() async {
+        let desk = await AdapterOwnership.desk()
+        let context = desk.context
+        for selector in [DisplaySelector.underPointer, .focused, .main] {
+            let result = await desk.settling { await context.send(Command(.get, .brightness, on: selector, origin: .interface)) }
+            #expect(result.error == nil, "\(selector): \(result.error ?? "")")
+            #expect(result.entries.map(\.tag) == [desk.tag(SampleDesk.lenovoID)], "\(selector)")
+        }
+    }
+}
