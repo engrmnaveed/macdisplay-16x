@@ -41,23 +41,16 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Skin.space.xl) {
-            Picker("Section", selection: tab.projectedValue) {
-                ForEach(Tab.allCases) { (tab: Tab) in
-                    Text(verbatim: tab.rawValue).tag(tab)
-                }
+        FixedWindowColumn(width: Skin.size.settingsWidth, height: Skin.size.settingsHeight) {
+            TabStrip(title: "Section", tabs: Tab.allCases.map(\.rawValue), chosen: Tab.allCases.firstIndex(of: tab.wrappedValue) ?? 0) { (index: Int) in
+                tab.wrappedValue = Tab.allCases[index]
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             SettingsNotices(layoutModel: layoutModel, model: model)
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: Skin.space.l) { page }
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(Skin.space.window)
-        .frame(width: Skin.size.settingsWidth, height: Skin.size.settingsHeight, alignment: .top)
-        .background(Skin.color.canvas)
         .tint(Skin.color.accent)
     }
 
