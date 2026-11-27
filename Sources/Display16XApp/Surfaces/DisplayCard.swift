@@ -99,31 +99,51 @@ struct QuietLine: View {
 }
 
 /// The strip from "larger text" to "more space". The resolution is secondary detail, and a
-/// press on a stop asks for that size, which then waits for Keep or Revert.
+/// press on a stop asks for that size, which then waits for Keep or Revert. While the
+/// pointer is on a stop, the line under the strip shows the size that stop gives, drawn as
+/// a preview, in place of the size in use.
 struct SizeStrip: View {
     let card: PanelModel.Card
     let choose: (ModeDescriptor) -> Void
+    private let hovered: State<Int?>
 
-    private var stops: [LetterStops.Stop] {
-        card.strip.map { (entry: SizeStripEntry) -> LetterStops.Stop in
-            LetterStops.Stop(id: entry.id, label: PanelText.stopLabel(entry), isCurrent: entry.isCurrent, isDefault: entry.isDefault)
+    /// - Parameter hovered: The stop under the pointer to begin with, for pictures of the strip.
+    init(card: PanelModel.Card, hovered: Int? = nil, choose: @escaping (ModeDescriptor) -> Void) {
+        self.card = card
+        self.choose = choose
+        self.hovered = State(initialValue: hovered)
+    }
+
+    /// One stop a size. VoiceOver says the size in words; the tooltip shows it as the line does.
+    static func stops(_ strip: [SizeStripEntry]) -> [LetterStops.Stop] {
+        strip.map { (entry: SizeStripEntry) -> LetterStops.Stop in
+            LetterStops.Stop(id: entry.id, label: PanelText.stopLabel(entry), help: PanelText.sizeLine(entry), isCurrent: entry.isCurrent, isDefault: entry.isDefault)
         }
     }
 
-    private var line: String {
-        card.strip.first(where: \.isCurrent).map(PanelText.sizeLine) ?? card.currentMode?.sizeLabel ?? ""
+    /// The line under the strip: the size in use, or the size of the stop under the pointer.
+    static func line(strip: [SizeStripEntry], current: ModeDescriptor?, hovered: Int?) -> (text: String, isPreview: Bool) {
+        if let hovered, strip.indices.contains(hovered), !strip[hovered].isCurrent {
+            return (PanelText.sizeLine(strip[hovered]), true)
+        }
+        return (strip.first(where: \.isCurrent).map(PanelText.sizeLine) ?? current?.sizeLabel ?? "", false)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Skin.space.xs) {
-            LetterStops(title: "Text size on \(card.name)", stops: stops) { index in
+        let line = SizeStrip.line(strip: card.strip, current: card.currentMode, hovered: hovered.wrappedValue)
+        return VStack(alignment: .leading, spacing: Skin.space.xs) {
+            LetterStops(title: "Text size on \(card.name)", stops: SizeStrip.stops(card.strip), hover: { (index: Int, inside: Bool) in
+                hovered.wrappedValue = LetterStops.hovered(hovered.wrappedValue, stop: index, inside: inside)
+            }) { (index: Int) in
                 let entry: SizeStripEntry = card.strip[index]
                 if !entry.isCurrent { choose(entry.mode) }
             }
             HStack {
                 Text("Larger text").foregroundStyle(Skin.color.textSecondary)
                 Spacer()
-                Text(verbatim: line).font(Skin.type.valueSmall).foregroundStyle(Skin.color.text)
+                Text(verbatim: line.isPreview ? "→ \(line.text)" : line.text)
+                    .font(Skin.type.valueSmall)
+                    .foregroundStyle(line.isPreview ? Skin.color.textSecondary : Skin.color.text)
                 Spacer()
                 Text("More space").foregroundStyle(Skin.color.textSecondary)
             }

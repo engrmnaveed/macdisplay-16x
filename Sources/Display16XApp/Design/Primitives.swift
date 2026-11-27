@@ -292,19 +292,39 @@ struct BarSymbol: View {
 // MARK: Stops
 
 /// A row of stops with a letter in each, large at the left and small at the right. One is
-/// in use, and a dot marks the one that is the default. Each stop is a button.
+/// in use, and a dot marks the one that is the default. Each stop is a button, with a
+/// tooltip, and says when the pointer comes onto it or leaves it.
 struct LetterStops: View {
     struct Stop: Identifiable, Equatable {
         var id: String
         /// What VoiceOver says for this stop.
         var label: String
+        /// The tooltip. Empty shows none.
+        var help: String = ""
         var isCurrent: Bool
         var isDefault: Bool
     }
 
     let title: String
     let stops: [Stop]
+    /// The pointer came onto a stop (true) or left it (false).
+    let hover: ((_ index: Int, _ inside: Bool) -> Void)?
     let choose: (Int) -> Void
+
+    init(title: String, stops: [Stop], hover: ((_ index: Int, _ inside: Bool) -> Void)? = nil, choose: @escaping (Int) -> Void) {
+        self.title = title
+        self.stops = stops
+        self.hover = hover
+        self.choose = choose
+    }
+
+    /// The stop under the pointer after it comes onto a stop or leaves one. Moving from one
+    /// stop to the next can report the arrival before the departure, so leaving a stop that
+    /// is no longer the hovered one changes nothing.
+    static func hovered(_ current: Int?, stop: Int, inside: Bool) -> Int? {
+        if inside { return stop }
+        return current == stop ? nil : current
+    }
 
     static func letterSize(index: Int, count: Int, large: CGFloat, small: CGFloat) -> CGFloat {
         guard count > 1 else { return large }
@@ -321,8 +341,10 @@ struct LetterStops: View {
                         stop: stops[index],
                         letterSize: LetterStops.letterSize(index: index, count: count, large: Skin.size.stopLetterLarge, small: Skin.size.stopLetterSmall)
                     ))
+                    .help(stops[index].help)
                     .accessibilityLabel(stops[index].label)
                     .accessibilityAddTraits(stops[index].isCurrent ? .isSelected : [])
+                    .onHover { (inside: Bool) in hover?(index, inside) }
             }
         }
         .padding(Skin.space.xxs)

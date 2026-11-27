@@ -43,6 +43,7 @@ enum SkinCatalog {
     static let parts: [(id: String, title: String)] = [
         ("panel", "The panel"), ("display", "A display's page"), ("arrange", "Arrange"), ("settings", "Settings: Appearance"),
         ("keep", "A Keep window"), ("indicator", "The indicator"), ("notice", "A notice"), ("sheet", "Every value and piece"),
+        ("size-hover", "The text-size strip, the pointer on a stop"),
     ]
 
     /// Draws every skin on the main surfaces in light and dark, one group a skin, then one
@@ -88,6 +89,15 @@ enum SkinCatalog {
             }
             try session.shoot(id("sheet"), group: group, title: title("sheet"), chrome: .bare, dumpAccessibility: false, active: true) {
                 SkinSheet()
+            }
+            // The pointer on the first stop: the line under the strip previews that size.
+            if let card = model.cards.first(where: { $0.tag == lg }), let stop = card.strip.firstIndex(where: { !$0.isCurrent }) {
+                try session.shoot(id("size-hover"), group: group, title: title("size-hover"), active: true) {
+                    SkinBlock { SizeStrip(card: card, hovered: stop) { _ in } }
+                        .padding(Skin.space.xl)
+                        .frame(width: Skin.size.panelWidth)
+                        .background(Skin.color.canvas)
+                }
             }
         }
         try compareSheets(session)
