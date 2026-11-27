@@ -115,6 +115,34 @@ struct ConvergeTests {
         #expect(evidence(rig, .hardwareBrightness) == nil)
     }
 
+    @Test("The last value of a brightness drag is checked, even when the drag's last step already sent the same value")
+    func dragEndIsChecked() async throws {
+        let (rig, ddc) = await makeRig()
+        for step in [0.45, 0.42, 0.4] {
+            _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(step), origin: .interface, options: CommandOptions(verification: .none))
+        }
+        #expect(rig.controls.knowledge(of: .brightness, for: tag) == .sent)
+        ddc.clearWrites()
+        ddc.clearReads()
+        // Letting go sends the same value as the last step, with read-back.
+        let entry = try #require(await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.4), origin: .interface).entries.first)
+        #expect(entry.outcome == .confirmed)
+        #expect(!ddc.reads.isEmpty, "the value was read back")
+        #expect(rig.controls.knowledge(of: .brightness, for: tag) == .readBack, "no longer shown as sent")
+    }
+
+    @Test("A drag whose last step the LG lost ends on the value: letting go sends it again and checks it")
+    func dragEndRescuesLostStep() async throws {
+        let (rig, ddc) = await makeRig()
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.41), origin: .interface, options: CommandOptions(verification: .none))
+        ddc.dropNextWrites(1)
+        _ = await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.4), origin: .interface, options: CommandOptions(verification: .none))
+        #expect(ddc.values[.hardwareBrightness] == 41, "the last step was lost")
+        let entry = try #require(await rig.run(.set, .brightness, on: .tag(1), value: .absolute(0.4), origin: .interface).entries.first)
+        #expect(entry.outcome == .confirmed)
+        #expect(ddc.values[.hardwareBrightness] == 40)
+    }
+
     @Test("Keys and the steps of a drag stay unverified: one write each, no read")
     func unverifiedStaysQuick() async {
         let (rig, ddc) = await makeRig()

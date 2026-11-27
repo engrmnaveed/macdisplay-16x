@@ -607,7 +607,10 @@ public final class ControlService {
         let parts = composition.split(target)
         let values = settings.recordSettings(tag).values
         // While dragging or stepping, a part that would not change on the device is not resent.
-        let skipUnchanged = origin == .interface || origin == .keyboard
+        // The value read back at the end of a drag is always sent: it is usually the same step
+        // as the drag's last one, and skipping it left the value shown as sent, never checked,
+        // and a step the monitor lost never sent again.
+        let skipUnchanged = (origin == .interface || origin == .keyboard) && verification == .none
 
         track(.brightness, value: target, for: tag, origin: origin, recompose: false)
 
