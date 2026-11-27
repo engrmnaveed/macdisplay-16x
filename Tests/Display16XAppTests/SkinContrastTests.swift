@@ -71,6 +71,9 @@ import Testing
             Pair(name: "the accent as text on the canvas", front: color.accent, back: color.canvas, least: 4.5, leastContrast: 7),
             Pair(name: "the filled part of a bar against its bed", front: color.accent, back: color.track, least: 3, leastContrast: 4.5),
             Pair(name: "text on a quiet button", front: color.text, back: color.track, least: 7, leastContrast: 10),
+            // The number inside a value bar reads over both parts of it.
+            Pair(name: "a bar's number over its fill", front: color.onAccent, back: color.accent, least: 4.5, leastContrast: 7),
+            Pair(name: "a bar's number over its bed", front: color.text, back: color.track, least: 7, leastContrast: 10),
             Pair(name: "text on an attention banner", front: color.text, back: color.attentionSurface, least: 7, leastContrast: 10),
             Pair(name: "secondary text on an attention banner", front: color.textSecondary, back: color.attentionSurface, least: 4.5, leastContrast: 7),
             Pair(name: "the attention mark on its banner", front: color.attention, back: color.attentionSurface, least: 4.5, leastContrast: 7),
@@ -180,6 +183,8 @@ import Testing
             ("the accent on the canvas", palette.accent[look], palette.canvas[look], (4.5, 7)),
             ("a bar against its bed", palette.accent[look], palette.track[look], (3, 4.5)),
             ("text on a quiet button", palette.text[look], palette.track[look], (7, 10)),
+            ("a bar's number over its fill", palette.onAccent[look], palette.accent[look], (4.5, 7)),
+            ("a bar's number over its bed", palette.text[look], palette.track[look], (7, 10)),
             ("text on an attention banner", palette.text[look], attention, (7, 10)),
             ("secondary text on an attention banner", palette.textSecondary[look], attention, (4.5, 7)),
             ("text on a danger banner", palette.text[look], danger, (7, 10)),

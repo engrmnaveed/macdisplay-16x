@@ -44,6 +44,7 @@ enum SkinCatalog {
         ("panel", "The panel"), ("display", "A display's page"), ("arrange", "Arrange"), ("settings", "Settings: Appearance"),
         ("keep", "A Keep window"), ("indicator", "The indicator"), ("notice", "A notice"), ("sheet", "Every value and piece"),
         ("size-hover", "The text-size strip, the pointer on a stop"),
+        ("bar-states", "The value bar in every state"),
     ]
 
     /// Draws every skin on the main surfaces in light and dark, one group a skin, then one
@@ -89,6 +90,9 @@ enum SkinCatalog {
             }
             try session.shoot(id("sheet"), group: group, title: title("sheet"), chrome: .bare, dumpAccessibility: false, active: true) {
                 SkinSheet()
+            }
+            try session.shoot(id("bar-states"), group: group, title: title("bar-states"), active: true) {
+                ValueBarStates()
             }
             // The pointer on the first stop: the line under the strip previews that size.
             if let card = model.cards.first(where: { $0.tag == lg }), let stop = card.strip.firstIndex(where: { !$0.isCurrent }) {

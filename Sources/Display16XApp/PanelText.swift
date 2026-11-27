@@ -24,6 +24,18 @@ enum PanelText {
         return parts.joined(separator: " · ")
     }
 
+    /// A monitor that kept the value it had, said calmly: it is not a failure of the app.
+    /// The second time, the core concludes that the monitor ignores the control.
+    static func kept(name: String, feature: FeatureID, value: Double?, nowIgnored: Bool) -> String {
+        let control: String = switch feature {
+        case .volume: "volume"
+        case .contrast: "contrast"
+        default: "brightness"
+        }
+        if nowIgnored { return "\(name) reports a \(control) level and does not change it, so Display 16X no longer offers its \(control)." }
+        return "\(name) kept its \(control)" + (value.map { " at \(Int(($0 * 100).rounded()))%" } ?? "") + "."
+    }
+
     /// The word next to a value on a card, with what it means. A value the display read
     /// back needs no word there.
     static func mark(_ knowledge: ValueKnowledge?) -> (text: String, help: String)? {
@@ -31,6 +43,15 @@ enum PanelText {
         case .sent: (ValueKnowledge.sent.label, "Display 16X sent this value. The display has not confirmed it.")
         case .unknown: (ValueKnowledge.unknown.label, "This is the value Display 16X remembers. The display has not confirmed it since.")
         case .readBack, nil: nil
+        }
+    }
+
+    /// How a value bar draws a value known this way.
+    static func certainty(_ knowledge: ValueKnowledge?) -> ValueBar.Certainty {
+        switch knowledge {
+        case .sent: .sent
+        case .unknown: .remembered
+        case .readBack, nil: .confirmed
         }
     }
 

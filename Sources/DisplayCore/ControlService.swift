@@ -49,6 +49,15 @@ public final class ControlService {
     private let bus: EventBus
     private let sequencer: EventSequencer
     public var resolver = ControlResolver()
+    /// The raw value each control last reported, until sleep. A verified write compares the
+    /// device's answer with it: a monitor that still reports it never moved.
+    private var lastReported: [DisplayTag: [ControlID: Double]] = [:]
+
+    /// A verified write reads back at most this often, and sends the value again at most
+    /// this often. Each read is bounded by the display's own queue (about 0.75 s when the
+    /// monitor stays silent), so a whole attempt ends within about 3 s.
+    static let verificationReads = 4
+    static let verificationResends = 2
 
     public init(registry: DisplayRegistry, settings: SettingsStore, bus: EventBus, sequencer: EventSequencer) {
         self.registry = registry
@@ -273,9 +282,15 @@ public final class ControlService {
         note(.readBack, of: control, on: registry.live[tag])
     }
 
+    /// Remembers what the device reported for a control, read by the service or during a check.
+    public func noteReported(_ control: ControlID, raw: Double, for tag: DisplayTag) {
+        lastReported[tag, default: [:]][control] = raw
+    }
+
     /// At sleep, what was read back stops counting as known. The read after the wake has
     /// settled renews it. A value that was only sent stays sent: nothing was claimed for it.
     private func forgetReadBack() {
+        lastReported.removeAll()
         for tag in registry.live.keys.sorted() {
             guard let live = registry.live[tag], live.valueKnowledge.values.contains(.readBack) else { continue }
             live.valueKnowledge = live.valueKnowledge.filter { $0.value != .readBack }
@@ -310,6 +325,8 @@ public final class ControlService {
         let previous = settings.recordSettings(tag).values[control]
         let previousRaw = previous.map { isSwitch ? mapping.raw(forSwitch: $0 >= 0.5) : mapping.raw(for: $0) }
         let previousKnowledge = live.valueKnowledge[control]
+        // What the device said last, before this write.
+        let reportedBefore = lastReported[tag]?[control]
         track(control, value: target, for: tag, origin: origin, recompose: recompose)
         // On its way, and nothing has confirmed it yet.
         note(.sent, of: control, on: live)
@@ -335,31 +352,52 @@ public final class ControlService {
         guard verification == .readBack, owner.capability.readability != .writeOnly, control != .input else {
             return ControlWriteResult(outcome: .accepted, actual: target)
         }
+        // Read back until the device reports the value. A monitor can drop the last writes
+        // of a burst while it is busy, and say nothing for up to a second: when it answers
+        // with another value, the same value is sent again, at most twice. A monitor that does
+        // not answer is asked again; its queue backs off between attempts. A newer request
+        // ends the attempt, and until the attempt ends the value stays "sent".
+        let replaced = ControlWriteResult(outcome: .accepted, actual: target, detail: "replaced by a newer value")
+        func matches(_ reading: Double) -> Bool {
+            owner.capability.isStepped ? reading == raw : abs(reading - raw) <= abs(mapping.rawMaximum - mapping.rawMinimum) * 0.01
+        }
         var reported: Double?
-        var readings: [Double] = []
-        for _ in 0..<2 {
-            guard case .success(let reading) = await owner.controller.read(control, access: access) else { break }
+        var reads = 0
+        var resends = 0
+        attempt: while reads < ControlService.verificationReads {
+            guard settings.recordSettings(tag).values[control] == target else { return replaced }
+            reads += 1
+            guard case .success(let reading) = await owner.controller.read(control, access: access) else { continue }
+            noteReported(control, raw: reading.value, for: tag)
             reported = reading.value
-            readings.append(reading.value)
-            let matches = owner.capability.isStepped ? reading.value == raw : abs(reading.value - raw) <= abs(mapping.rawMaximum - mapping.rawMinimum) * 0.01
-            if matches {
+            if matches(reading.value) {
                 // A change that took is proof the control works.
                 if let previousRaw, previousRaw != raw { noteWrite(control, kind: owner.kind, tag: tag, effective: true) }
                 // A newer request may already be tracked. This read says nothing about it.
                 if settings.recordSettings(tag).values[control] == target { note(.readBack, of: control, on: live) }
                 return ControlWriteResult(outcome: .confirmed, actual: target)
             }
+            guard settings.recordSettings(tag).values[control] == target else { return replaced }
+            guard resends < ControlService.verificationResends, reads < ControlService.verificationReads else { break }
+            resends += 1
+            Log.core.debug("\(control) on \(tag): the display reports \(format(reading.value)), so \(format(raw)) is sent again (\(resends) of \(ControlService.verificationResends)).")
+            switch await owner.controller.write(control, raw: raw, access: access) {
+            case .written: continue attempt
+            case .superseded: return replaced
+            case .failed: break attempt
+            }
         }
         guard let reported else {
             return ControlWriteResult(outcome: .accepted, actual: target, detail: "sent, but the value could not be read back")
         }
-        // The device disagrees. Believe the device, and say so. Two reads that agree with
-        // each other and not with what was sent mean the write was ignored, which some
-        // monitors do for a control they report and do not really have. Only changes made
-        // by hand count as evidence: a restore right after wake can be ignored by a monitor
-        // that is simply not ready yet.
-        if readings.count == 2, readings[0] == readings[1], !origin.isAutomatic, !sequencer.isInWakeTransition {
-            noteWrite(control, kind: owner.kind, tag: tag, effective: false)
+        // The device disagrees. Believe the device, and say so. A monitor that still reports
+        // what it said before this write never moved, which some monitors do for a control
+        // they report and do not really have. One that moved part of the way has shown that
+        // the control works. With nothing reported before, there is no evidence either way.
+        // Only changes made by hand count: a restore right after wake can be ignored by a
+        // monitor that is simply not ready yet.
+        if let reportedBefore, !origin.isAutomatic, !sequencer.isInWakeTransition {
+            noteWrite(control, kind: owner.kind, tag: tag, effective: !(owner.capability.isStepped ? reported == reportedBefore : abs(reported - reportedBefore) <= abs(mapping.rawMaximum - mapping.rawMinimum) * 0.01))
         }
         let actual = isSwitch ? (mapping.switchState(forRaw: reported).map { $0 ? 1.0 : 0.0 } ?? target) : mapping.normalized(for: reported)
         if settings.recordSettings(tag).values[control] == target {
@@ -425,6 +463,7 @@ public final class ControlService {
         case .failure(let failure):
             return .failure(failure)
         case .success(let reading):
+            noteReported(control, raw: reading.value, for: tag)
             let value: Double
             if control == .mute {
                 guard let state = mapping.switchState(forRaw: reading.value) else {
@@ -482,6 +521,7 @@ public final class ControlService {
             }
             raw = reading.value
         }
+        noteReported(control, raw: raw, for: tag)
         let value: Double
         if control == .mute {
             guard let state = mapping.switchState(forRaw: raw) else {
@@ -567,7 +607,10 @@ public final class ControlService {
         let parts = composition.split(target)
         let values = settings.recordSettings(tag).values
         // While dragging or stepping, a part that would not change on the device is not resent.
-        let skipUnchanged = origin == .interface || origin == .keyboard
+        // The value read back at the end of a drag is always sent: it is usually the same step
+        // as the drag's last one, and skipping it left the value shown as sent, never checked,
+        // and a step the monitor lost never sent again.
+        let skipUnchanged = (origin == .interface || origin == .keyboard) && verification == .none
 
         track(.brightness, value: target, for: tag, origin: origin, recompose: false)
 

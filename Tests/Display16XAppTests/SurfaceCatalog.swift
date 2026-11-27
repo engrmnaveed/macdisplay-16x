@@ -261,6 +261,24 @@ enum SurfaceCatalog {
         await checking.settle()
         try shootPanel(session, checking, "panel-checking", group: "states", title: "A monitor still being checked")
         controllers.lg.release()
+
+        // A monitor that kept its volume after a drag: said calmly. The second time the
+        // control leaves the card, with its reason.
+        let keeping = await desk()
+        let keptTag = keeping.tag(SampleDesk.lenovoID)
+        let keptModel = PanelModel(context: keeping.context)
+        let keptLayout = LayoutPanelModel(context: keeping.context, hotKeys: nil)
+        for (index, id, title) in [(0, "panel-kept-value", "A monitor that kept its volume"), (1, "panel-volume-ignored", "The second time: volume is no longer offered, and the card says why")] {
+            keptModel.message = nil
+            keptModel.setVolume(index == 0 ? 0.6 : 0.7, tag: keptTag, final: true)
+            await keeping.until { keptModel.message != nil }
+            keptModel.rebuild()
+            try session.shoot(id, group: "states", title: title) {
+                PanelView(model: keptModel, layoutModel: keptLayout, maxHeight: 900, start: .home, openSettings: {}, quit: {})
+            }
+        }
+        keptModel.close()
+        keptLayout.close()
         await checking.idle()
 
         // A change the system refuses.

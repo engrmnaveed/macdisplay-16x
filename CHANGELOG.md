@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixes
+
+- Sliders keep their length before, during and after a drag. They take the full width of the card, and the percentage sits inside the slider, readable over both parts. A value sent and not yet confirmed is underlined with dots, with a tooltip, and no longer pushes the slider aside. The slider shows an edge and a grip under the pointer, and grows a little while dragged.
+- After a drag, the value is checked with the monitor and sent again if the monitor dropped it. The LG SDQHD drops writes while it is busy, which gave "sent 40, but the display reports 41" and could hide its brightness.
+- A monitor that keeps its value is no longer reported as an error. "LEN P32p-20 kept its volume at 50%." comes first. The second time, the control is no longer offered and its card says why.
+- A brightness drag no longer stays marked as sent after it took.
+
 ## 0.5.1
 
 A fix release for 0.5.0. The brightness and volume keys reach your monitors again, the settings window no longer cuts off its tabs, a display's text-size strip shows the size of a step before you choose it, and `brew install` now installs Display 16X. Apart from these, the app works as 0.5.0 did, with the same settings.

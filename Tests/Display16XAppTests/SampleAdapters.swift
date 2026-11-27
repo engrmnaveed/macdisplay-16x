@@ -50,6 +50,7 @@ final class SampleController: DisplayController, @unchecked Sendable {
     private var deaf: Set<ControlID>
     private var inputs: [Int]?
     private var held = false
+    private var failing: Set<ControlID> = []
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
     init(
@@ -96,6 +97,9 @@ final class SampleController: DisplayController, @unchecked Sendable {
     /// While held, a check of the monitor does not finish, which is what "checking" looks like.
     func hold() { lock.withLock { held = true } }
 
+    /// Writes to these controls cannot be sent, as when the channel stops answering.
+    func failWrites(_ controls: Set<ControlID>) { lock.withLock { failing = controls } }
+
     func release() {
         let waiting: [CheckedContinuation<Void, Never>] = lock.withLock {
             held = false
@@ -127,6 +131,7 @@ final class SampleController: DisplayController, @unchecked Sendable {
 
     func write(_ control: ControlID, raw: Double, access: ControlAccess) async -> RawWriteOutcome {
         lock.withLock {
+            if failing.contains(control) { return .failed(.noReply) }
             if !deaf.contains(control) { values[control] = raw }
             return .written
         }
