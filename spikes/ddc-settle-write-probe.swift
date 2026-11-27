@@ -13,6 +13,9 @@
 //
 // --settle-ms holds the first read back that long after the last write (the app reads at
 // once). --bursts-only runs only the burst, for counting how often its last write is lost.
+// --repeat 1 sends each write once instead of twice.
+// --read only reads the value. --set N writes N, reads it back and stops: for putting a
+// value back by hand.
 //
 // Reads and writes are sent the way the app sends them: each write twice 10 ms apart, each
 // query twice 10 ms apart, the reply read 50 ms later. Burst writes are 50 ms apart, the
@@ -48,6 +51,7 @@ let step = min(max(option("--step", default: controlName == "brightness" ? 10 : 
 let runs = min(max(option("--runs", default: 2), 1), 10)
 let settle = min(max(option("--settle-ms", default: 0), 0), 1000)
 let burstsOnly = arguments.contains("--bursts-only")
+let repeats = min(max(option("--repeat", default: 2), 1), 3)
 /// When reads start, in milliseconds after the last write.
 let schedule = [0, 50, 100, 200, 400, 800, 1600].map { $0 + settle }
 
@@ -105,7 +109,7 @@ func readSure() -> Int? {
 func write(_ value: Int) {
     var request: [UInt8] = [0x84, 0x03, code, UInt8(value >> 8), UInt8(value & 0xFF), 0]
     request[5] = 0x6E ^ 0x51 ^ request[0] ^ request[1] ^ request[2] ^ request[3] ^ request[4]
-    for index in 0..<2 {
+    for index in 0..<repeats {
         if index > 0 { pause(10) }
         _ = avWrite(monitor.service, 0x37, 0x51, &request, UInt32(request.count))
     }
@@ -137,6 +141,21 @@ func restore(_ original: Int) -> Bool {
 }
 
 print("monitor: \(monitor.name), \(controlName) (VCP 0x\(String(code, radix: 16)))")
+if arguments.contains("--read") {
+    print("value: \(readSure().map(String.init) ?? "no reply")")
+    exit(0)
+}
+if arguments.contains("--set") {
+    let wantedValue = option("--set", default: -1)
+    guard (0...100).contains(wantedValue) else {
+        print("--set needs a value from 0 to 100")
+        exit(2)
+    }
+    print("before: \(readSure().map(String.init) ?? "no reply")")
+    let ok = restore(wantedValue)
+    print("after: \(readSure().map(String.init) ?? "no reply")\(ok ? "" : "  <-- not confirmed")")
+    exit(ok ? 0 : 1)
+}
 guard let original = readSure() else {
     print("The current value could not be read, so nothing was written.")
     exit(1)

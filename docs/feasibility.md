@@ -172,7 +172,26 @@ What it shows:
 - **Neither monitor needs time before it reports a value it took.** When a value is taken, the first read has it, about 90 to 100 ms after the write. A longer wait would not have changed the reported value in any run.
 - **The Lenovo never takes a volume.** It reports 50 whatever is written, as the earlier check in this file found. The banner was the app learning that from scratch on a fresh settings file: two such reads mark volume as reported and ignored.
 - **The LG can lose the last write of a burst** when the read's query follows it within about 10 ms. It then reports the step before for good, and two reads that agree make the app believe the write was ignored. That would turn a dragged brightness slider into a false mismatch, and a second one would hide brightness as ignored. A first read held back 100 ms lost none in 8 bursts. The earlier write probe, which read 150 ms after each sweep, never lost a last value on either monitor. The DDC/CI standard asks for 50 ms after a Set VCP Feature before the next command, and the app sends its query after 10.
-- **Not settled, and needs the displays awake:** how often the LG loses the last write with the query at once (1 of 2 awake, 1 of 8 asleep), and whether a 60 ms wait is enough. Holding the first read back keeps the screen awake for the run with the owner present.
+- **Not settled at first, and needed the displays awake:** how often the LG loses the last write with the query at once (1 of 2 awake, 1 of 8 asleep), and whether a 60 ms wait is enough.
+
+**Awake re-run**, the same afternoon from 14:31, with the owner at the desk and `caffeinate -d` keeping the displays on (they had come on at 14:28). Bursts of 10 brightness writes, 50 → 40, counted by whether the last value was ever reported:
+
+| Monitor | Each write sent | First read | Bursts that lost the last write |
+| --- | --- | --- | --- |
+| LG | twice | at once | 0 of 10 (and 1 of 2 earlier) |
+| LG | twice | after 60 ms | 1 of 10: no reply for about 250 ms, then 45, five steps short |
+| LG | twice | after 100 ms | 0 of 10 |
+| LG | once | at once | 1 of 10: no reply for about 800 ms, then 43, three steps short. The probe's own three single restore writes after that run were ignored too, and the LG stayed at 40 until it was set back to 50 with each write sent twice |
+| Lenovo | twice | at once | 0 of 10 |
+
+Every value was back where it started at the end: LG brightness 50 and volume 70, Lenovo brightness 100 and volume 50.
+
+What the re-run changes:
+
+- **When the LG loses writes does not depend on when the next query comes.** It lost one with the first read held back 60 ms, and none with the read at once. Each loss looks the same: the monitor stops answering for a quarter of a second to a second, and then keeps a value one to five steps short of the last one written. It drops a run of writes while it is busy, the last among them. A wait before the read would not have saved any of these writes.
+- **About one burst in ten loses its last write on the LG**, awake, whatever the read timing: 3 of 42 in all. None was lost on the Lenovo in 22 bursts.
+- **Sending each write once is not safer on the LG.** It lost a burst too, and then ignored three single writes in a row, which the doubled writes never did.
+- So the read-back that follows a drag finds the LG on an older value about one time in ten. A wait does not prevent that. Only sending the last value again once the monitor answers would.
 
 
 Not tested: a connection that carries video and no DDC. There is none on this desk.
