@@ -296,6 +296,7 @@ public final class DisplayCoordinator {
             if kind != .softwareGamma {
                 for (control, raw) in detection.currentRaw where control != .input && controls.owner(of: control, for: tag)?.kind == kind {
                     readings[control] = raw
+                    controls.noteReported(control, raw: raw, for: tag)
                 }
             }
             if kind == .ddc {
