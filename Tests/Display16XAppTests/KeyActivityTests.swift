@@ -31,7 +31,8 @@ import Testing
         #expect(lgAfter > lgBefore)
         #expect(KeyRoutingTests.brightness(desk, SampleDesk.lenovoID) == lenovoBefore)
         #expect(desk.context.keyActivity.lastBrightness?.outcome == "changed LG SDQHD")
-        #expect(desk.context.keyActivity.brightnessNote == "The last brightness key changed LG SDQHD.")
+        // A key that worked needs no note in Settings.
+        #expect(desk.context.keyActivity.brightnessNote == nil)
     }
 
     @Test("Pointer on the main monitor: a brightness key steps that monitor alone")
@@ -65,7 +66,7 @@ import Testing
         #expect(!MirrorAwareKeys.handle(.brightnessUp, fine: false, context: desk.context))
         let outcome = desk.context.keyActivity.lastBrightness?.outcome ?? ""
         #expect(outcome.hasPrefix("was passed on to macOS, because \(passCase.reason)"), "the outcome was: \(outcome)")
-        #expect(desk.context.keyActivity.brightnessNote.hasPrefix("The last brightness key was passed on to macOS, because \(passCase.reason)"))
+        #expect(desk.context.keyActivity.brightnessNote?.hasPrefix("The last brightness key was passed on to macOS, because \(passCase.reason)") == true)
     }
 
     enum PassCase: String, CaseIterable, CustomTestStringConvertible {
@@ -91,7 +92,7 @@ import Testing
         #expect(activity.statusLines == ["keys: not listening, key capture has not started", "last brightness key: none since the app started", "last volume key: none since the app started"])
         #expect(activity.brightnessNote == "Not listening for keys: key capture has not started.")
         activity.listening()
-        #expect(activity.brightnessNote.hasPrefix("No brightness key has reached Display 16X since it started."))
+        #expect(activity.brightnessNote == "Listening. No brightness key has arrived since Display 16X started.")
         desk.selector.pointer = .some(SampleDesk.lgID)
         _ = MirrorAwareKeys.handle(.brightnessUp, fine: false, context: desk.context)
         let report = try #require(await desk.send(.get, .status).report)
@@ -109,11 +110,48 @@ import Testing
         activity.listening()
         activity.claimed(.brightnessUp, for: ["LG SDQHD", "LEN P32p-20"])
         #expect(activity.lastBrightness?.outcome == "changed LG SDQHD and LEN P32p-20")
-        activity.failed(.brightnessUp, [])
+        activity.finished(.brightnessUp, [])
         #expect(activity.lastBrightness?.outcome == "changed LG SDQHD and LEN P32p-20")
-        activity.failed(.brightnessUp, [(name: "LG SDQHD", reason: "the monitor did not answer")])
+        #expect(activity.brightnessNote == nil)
+        activity.claimed(.brightnessUp, for: ["LG SDQHD"])
+        activity.finished(.brightnessUp, [(name: "LG SDQHD", reason: "the monitor did not answer")])
         #expect(activity.brightnessNote == "The last brightness key was claimed, and LG SDQHD did not change: the monitor did not answer.")
         #expect(activity.lastVolume == nil)
+    }
+
+    @Test("A notice goes to the log when a kind of key starts to end differently, and repeats go to debug")
+    func logLines() {
+        let center = LogCenter()
+        center.setVerbose(true)
+        let activity = KeyActivity(log: Log(category: "app", center: center))
+        activity.listening()
+        func press(_ key: MediaKey) {
+            activity.claimed(key, for: ["LG SDQHD"])
+            activity.finished(key, [])
+        }
+        // A held key: the first press is a notice, the repeats are not, up or down alike.
+        for _ in 0..<5 { press(.brightnessUp) }
+        press(.brightnessDown)
+        // Passed on twice, then claimed again: each change of outcome is a notice.
+        activity.passed(.brightnessUp, because: "the pointer is on no display")
+        activity.passed(.brightnessUp, because: "the pointer is on no display")
+        press(.brightnessUp)
+        // Volume keys are counted apart from brightness keys.
+        activity.passed(.volumeUp, because: "the sound does not play through a monitor Display 16X controls")
+        activity.passed(.volumeDown, because: "the sound does not play through a monitor Display 16X controls")
+        let notices: [String] = center.recent().filter { $0.level == .notice }.map(\.message)
+        #expect(notices == [
+            "Key capture started.",
+            "Brightness up key changed LG SDQHD.",
+            "Brightness up key was passed on to macOS, because the pointer is on no display.",
+            "Brightness up key changed LG SDQHD.",
+            "Volume up key was passed on to macOS, because the sound does not play through a monitor Display 16X controls.",
+        ])
+        let debug: [LogEntry] = center.recent().filter { $0.level == .debug }
+        #expect(debug.filter { $0.message.hasSuffix("key changed LG SDQHD.") }.count == 5)
+        #expect(debug.filter { $0.message.contains("passed on") }.count == 2)
+        #expect(activity.lastBrightness?.key == .brightnessUp)
+        #expect(activity.lastVolume?.key == .volumeDown)
     }
 }
 

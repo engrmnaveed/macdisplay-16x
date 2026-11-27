@@ -253,7 +253,7 @@ enum MirrorAwareKeys {
                     failures.append((name(of: command, context: context), result.error ?? result.entries.first?.detail ?? "unknown"))
                 }
             }
-            activity.failed(key, failures)
+            activity.finished(key, failures)
         }
         return true
     }

@@ -341,7 +341,7 @@ enum SurfaceCatalog {
         let model = PanelModel(context: desk.context)
         let layoutModel = LayoutPanelModel(context: desk.context, hotKeys: nil)
         let skins = SkinPanelModel(context: desk.context)
-        // Key capture runs, as it does with Accessibility granted, and no key has been pressed.
+        // Key capture runs, as it does with Accessibility granted, and no key has arrived yet.
         desk.context.keyActivity.listening()
         for tab in SettingsView.Tab.allCases {
             try session.shoot("settings-\(tab.rawValue.lowercased())", group: "settings", title: "Settings: \(tab.rawValue)", chrome: .window, active: true) {

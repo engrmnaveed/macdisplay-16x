@@ -135,6 +135,7 @@ struct GeneralSettings: View {
         SkinHeading(text: "Brightness and volume keys")
         SkinBlock {
             SwitchRow(title: "Brightness keys change a display's brightness", help: model.brightnessKeys ? keys.brightnessNote : nil, isOn: brightnessKeys)
+                .help(KeyActivity.brightnessTip)
             SkinRule()
             SwitchRow(title: "Volume keys change a monitor's volume", help: "Only while sound plays through that monitor.", isOn: volumeKeys)
             SkinRule()
