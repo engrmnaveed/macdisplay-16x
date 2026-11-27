@@ -100,6 +100,8 @@ struct Theme: Sendable {
         /// Used when the screen is not known, as in a picture made by the harness.
         var panelMaxHeight: CGFloat
         var bar: CGFloat
+        /// How much taller a value bar is drawn while it is dragged. Only drawn: its place stays.
+        var barDragScale: CGFloat
         var chip: CGFloat
         var control: CGFloat
         var stop: CGFloat
@@ -150,6 +152,8 @@ struct Theme: Sendable {
         var headingKerning: CGFloat
         /// Numbers that change: percentages, sizes, seconds.
         var value: Font
+        /// The number in a value bar while it is dragged.
+        var valueLarge: Font
         var valueSmall: Font
         var mono: Font
         var symbol: Font
@@ -331,7 +335,7 @@ extension Theme {
         radius: Radius(card: 14, control: 10, stop: 8, glyph: 3.5, tile: 7, hud: 16),
         size: Size(
             panelWidth: 340, panelScreenShare: 0.86, panelMaxHeight: 720,
-            bar: 26, chip: 26, control: 24, stop: 28, stopLetterLarge: 17, stopLetterSmall: 9, stopDot: 3.5,
+            bar: 26, barDragScale: 1.12, chip: 26, control: 24, stop: 28, stopLetterLarge: 17, stopLetterSmall: 9, stopDot: 3.5,
             symbolColumn: 30, valueColumn: 38, glyph: 22, glyphColumn: 40, glyphLine: 1.5,
             hairline: 1, edgeStrong: 1.5, whyMark: 20,
             ring: 54, ringLine: 4, countdownLine: 2, segment: 6, segmentCount: 16,
@@ -349,6 +353,7 @@ extension Theme {
             heading: .system(size: 10, weight: .semibold),
             headingKerning: 0.6,
             value: .system(size: 12, weight: .semibold).monospacedDigit(),
+            valueLarge: .system(size: 14, weight: .bold).monospacedDigit(),
             valueSmall: .system(size: 11, weight: .semibold).monospacedDigit(),
             mono: .system(size: 10, design: .monospaced),
             symbol: .system(size: 12, weight: .semibold),

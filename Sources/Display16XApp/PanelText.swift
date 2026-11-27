@@ -46,6 +46,15 @@ enum PanelText {
         }
     }
 
+    /// How a value bar draws a value known this way.
+    static func certainty(_ knowledge: ValueKnowledge?) -> ValueBar.Certainty {
+        switch knowledge {
+        case .sent: .sent
+        case .unknown: .remembered
+        case .readBack, nil: .confirmed
+        }
+    }
+
     /// The title of the row that says where a value on a display's page comes from.
     static func knowledgeTitle(_ knowledge: ValueKnowledge?) -> String {
         switch knowledge {

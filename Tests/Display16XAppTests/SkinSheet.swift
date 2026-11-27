@@ -52,7 +52,7 @@ struct SkinSheet: View {
                         MarkTag(text: "not known")
                     }
                     ValueBar(title: "Bar", symbol: Skin.symbol.brightness, value: 0.53) { _, _ in }
-                    ValueBar(title: "Bar, sent", symbol: Skin.symbol.volume, value: 0.2, mark: "sent") { _, _ in }
+                    ValueBar(title: "Bar, sent", symbol: Skin.symbol.volume, value: 0.2, certainty: .sent) { _, _ in }
                     ValueBar(title: "Bar, off", symbol: Skin.symbol.contrast, value: 0.7, isEnabled: false) { _, _ in }
                     LetterStops(title: "Stops", stops: stops) { _ in }
                     SkinRule()
