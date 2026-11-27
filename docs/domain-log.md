@@ -6,6 +6,32 @@ Add new entries at the top. Each entry has a date, a one-line title, what was ob
 
 <!-- entries -->
 
+## 27 November 2026 · After 0.5.1: sliders that changed width, and a monitor that drops writes while busy
+
+Reported by the owner after 0.5.1: a slider shrank while dragged with the word "sent" in its place, and "LEN P32p-20: sent 63, but the display reports 50." appeared after a drag. Measured on a Mac17,9 with macOS 27.2.1 (26B131), with the Lenovo P32p-20 on HDMI and the LG SDQHD on USB-C, rotated. The results are in `docs/feasibility.md`, "Reading a value back after a write". Fixed on `claude/fix-sliders-readback`. **This changes how the core verifies a write** (`DisplayCore/ControlService`, one line in `Coordinator`).
+
+- **A monitor that takes a value reports it at once.** The first read, about 90 to 100 ms after a write, already has it, on both monitors. Waiting longer before reading changes nothing.
+- **The LG SDQHD drops writes while it is busy**, about one burst in ten, awake. The last write of a drag can be lost, and so can a single write: 5 of 30 lone writes through the app. It then says nothing for a quarter of a second to a second, and keeps a value one to five steps short. When the next query came made no difference, so no gap before the read was added; one was written and tested, and made no measurable difference. Sending the value once instead of twice made it worse. The Lenovo lost nothing in 22 bursts.
+- **The Lenovo reports a volume of 50 and never changes it**, as v0.1 found. On a fresh settings file the app learns that again from two drags.
+- **How the core verifies a write. Before:**
+  - after a write with read-back, the device was read twice at once;
+  - a mismatch failed the write, and the device was believed;
+  - two reads that agreed with each other and not with the value counted as evidence that the control is ignored, and two such writes hid it.
+  
+  The LG's drops therefore gave false banners, and two of them could hide its brightness.
+- **How it verifies now:**
+  - it reads back; a silent monitor is asked again while its queue backs off; a monitor that answers with another value gets the same value again;
+  - it is bounded at two re-sends and four reads, about 3 s at worst; a newer request ends it;
+  - only at the bound does the write fail, in calm words: "kept its volume at 50%".
+  
+  Through the app, 30 LG drags confirmed 60 of 60 verified writes, 7 of them after one re-send.
+- **"Ignored" now needs a monitor that never moved.** A mismatch counts only when the device still reports what it reported before the write, kept from reads and from the detection check until sleep. A value that moved part of the way proves the control works. The Lenovo's volume is still learned in two tries.
+- **Composite brightness never checked the value a drag ended on.** It skipped a part that would not change on the device, and the end of a drag is almost always the same step as its last one. So the value stayed "sent", and a step the LG lost was never sent again. That was so from the start of composite brightness to 0.5.1. Unchanged parts are now skipped only for writes without read-back. Found by the owner on a test build.
+- **Rule for the interface: a control's place never changes with its state.** The value bar kept a column for its number and let a "sent" mark take width from its track. The number now sits inside the bar, and how a value is known is drawn on the number, explained by its tooltip. The words stay on the display's page. The owner chose this design from three sketches.
+- **Rule for measuring:** the displays turn off after a while with nobody at the desk, and the LG then stops answering DDC. Timing runs are made with the owner present, under `caffeinate -d`, and the runs made while asleep are not counted.
+- **For later, not fixed:** a held brightness key is a burst without any read-back, so the LG can end a step or more short there, silently.
+- **Seen once in the render harness:** the live skin check of the Keep window differed in its countdown digits, where a second ticked between its two pictures. The window has no value bar, and the runs before and after passed.
+
 ## 27 November 2026 · Three reports on 0.5.0: tabs cut off after a click, silent brightness keys, a size step that says nothing
 
 Reported by the owner on 27 November against the Homebrew 0.5.0 (build 203), on an Apple silicon MacBook with macOS 27, a Lenovo monitor on HDMI and a rotated LG on USB-C. Fixed on `claude/fix-0-5-0-bugs-914810`. None of the fixes touches `DisplayCore`, `DDC`, `DisplaySystem` or `DisplayPrivate`.

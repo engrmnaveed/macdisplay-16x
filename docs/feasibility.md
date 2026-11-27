@@ -192,6 +192,19 @@ What the re-run changes:
 - **About one burst in ten loses its last write on the LG**, awake, whatever the read timing: 3 of 42 in all. None was lost on the Lenovo in 22 bursts.
 - **Sending each write once is not safer on the LG.** It lost a burst too, and then ignored three single writes in a row, which the doubled writes never did.
 - So the read-back that follows a drag finds the LG on an older value about one time in ten. A wait does not prevent that. Only sending the last value again once the monitor answers would.
+- **So no settle gap was added.** A gap before the first read after a write made no measurable difference (3 losses in 42 bursts, whatever the timing). The gap that was written and tested for it is kept out of the code; its patch is with the bug notes.
+
+**Through the app, with the value sent again** (test build 0.5.1, 224, of `473fd42`), awake at 14:57 with the owner at the desk. The app ran in safe mode with a settings folder of its own, and the displays were held on. Thirty drags were played on the LG through the command line: nine unverified steps from 49 to 41, then 40 with read-back, then 50 with read-back.
+
+| Verified write | Confirmed | Needed one re-send | Needed two | Failed |
+| --- | --- | --- | --- | --- |
+| 40, after the burst | 30 of 30 | 2 (the LG reported 47 and 46) | 0 | 0 |
+| 50, a single write after a confirmed 40 | 30 of 30 | 5 (the LG still reported 40) | 0 | 0 |
+
+- Seven of 60 verified writes were lost on the LG, and one re-send brought each to the value. On 0.5.1 each would have shown "sent …, but the display reports …".
+- The five where the LG had not moved at all would also have counted as evidence that brightness is ignored, and two of those hide it.
+- **A single write can be lost too**, not only the last of a burst: 5 of 30 here.
+- LG brightness was 50 and Lenovo brightness 100 before and after.
 
 
 Not tested: a connection that carries video and no DDC. There is none on this desk.
