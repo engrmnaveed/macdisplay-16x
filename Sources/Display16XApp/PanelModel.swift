@@ -84,6 +84,9 @@ final class PanelModel: ObservableObject {
 
     private let context: AppContext
     private var subscription: EventBus.Subscription?
+
+    /// What became of the last brightness and volume keys.
+    var keyActivity: KeyActivity { context.keyActivity }
     /// Whether a display can be rotated, asked once when its page opens. macOS takes up to
     /// 20 ms to answer for one display, and only that page shows the answer, so the
     /// question is kept out of the panel's opening.

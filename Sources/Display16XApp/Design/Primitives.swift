@@ -292,19 +292,39 @@ struct BarSymbol: View {
 // MARK: Stops
 
 /// A row of stops with a letter in each, large at the left and small at the right. One is
-/// in use, and a dot marks the one that is the default. Each stop is a button.
+/// in use, and a dot marks the one that is the default. Each stop is a button, with a
+/// tooltip, and says when the pointer comes onto it or leaves it.
 struct LetterStops: View {
     struct Stop: Identifiable, Equatable {
         var id: String
         /// What VoiceOver says for this stop.
         var label: String
+        /// The tooltip. Empty shows none.
+        var help: String = ""
         var isCurrent: Bool
         var isDefault: Bool
     }
 
     let title: String
     let stops: [Stop]
+    /// The pointer came onto a stop (true) or left it (false).
+    let hover: ((_ index: Int, _ inside: Bool) -> Void)?
     let choose: (Int) -> Void
+
+    init(title: String, stops: [Stop], hover: ((_ index: Int, _ inside: Bool) -> Void)? = nil, choose: @escaping (Int) -> Void) {
+        self.title = title
+        self.stops = stops
+        self.hover = hover
+        self.choose = choose
+    }
+
+    /// The stop under the pointer after it comes onto a stop or leaves one. Moving from one
+    /// stop to the next can report the arrival before the departure, so leaving a stop that
+    /// is no longer the hovered one changes nothing.
+    static func hovered(_ current: Int?, stop: Int, inside: Bool) -> Int? {
+        if inside { return stop }
+        return current == stop ? nil : current
+    }
 
     static func letterSize(index: Int, count: Int, large: CGFloat, small: CGFloat) -> CGFloat {
         guard count > 1 else { return large }
@@ -321,8 +341,10 @@ struct LetterStops: View {
                         stop: stops[index],
                         letterSize: LetterStops.letterSize(index: index, count: count, large: Skin.size.stopLetterLarge, small: Skin.size.stopLetterSmall)
                     ))
+                    .help(stops[index].help)
                     .accessibilityLabel(stops[index].label)
                     .accessibilityAddTraits(stops[index].isCurrent ? .isSelected : [])
+                    .onHover { (inside: Bool) in hover?(index, inside) }
             }
         }
         .padding(Skin.space.xxs)
@@ -355,6 +377,87 @@ struct StopStyle: ButtonStyle {
         .frame(height: Skin.size.stop)
         .opacity(configuration.isPressed ? 0.7 : 1)
         .contentShape(Rectangle())
+    }
+}
+
+// MARK: Tabs
+
+/// Sets its parts side by side in equal shares of the width it is offered, and is never
+/// wider than that. Asked for the width it would like, it answers with the widest part times
+/// the number of parts: what every part needs to be drawn whole.
+struct EqualShares: Layout {
+    var spacing: CGFloat
+
+    static func share(of width: CGFloat, count: Int, spacing: CGFloat) -> CGFloat {
+        guard count > 0 else { return 0 }
+        return max((width - spacing * CGFloat(count - 1)) / CGFloat(count), 0)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let count: Int = subviews.count
+        guard count > 0 else { return .zero }
+        let width: CGFloat
+        if let offered = proposal.width, offered.isFinite {
+            width = offered
+        } else {
+            let widest: CGFloat = subviews.map { $0.sizeThatFits(.unspecified).width }.max() ?? 0
+            width = widest * CGFloat(count) + spacing * CGFloat(count - 1)
+        }
+        let share: CGFloat = EqualShares.share(of: width, count: count, spacing: spacing)
+        let height: CGFloat = subviews.map { $0.sizeThatFits(ProposedViewSize(width: share, height: proposal.height)).height }.max() ?? 0
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let share: CGFloat = EqualShares.share(of: bounds.width, count: subviews.count, spacing: spacing)
+        var x: CGFloat = bounds.minX
+        for subview in subviews {
+            subview.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: share, height: bounds.height))
+            x += share + spacing
+        }
+    }
+}
+
+/// A row of tabs, one of them chosen. The tabs share the width the strip is given, so the
+/// strip is never wider than the place it is put in, however many tabs there are and however
+/// long their names. A name too long for its share is cut short; VoiceOver reads it whole.
+struct TabStrip: View {
+    let title: String
+    let tabs: [String]
+    let chosen: Int
+    let choose: (Int) -> Void
+
+    var body: some View {
+        // Only the chosen tab is filled, so the tabs need no gap between them.
+        EqualShares(spacing: 0) {
+            ForEach(0..<tabs.count, id: \.self) { index in
+                Button { choose(index) } label: { Text(verbatim: tabs[index]) }
+                    .buttonStyle(TabStyle(isChosen: index == chosen))
+                    .accessibilityLabel(tabs[index])
+                    .accessibilityAddTraits(index == chosen ? .isSelected : [])
+            }
+        }
+        .padding(Skin.space.xxs)
+        .background(Skin.color.track, in: RoundedRectangle(cornerRadius: Skin.radius.control, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+}
+
+struct TabStyle: ButtonStyle {
+    let isChosen: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Skin.type.bodyStrong)
+            .foregroundStyle(isChosen ? Skin.color.onAccent : Skin.color.text)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, Skin.space.hair)
+            .frame(maxWidth: .infinity, minHeight: Skin.size.control)
+            .background(isChosen ? Skin.color.accent : Color.clear, in: RoundedRectangle(cornerRadius: Skin.radius.stop, style: .continuous))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Rectangle())
     }
 }
 
@@ -678,6 +781,26 @@ struct Wordmark: View {
         (Text("Display ").foregroundStyle(Skin.color.textSecondary) + Text("16X").foregroundStyle(Skin.color.accent).fontWeight(.bold))
             .font(font)
             .accessibilityLabel("Display 16X")
+    }
+}
+
+/// The inside of a window that keeps one size, such as the settings window. Its parts stand
+/// in a column as wide as the window less its margins, each from the leading edge. A part
+/// that asks for more width than that is cut at the trailing edge: it cannot widen the
+/// column and push the other parts out of sight.
+struct FixedWindowColumn<Content: View>: View {
+    let width: CGFloat
+    let height: CGFloat
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        let margin: CGFloat = Skin.space.window
+        return VStack(alignment: .leading, spacing: Skin.space.xl) { content }
+            .frame(width: max(width - margin * 2, 0), alignment: .leading)
+            .padding(margin)
+            .frame(width: width, height: height, alignment: .top)
+            .clipped()
+            .background(Skin.color.canvas)
     }
 }
 

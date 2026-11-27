@@ -2,10 +2,29 @@
 
 ## Unreleased
 
+## 0.5.1
+
+A fix release for 0.5.0. The brightness and volume keys reach your monitors again, the settings window no longer cuts off its tabs, a display's text-size strip shows the size of a step before you choose it, and `brew install` now installs Display 16X. Apart from these, the app works as 0.5.0 did, with the same settings.
+
+### Fixes
+
+- The brightness keys change the display under the pointer again, and the volume keys reach a monitor that plays the sound. From 0.2.0 to 0.5.0 the app lost track of the display under the pointer right after it started, so both kinds of key went on to macOS and did nothing on a monitor. `display16x --pointer` and `--focused`, and links naming those displays, found no display for the same reason.
+- `display16x status`, and the line under the brightness keys switch in Settings → General, say whether the keys are heard, and why a key was passed on to macOS or did not change a display. The log notes when the keys start to end differently.
+- The settings window no longer cuts off its tabs and its pages after the first click. The tabs share the width of the window, so they are always shown whole. They are drawn in the skin's colors now, with the chosen tab in the accent.
+- On a display's card, the text-size strip shows the size a step gives while the pointer is on it, in the line under the strip, and each step has a tooltip with that size.
+
 ### Homebrew
 
-- `brew install --cask engrmnaveed/tap/display16x` now installs Display 16X. Until 26 November 2026 it said the cask does not exist: no release from 0.2.0 to 0.5.0 had reached the Homebrew tap. The tap has 0.5.0's cask now, and nothing had to change in 0.5.0 itself.
+- `brew install --cask engrmnaveed/tap/display16x` now installs Display 16X. Until 26 November 2026 it said the cask does not exist: no release from 0.2.0 to 0.5.0 had reached the Homebrew tap. 0.5.0's cask was added to the tap by hand that day, and 0.5.1 is the first release whose own run puts its cask there. If Homebrew still says the cask does not exist, run `brew update` and try again.
 - A release is no longer published when it cannot update the tap, and before a release run finishes it installs the new version from the tap on a Mac that has never had Display 16X, then removes it again.
+
+### What was checked on hardware
+
+- On an Apple M5 Pro Mac with macOS 27.2.1, a Lenovo P32p-20 on HDMI and an LG SDQHD on USB-C, a build with these fixes ran with a settings folder of its own while the developer tried it. The brightness keys changed the monitor under the pointer, first the Lenovo and then the LG as the pointer moved to it, and `display16x --pointer` and `--focused` found the monitor. The developer confirmed the keys work. Both monitors' brightness was read first and put back afterwards. A build without the fix, on the same desk, passed a brightness key on to macOS with the pointer on a monitor.
+- On that build the developer also clicked through the settings tabs and moved the pointer over the text-size steps, and saw no problem. Neither leaves a line in the log, so there is no other record of it.
+- The volume keys were not tried after the fix. They are unit-tested, and before the fix a volume key was seen passed on to macOS.
+- Homebrew: on 26 November, 0.5.0's cask, added to the tap by hand, was installed from the tap on a clean GitHub runner, and the app and the `display16x` command it linked both said 0.5.0. The 0.5.1 release run does the same with its own cask before it finishes.
+- Not yet done: a build with these fixes as the copy in daily use.
 
 ## 0.5.0
 

@@ -223,9 +223,26 @@ final class SampleColorBackend: ColorBackend {
 @MainActor
 final class SampleSelectorContext: SelectorContext {
     var main: SystemDisplayID?
+    /// Where the pointer is. Nil leaves it on the main display; `.some(nil)` puts it on no display.
+    var pointer: SystemDisplayID??
     func mainDisplay() -> SystemDisplayID? { main }
-    func displayUnderPointer() -> SystemDisplayID? { main }
+    func displayUnderPointer() -> SystemDisplayID? { pointer ?? main }
     func focusedDisplay() -> SystemDisplayID? { main }
+}
+
+/// Answers from the inventory alone: the pointer and the active window are on the main
+/// display. Only what it is handed to keeps it alive.
+@MainActor
+final class InventorySelector: SelectorContext {
+    let inventory: SampleInventory
+
+    init(inventory: SampleInventory) {
+        self.inventory = inventory
+    }
+
+    func mainDisplay() -> SystemDisplayID? { inventory.displays.first(where: \.isMain)?.systemID }
+    func displayUnderPointer() -> SystemDisplayID? { mainDisplay() }
+    func focusedDisplay() -> SystemDisplayID? { mainDisplay() }
 }
 
 @MainActor

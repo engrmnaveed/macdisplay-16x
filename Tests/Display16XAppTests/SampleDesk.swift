@@ -26,7 +26,13 @@ final class SampleDesk {
     let context: AppContext
 
     /// - Parameter firstRun: No settings file exists yet, as on the very first launch.
-    init(safeMode: Bool = false, layoutAvailable: Bool = true, firstRun: Bool = false, configure: ((inout SettingsDocument) -> Void)? = nil) {
+    /// - Parameter contextOwnsSelector: The context is handed a selector context and an audio
+    ///   output that nothing else holds, as in the app, instead of the desk's own. The pointer
+    ///   is then on the main display and the sound plays through the built-in speakers.
+    init(
+        safeMode: Bool = false, layoutAvailable: Bool = true, firstRun: Bool = false, contextOwnsSelector: Bool = false,
+        configure: ((inout SettingsDocument) -> Void)? = nil
+    ) {
         let saved: Data? = firstRun ? nil : try? DocumentCoding.encoder().encode(SettingsDocument())
         let adapters = SystemAdapters(
             paths: AppPaths(supportDirectory: URL(fileURLWithPath: "/nonexistent/display16x-render-harness", isDirectory: true)),
@@ -38,8 +44,8 @@ final class SampleDesk {
             inventory: inventory,
             provider: provider,
             colorBackend: color,
-            selectorContext: selector,
-            audio: audio,
+            selectorContext: contextOwnsSelector ? InventorySelector(inventory: inventory) : selector,
+            audio: contextOwnsSelector ? SampleAudio() : audio,
             layoutSystem: layoutAvailable ? layoutSystem : nil,
             connectionSystem: connectionSystem,
             lid: lid,

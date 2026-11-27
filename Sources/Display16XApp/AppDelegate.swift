@@ -68,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let layoutSurfaces = LayoutSurfaceSet(context: context)
         self.layoutSurfaces = layoutSurfaces
         settingsWindow = SettingsWindowPresenter(context: context, hotKeys: layoutSurfaces.hotKeys)
-        keyCapture = KeyCapture(keys: context.keys, settings: context.settings)
+        keyCapture = KeyCapture(keys: context.keys, settings: context.settings, activity: context.keyActivity)
         keyCapture?.handler = layoutSurfaces.keyHandler
         makeStatusItem()
         context.start()
@@ -110,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        keyCapture?.stop()
+        keyCapture?.stop("the app is quitting")
         layoutSurfaces?.stop()
         context?.shutdown()
     }
@@ -130,11 +130,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     /// Runs the event tap exactly when the user wants keys and macOS allows the tap.
     private func updateKeyCapture() {
         guard let context, let keyCapture else { return }
-        let wanted = context.permissions.wantsKeys && context.permissions.state.accessibility == .granted
-        if wanted {
-            if !keyCapture.start() { Log.app.notice("Key capture could not start even though Accessibility is granted.") }
-        } else {
-            keyCapture.stop()
+        if !context.permissions.wantsKeys {
+            keyCapture.stop("brightness and volume keys are both switched off in Settings")
+        } else if context.permissions.state.accessibility != .granted {
+            keyCapture.stop("Display 16X has no Accessibility permission (\(context.permissions.state.accessibility.rawValue))")
+        } else if !keyCapture.start() {
+            Log.app.notice("Key capture could not start even though Accessibility is granted.")
         }
     }
 

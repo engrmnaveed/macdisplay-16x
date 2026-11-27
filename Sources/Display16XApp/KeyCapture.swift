@@ -9,6 +9,7 @@ import Foundation
 final class KeyCapture {
     private let keys: KeyCoordinator
     private let settings: SettingsStore
+    private let activity: KeyActivity
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     /// Keys we claimed on the way down, so their release is swallowed too.
@@ -27,9 +28,10 @@ final class KeyCapture {
     private static let f14: Int64 = 107
     private static let f15: Int64 = 113
 
-    init(keys: KeyCoordinator, settings: SettingsStore) {
+    init(keys: KeyCoordinator, settings: SettingsStore, activity: KeyActivity) {
         self.keys = keys
         self.settings = settings
+        self.activity = activity
     }
 
     var isRunning: Bool { tap != nil }
@@ -46,16 +48,21 @@ final class KeyCapture {
             eventsOfInterest: mask,
             callback: KeyCapture.callback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else { return false }
+        ) else {
+            activity.notListening("macOS refused the event tap even though Accessibility is granted")
+            return false
+        }
         tap = created
         source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, created, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: created, enable: true)
-        Log.app.info("Key capture started.")
+        activity.listening()
         return true
     }
 
-    func stop() {
+    /// - Parameter reason: Why, in the words `display16x status` and Settings show.
+    func stop(_ reason: String) {
+        activity.notListening(reason)
         guard let tap else { return }
         CGEvent.tapEnable(tap: tap, enable: false)
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
@@ -94,15 +101,20 @@ final class KeyCapture {
             case KeyCapture.mute: key = .mute
             case KeyCapture.brightnessUp: key = .brightnessUp
             case KeyCapture.brightnessDown: key = .brightnessDown
-            default: return false
+            default:
+                if isDown { Log.app.debug("A media key with code \(code) arrived. It is not one Display 16X handles, so it was passed on.") }
+                return false
             }
             return route(key, identifier: code, isDown: isDown, fine: fine)
         }
 
         // F14 and F15 are the brightness keys on keyboards without media keys.
-        guard settings.document.global.alternateBrightnessKeys ?? SettingsDefaults.alternateBrightnessKeys else { return false }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         guard keyCode == KeyCapture.f14 || keyCode == KeyCapture.f15 else { return false }
+        guard settings.document.global.alternateBrightnessKeys ?? SettingsDefaults.alternateBrightnessKeys else {
+            if type == .keyDown { activity.passed(keyCode == KeyCapture.f15 ? .brightnessUp : .brightnessDown, because: "F14 and F15 are switched off as brightness keys in the settings file") }
+            return false
+        }
         return route(keyCode == KeyCapture.f15 ? .brightnessUp : .brightnessDown, identifier: 1_000 + Int(keyCode), isDown: type == .keyDown, fine: fine)
     }
 
