@@ -16,7 +16,7 @@ Change a monitor's own backlight, contrast and speaker volume from the menu bar,
 ### Use it
 
 1. Click the display icon in the menu bar.
-2. Drag the **☀ bar** on a display's card.
+2. Drag the **☀ bar** on a display's card. The percentage sits inside the bar.
 3. Drag the **🔊 bar** for volume. Click the speaker symbol to mute.
 4. For **contrast**, click the sliders button at the top right of the card. The display's page opens: **Picture → Contrast**.
 
@@ -24,13 +24,38 @@ Change a monitor's own backlight, contrast and speaker volume from the menu bar,
 
 ### How a value is known
 
-The display's page says where each value comes from:
-
-| It says | Means |
+| The number in the bar | Means |
 |---|---|
-| **✓ The display says 68%** | Read back from the monitor |
-| **Display 16X sent** | Sent, and the monitor cannot be asked, as with dimming |
-| **Remembered, not confirmed since …** | The last value known, for example just after a wake |
+| **68%** | Read back from the monitor |
+| **68%** with a dotted line under it | Sent, and the monitor has not confirmed it, as with dimming. Point at it to see why |
+| The same, dimmed | The value the app remembers, for example just after a wake |
+
+The display's page says it in words, such as **✓ The display says 68%**.
+
+### When a monitor does not take a value
+
+After a drag, Display 16X reads the value back from the monitor. If the monitor dropped it, the app sends it again, up to twice.
+
+A monitor that keeps its old value gets a calm note, such as *"LEN P32p-20 kept its volume at 50%."* If it does that again, the app stops offering the control, and the card shows **No volume control** in its place, with the reason. **Check Again** on the display's page asks the monitor again what it supports.
+
+<table>
+<tr>
+<td align="center" valign="top" width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/note-kept-value-dark.webp">
+  <img src="../assets/note-kept-value-light.webp" width="344" alt="A calm note at the top of the panel: LEN P32p-20 kept its volume at 30%.">
+</picture>
+<br><sub>The first time: a calm note</sub>
+</td>
+<td align="center" valign="top" width="50%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/card-no-volume-dark.webp">
+  <img src="../assets/card-no-volume-light.webp" width="338" alt="The LEN P32p-20 card with brightness and text size, and a quiet line in place of volume: No volume control. The monitor reports a volume level and ignores changes to it.">
+</picture>
+<br><sub>The second time: the control steps aside</sub>
+</td>
+</tr>
+</table>
 
 ### Darker than the monitor goes
 
@@ -81,7 +106,9 @@ display16x set restoreAfterWake on --tag 2
 ### Good to know
 
 > [!NOTE]
-> - Brightness, contrast and volume go over the monitor's control channel, DDC/CI, so each monitor decides what it accepts. On the test desk, brightness and contrast were confirmed on both monitors, and volume on one. The other ignores volume, and the app marks it so.
+> - Brightness, contrast and volume go over the monitor's control channel, DDC/CI, so each monitor decides what it accepts. On the test desk, brightness and contrast were confirmed on both monitors, and volume on one. The other ignores volume.
+> - Checking after a drag was tried on hardware: on the LG SDQHD, 60 of 60 checked writes ended on the value asked for, 7 of them after a second send. The calm note and the **No volume control** line are unit-tested and drawn, not yet seen on a real monitor.
+> - A brightness key held down sends a run of steps without checking the last one, so a monitor that drops writes while busy can end a step or so short.
 > - Mute has been read on hardware but never written. Switching the input is built, asks you to confirm, and has never been run on hardware, because it can cut the Mac off from the monitor.
 > - Built-in and Apple displays use macOS's own brightness. Built, not yet tried on such a display.
 > - The brightness keys were checked on both monitors with 0.5.1. The volume keys, and the keys reaching a display that mirrors another, are unit-tested and not yet tried on hardware.

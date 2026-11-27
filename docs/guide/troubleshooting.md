@@ -49,11 +49,16 @@ Nothing is restored or put back by itself: no values after sleep, no protected l
 
 ### The volume keys do nothing
 
-They change a monitor only while the sound plays through it. Pick the monitor as the sound output in Control Center or **System Settings → Sound**. Some monitors ignore volume over DDC; see the next answer.
+They change a monitor only while the sound plays through it. Pick the monitor as the sound output in Control Center or **System Settings → Sound**. If its card says **No volume control**, the monitor ignores volume over DDC; see the next answer.
 
 ### A monitor ignores a control
 
-Each monitor decides which controls it accepts over DDC/CI. Display 16X reads a value back after it changes it, and marks a control the monitor reports but ignores. A monitor in standby may not answer at all: the app keeps what it knew and asks again after a wake. Click **Check Again** on the display's page to ask it what it supports.
+Each monitor decides which controls it accepts over DDC/CI. After a change, Display 16X reads the value back and sends it again, up to twice, if the monitor dropped it.
+
+- A monitor that keeps its old value gets a calm note, such as *"LEN P32p-20 kept its volume at 50%."* That is the monitor, not a fault in the app.
+- If it does that again, the app stops offering the control, and the card shows a quiet line such as **No volume control** with the reason.
+- A monitor in standby may not answer at all: the app keeps what it knew and asks again after a wake.
+- Click **Check Again** on the display's page to ask the monitor again what it supports.
 
 ### The picture is too dark
 

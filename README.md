@@ -14,7 +14,7 @@ Hardware brightness and volume, keys that reach the monitor, every text size it 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/panel-dark.webp">
-  <img src="docs/assets/panel-light.webp" width="360" alt="The Display 16X panel with two monitors. Each card has a brightness bar and a text-size strip with the size in use; the second card also has a volume bar and its input. Scenes sit along the top, Arrange and Settings along the bottom.">
+  <img src="docs/assets/panel-light.webp" width="360" alt="The Display 16X panel with two monitors. Each card has a full-width brightness bar with the percentage inside and a text-size strip with the size in use. The first card says No volume control; the second has a volume bar and its input. Scenes sit along the top, Arrange and Settings along the bottom.">
 </picture>
 
 <sub>Free and open source, by <a href="https://16xbrains.com/">16X Brains</a>.</sub>
@@ -178,7 +178,7 @@ Six ready-made looks or two colors of your own, kept readable in light, dark and
 <details>
 <summary><b>A monitor ignores volume or brightness</b></summary>
 
-Each monitor decides which controls it accepts over DDC/CI. Display 16X reads a value back after it changes it, and marks a control the monitor reports but ignores. The Lenovo P32p-20 ignores volume, for example. Brightness still goes lower with software dimming (**Settings → General**). `display16x probe` prints what each monitor answers, read only.
+Each monitor decides which controls it accepts over DDC/CI. After a change, Display 16X reads the value back and sends it again if the monitor dropped it. A monitor that keeps its old value gets a calm note, such as *"LEN P32p-20 kept its volume at 50%."* If it does that again, the app stops offering the control and the card shows **No volume control** in its place. The Lenovo P32p-20 is one such monitor. **Check Again** on the display's page asks the monitor afresh, brightness still goes lower with software dimming (**Settings → General**), and `display16x probe` prints what each monitor answers, read only.
 
 </details>
 

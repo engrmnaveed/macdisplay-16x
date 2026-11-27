@@ -43,8 +43,14 @@ for look in light dark; do
     # The panel, whole: the README's hero and the panel page.
     webp "$surfaces/panel-home-$look.png" "panel-$look"
     # One card from the panel: the second display, with brightness, text size, volume and input.
-    "$tool" crop 46 448 676 476 "$surfaces/panel-home-$look.png" "$work/card.png"
+    "$tool" crop 46 520 676 480 "$surfaces/panel-home-$look.png" "$work/card.png"
     webp "$work/card.png" "card-$look"
+    # The first display's card, whose monitor ignores volume: "No volume control" in its place.
+    "$tool" crop 46 120 676 420 "$surfaces/panel-home-$look.png" "$work/card-no-volume.png"
+    webp "$work/card-no-volume.png" "card-no-volume-$look"
+    # The calm note when a monitor kept its value.
+    "$tool" crop 40 44 688 124 "$surfaces/panel-kept-value-$look.png" "$work/note-kept-value.png"
+    webp "$work/note-kept-value.png" "note-kept-value-$look"
     # A display's page, its top part, as tall as Arrange so the two sit side by side.
     "$tool" crop 0 0 768 1284 "$surfaces/detail-full-$look.png" "$work/display-page.png"
     webp "$work/display-page.png" "display-page-$look"

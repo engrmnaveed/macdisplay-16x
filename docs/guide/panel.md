@@ -6,16 +6,16 @@ Everything starts at the display icon in the menu bar. Click it for one card per
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/panel-dark.webp">
-  <img src="../assets/panel-light.webp" width="340" align="right" alt="The panel: scenes along the top, a card for each of two monitors, and Arrange, Settings and Quit along the bottom.">
+  <img src="../assets/panel-light.webp" width="340" align="right" alt="The panel: scenes along the top, a card for each of two monitors with full-width bars, and Arrange, Settings and Quit along the bottom.">
 </picture>
 
 ### From top to bottom
 
 - **Scenes**: your saved setups, one press each. <kbd>+</kbd> saves the one you have now. See [Scenes](scenes-and-shortcuts.md)
 - **A card per display**: its shape drawn to scale, its name, size in inches, how it is connected, and whether it is the main display
-- ☀ **Brightness bar**: drag it. See [Brightness and volume](brightness-and-volume.md)
+- ☀ **Brightness bar**: the full width of the card, with the percentage inside. Drag it. See [Brightness and volume](brightness-and-volume.md)
 - **Text-size strip**: larger text on the left, more space on the right. The dot marks the display's default. See [Text size](text-size.md)
-- 🔊 **Volume bar** and **Input**: only on a monitor that offers them
+- 🔊 **Volume bar** and **Input**: only on a monitor that offers them. A monitor found to ignore volume shows **No volume control** instead
 - **Sliders button**: opens the display's page, one level down
 - **Arrange · Settings · ⏻**: your desk drawn to scale, the [settings window](settings.md), and Quit
 
