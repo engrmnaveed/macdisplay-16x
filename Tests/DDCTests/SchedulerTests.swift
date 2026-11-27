@@ -47,6 +47,7 @@ final class FakeMonitor: I2CTransport, @unchecked Sendable {
     private var consecutiveRequests = 0
     var capabilities = ""
     private var _failingWrites = 0
+    private var _droppedWrites = 0
     private var _silentReads = 0
     private var _driftingReads = 0
     /// When set, the first write blocks here until the test lets it go.
@@ -64,6 +65,8 @@ final class FakeMonitor: I2CTransport, @unchecked Sendable {
     var sent: [SentWrite] { lock.withLock { _sent } }
     var requests: [UInt8] { lock.withLock { _requests } }
     func failNextWrites(_ count: Int) { lock.withLock { _failingWrites = count } }
+    /// The next writes arrive and are lost, as the LG SDQHD loses writes while it is busy.
+    func dropNextWrites(_ count: Int) { lock.withLock { _droppedWrites = count } }
     func stayers(silentReads count: Int) { lock.withLock { _silentReads = count } }
     func drift(reads count: Int) { lock.withLock { _driftingReads = count } }
 
@@ -100,8 +103,12 @@ final class FakeMonitor: I2CTransport, @unchecked Sendable {
             clock.advance(3)
             lock.withLock {
                 let value = UInt16(bytes[3]) << 8 | UInt16(bytes[4])
-                _values[bytes[2]] = value
                 _sent.append(SentWrite(time: clock.nowMilliseconds(), code: bytes[2], value: value, hostAddress: dataAddress))
+                if _droppedWrites > 0 {
+                    _droppedWrites -= 1
+                    return
+                }
+                _values[bytes[2]] = value
             }
         default:
             Issue.record("unexpected opcode \(bytes[1])")
@@ -231,6 +238,30 @@ struct SchedulerTests {
         }
         let elapsed = Double(clock.nowMilliseconds() - 10_000) / 1_000
         #expect(Double(firstSends.count) <= elapsed * 20 + 1)
+    }
+
+    @Test("The LG SDQHD's lost writes, as measured: the last of a burst lost, silence, then the step before in LG frames")
+    func lgLostWrites() async throws {
+        var tuning = DDCTuning()
+        tuning.tolerance.allowBadHeader = true
+        let (scheduler, monitor, clock) = make(tuning: tuning)
+        monitor.style = .lg
+        monitor.requiresDoubleRequest = true
+        for value in stride(from: 49, through: 41, by: -1) as StrideThrough<UInt16> {
+            _ = await scheduler.write(code: VCPCode.brightness, value: value)
+        }
+        // The last write is sent twice, as always, and both copies are lost.
+        monitor.dropNextWrites(2)
+        _ = await scheduler.write(code: VCPCode.brightness, value: 40)
+        #expect(monitor.sent.last?.value == 40)
+        // Busy: the first queries get no reply. The queue backs off and asks again.
+        monitor.stayers(silentReads: 2)
+        let before = clock.nowMilliseconds()
+        let reply = try await scheduler.read(code: VCPCode.brightness).get()
+        #expect(reply.current == 41, "the step before the last, kept")
+        #expect(reply.maximum == 100)
+        #expect(reply.quirks.contains(.nonStandardHeader))
+        #expect(clock.nowMilliseconds() - before >= 50 + 100 + 200, "it waited through the silence")
     }
 
     @Test("A failing transport is retried with backoff, a bounded number of times")

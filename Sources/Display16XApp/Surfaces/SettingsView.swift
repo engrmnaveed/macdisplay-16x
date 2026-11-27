@@ -81,9 +81,7 @@ struct SettingsNotices: View {
                 Button("Cancel") { layoutModel.stopRecording() }.buttonStyle(QuietStyle())
             }
         }
-        if let message = model.message {
-            Banner(kind: .danger, symbol: Skin.symbol.danger, title: PanelText.sentence(message))
-        }
+        PanelMessage(model: model)
         if let message = layoutModel.message {
             Banner(kind: layoutModel.messageIsFailure ? .danger : .note, symbol: layoutModel.messageIsFailure ? Skin.symbol.danger : Skin.symbol.confirmed, title: PanelText.sentence(message))
         }

@@ -78,7 +78,7 @@ struct PictureSection: View {
                     Text("Contrast").font(Skin.type.body).foregroundStyle(Skin.color.text)
                     ValueBar(
                         title: "Contrast of \(card.name)", symbol: Skin.symbol.contrast, value: card.contrast.value,
-                        mark: PanelText.mark(card.contrastKnowledge)?.text, markHelp: PanelText.mark(card.contrastKnowledge)?.help ?? ""
+                        certainty: PanelText.certainty(card.contrastKnowledge), certaintyHelp: PanelText.mark(card.contrastKnowledge)?.help ?? ""
                     ) { value, final in
                         model.setContrast(value, tag: card.tag, final: final)
                     }

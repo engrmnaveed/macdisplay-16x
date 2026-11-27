@@ -186,53 +186,94 @@ enum BarGeometry {
     }
 }
 
-/// A thick bar for a value from 0 to 1. The symbol sits in the filled part and the number
-/// at the end. Drag it, or use the arrow keys when it has the keyboard. VoiceOver is given
-/// a standard slider in its place.
+/// A value from 0 to 1, as a bar as wide as its place. The symbol sits at the leading end
+/// and the number at the trailing end, both inside the bar: in the text color over the empty
+/// part and in the on-accent color over the fill, so they read wherever the fill ends.
+///
+/// The bar never changes its width. How the value is known is a quiet state of the number,
+/// explained by the tooltip: underlined with dots when it was sent and not confirmed, and
+/// dimmed as well when it is only remembered. The words for it are on the display's page.
+///
+/// With the pointer over it, an edge and a grip at the end of the fill say it can be dragged.
+/// While it is dragged it grows a little and the number gets larger and rolls. Drag it, or use
+/// the arrow keys when it has the keyboard. VoiceOver is given a standard slider in its place.
+/// Nothing moves without input, and nothing moves with Reduce Motion on.
 struct ValueBar: View {
+    /// How the value shown is known.
+    enum Certainty: Equatable {
+        case confirmed
+        /// Sent, and the display has not confirmed it.
+        case sent
+        /// Remembered, and not confirmed since.
+        case remembered
+    }
+
+    /// A state reached with the pointer, for pictures and tests of it.
+    enum Showing: Equatable {
+        case hover
+        case drag(Double)
+    }
+
     let title: String
     let symbol: String
     let value: Double
     var isEnabled = true
-    /// A word that says how the value is known, when that needs saying, with its explanation.
-    var mark: String?
-    var markHelp = ""
+    var certainty = Certainty.confirmed
+    /// What the tooltip says about how the value is known.
+    var certaintyHelp = ""
     /// Makes the symbol a button, for example to mute.
     var symbolAction: (() -> Void)?
     var symbolLabel = ""
+    var showing: Showing?
     let change: (_ value: Double, _ final: Bool) -> Void
 
     private let dragged = State<Double?>(initialValue: nil)
+    private let hovering = State(initialValue: false)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var shown: Double { dragged.wrappedValue ?? value }
-
-    private var spoken: String { "\(Int((shown * 100).rounded())) percent" }
-
-    var body: some View {
-        HStack(spacing: Skin.space.m) {
-            track
-            if let mark { MarkTag(text: mark, help: markHelp) }
-            Text(verbatim: "\(Int((shown * 100).rounded()))%")
-                .font(Skin.type.value)
-                .foregroundStyle(isEnabled ? Skin.color.text : Skin.color.textTertiary)
-                .frame(width: Skin.size.valueColumn, alignment: .trailing)
-                .accessibilityHidden(true)
-        }
+    private var dragValue: Double? {
+        if let value = dragged.wrappedValue { return value }
+        if case .drag(let value)? = showing { return value }
+        return nil
     }
 
-    private var track: some View {
+    private var shown: Double { dragValue ?? value }
+    private var percent: Int { Int((shown * 100).rounded()) }
+    private var spoken: String { "\(percent) percent" }
+    private var isDragging: Bool { isEnabled && dragValue != nil }
+    private var isLifted: Bool { isEnabled && (hovering.wrappedValue || showing != nil || dragValue != nil) }
+
+    var body: some View {
         GeometryReader { geometry in
             let width: CGFloat = geometry.size.width
             let filled: CGFloat = BarGeometry.fill(width: width, value: shown, minimum: Skin.size.symbolColumn)
             ZStack(alignment: .leading) {
                 Capsule().fill(Skin.color.track)
                 Capsule().fill(isEnabled ? Skin.color.accent : Skin.color.hairline).frame(width: filled)
-                BarSymbol(symbol: symbol, action: isEnabled ? symbolAction : nil, label: symbolLabel)
+                // The grip stays clear of the number at the trailing end.
+                if isLifted, filled < width - Skin.size.valueColumn - Skin.space.l * 2 {
+                    Capsule()
+                        .fill(Skin.color.onAccent)
+                        .frame(width: Skin.size.edgeStrong * 2, height: Skin.size.bar / 2)
+                        .offset(x: max(filled - Skin.space.m, Skin.size.symbolColumn))
+                        .accessibilityHidden(true)
+                }
+                number(isEnabled ? Skin.color.text : Skin.color.textTertiary)
+                number(isEnabled ? Skin.color.onAccent : Skin.color.textTertiary)
+                    .mask(alignment: .leading) { Rectangle().frame(width: filled) }
+                BarSymbol(symbol: symbol, action: isEnabled ? symbolAction : nil, label: symbolLabel, tint: isEnabled ? nil : Skin.color.textTertiary)
             }
+            // A rounded rectangle as round as the capsule: a stroked capsule ticks at its ends.
+            .overlay(RoundedRectangle(cornerRadius: Skin.size.bar / 2, style: .circular).edge(isLifted ? Skin.color.accent : Color.clear, width: Skin.size.edgeStrong))
             .contentShape(Capsule())
             .gesture(drag(width: width), including: isEnabled ? .all : .none)
         }
         .frame(height: Skin.size.bar)
+        .scaleEffect(x: 1, y: ValueBar.drawnScale(dragging: isDragging))
+        .animation(Skin.animation(reduceMotion: reduceMotion), value: isLifted)
+        .animation(Skin.animation(reduceMotion: reduceMotion), value: isDragging)
+        .onHover { (inside: Bool) in hovering.wrappedValue = inside }
+        .help(certainty == .confirmed ? "" : certaintyHelp)
         .focusable(isEnabled)
         .onKeyPress(.leftArrow) { step(-1) }
         .onKeyPress(.rightArrow) { step(1) }
@@ -241,6 +282,30 @@ struct ValueBar: View {
                 .accessibilityValue(Text(verbatim: spoken))
                 .disabled(!isEnabled)
         }
+    }
+
+    /// How much taller the bar is drawn: a little while it is dragged. Only drawn: its place
+    /// in the layout stays, on every macOS.
+    static func drawnScale(dragging: Bool) -> CGFloat {
+        dragging ? Skin.size.barDragScale : 1
+    }
+
+    /// The number at the trailing end, in one color.
+    private func number(_ color: Color) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Text(verbatim: "\(percent)%")
+                .font(isDragging ? Skin.type.valueLarge : Skin.type.value)
+                .underline(certainty != .confirmed, pattern: .dot, color: color)
+                .foregroundStyle(color)
+                .opacity(certainty == .remembered ? 0.6 : 1)
+                .contentTransition(reduceMotion ? .identity : .numericText(value: shown))
+                .animation(Skin.animation(reduceMotion: reduceMotion), value: percent)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.trailing, Skin.space.l)
+        }
+        .accessibilityHidden(true)
     }
 
     private func drag(width: CGFloat) -> some Gesture {
@@ -268,6 +333,8 @@ struct BarSymbol: View {
     let symbol: String
     let action: (() -> Void)?
     let label: String
+    /// The symbol's color. Nil draws it on the accent.
+    var tint: Color?
 
     var body: some View {
         if let action {
@@ -283,7 +350,7 @@ struct BarSymbol: View {
     private var image: some View {
         Image(systemName: symbol)
             .font(Skin.type.symbol)
-            .foregroundStyle(Skin.color.onAccent)
+            .foregroundStyle(tint ?? Skin.color.onAccent)
             .frame(width: Skin.size.symbolColumn, height: Skin.size.bar)
             .contentShape(Rectangle())
     }
