@@ -69,7 +69,7 @@ The pushed tag runs these jobs:
 
 **What the reviewer sees and clicks.** GitHub sends the reviewer a notification that a deployment to `release` waits for review. In the run (**Actions → Release →** the run for the tag), the summary lists the signing level, the designated requirement and the archive's SHA-256, and the artifact `display16x-macos-arm64` can be downloaded. An ad hoc build also shows the warning that it is not signed with the project certificate. Click **Review deployments**, tick **release**, and click **Approve and deploy**. **Reject** stops the run with nothing published. A pending review expires after 30 days.
 
-**When two runs wait.** They can be approved in either order. The higher version stays the latest release and keeps the tap: a version approved after a later one is published is not marked as the latest and leaves the tap alone. That holds for tags from 0.3.0 on, because a run uses the workflow at its own tag. A release is compared with the release published just below it, so a lower version that is still waiting is left out of the comparison, and the run says so under **Earlier version not published**. That matters only when the two are signed differently, such as the last ad hoc release and the first one signed with the certificate. Then approve the lower one first, or, if it is published second, the higher release's notes lack the sentence about the Accessibility grant: print the notes with it, such as `scripts/release-notes 0.6.0 certificate v0.5.0` when 0.5.0 was the last ad hoc release, and replace them with `gh release edit v0.6.0 --notes-file` and that text.
+**When two runs wait.** They can be approved in either order. The higher version stays the latest release and keeps the tap: a version approved after a later one is published is not marked as the latest and leaves the tap alone. That holds for tags from 0.3.0 on, because a run uses the workflow at its own tag. A release is compared with the release published just below it, so a lower version that is still waiting is left out of the comparison, and the run says so under **Earlier version not published**. That matters only when the two are signed differently, such as the last ad hoc release and the first one signed with the certificate. Then approve the lower one first, or, if it is published second, the higher release's notes lack the sentence about the Accessibility grant: print the notes with it, such as `scripts/release-notes 0.6.0 certificate v0.5.1` when 0.5.1 was the last ad hoc release, and replace them with `gh release edit v0.6.0 --notes-file` and that text.
 
 ### If a job fails or never starts
 
@@ -279,18 +279,18 @@ Once, on a Mac with the GitHub CLI:
 
 ### Commit the cask by hand
 
-When Publish created the release but its push to the tap failed, commit the release's `display16x.rb` yourself, here for 0.5.0. The tap holds one version, so only the newest release needs it:
+When Publish created the release but its push to the tap failed, commit the release's `display16x.rb` yourself, here for 0.5.1. The tap holds one version, so only the newest release needs it:
 
 ```sh
 gh repo clone engrmnaveed/homebrew-tap && cd homebrew-tap
-gh release download v0.5.0 --repo engrmnaveed/macdisplay-16x --pattern display16x.rb --output Casks/display16x.rb --clobber
-git add Casks/display16x.rb && git commit -m "display16x 0.5.0" && git push
+gh release download v0.5.1 --repo engrmnaveed/macdisplay-16x --pattern display16x.rb --output Casks/display16x.rb --clobber
+git add Casks/display16x.rb && git commit -m "display16x 0.5.1" && git push
 ```
 
 Then check it the way the release does:
 
 ```sh
-gh workflow run tap-install.yml --repo engrmnaveed/macdisplay-16x -f version=0.5.0
+gh workflow run tap-install.yml --repo engrmnaveed/macdisplay-16x -f version=0.5.1
 ```
 
 ### When Install from the tap fails
